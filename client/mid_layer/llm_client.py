@@ -71,7 +71,7 @@ class LLMClient:
         if self.provider_type == "llama-cpp":
              if not self._check_llama_cpp_connection_sync():
                   # Log a warning, but don't raise an error immediately.
-                  # Let the first actual request fail if connection is truly bad.
+                  # Let the first actual request fail if connection is terrible.
                   logger.warning(f"LLMClient.__init__: Initial check failed for llama-cpp server at {self.server_url}. Client will proceed, but requests may fail.")
              else:
                   logger.info(f"LLMClient.__init__: Initial check successful for llama-cpp server at {self.server_url}, model={self.model}")
@@ -183,8 +183,8 @@ class LLMClient:
     # --- New method for Llama-cpp sync connection check ---
     def _check_llama_cpp_connection_sync(self) -> bool:
         """Synchronously check connection for llama-cpp server using health endpoint."""
+        endpoint = self._get_endpoint(self.health_endpoint)
         try:
-            endpoint = self._get_endpoint(self.health_endpoint)
             logger.debug(f"Checking llama-cpp connection sync at: {endpoint}")
             # Use requests for sync check, short timeout
             response = requests.get(endpoint, timeout=2)
@@ -561,8 +561,9 @@ class LLMClient:
                     "tool_calls": final_tool_calls
                 }
             }
+
             logger.debug(f"Final aggregated result (not returned): {final_result}")
-            return # Changed back from: return final_result
+
 
         except UserVisibleError:
             raise
