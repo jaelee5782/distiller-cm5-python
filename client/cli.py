@@ -104,8 +104,8 @@ async def chat_loop(client: MCPClient, whisper_instance: whisper.Whisper):
                  # Maybe add a placeholder message?
                  # client.message_processor.add_message("assistant", "[Error processing request]")
             except UserVisibleError as e: # Catch user-visible errors from process_query
-                 logger.error(f"Error during response generation: {e.message}")
-                 print(f"{Fore.RED}\nError: {e.message}{Style.RESET_ALL}")
+                 logger.error(f"Error during response generation: {e}")
+                 print(f"{Fore.RED}\nError: {e}{Style.RESET_ALL}")
                  # History is handled by process_query yielding the error message
 
             end_time = time.time()
@@ -115,8 +115,8 @@ async def chat_loop(client: MCPClient, whisper_instance: whisper.Whisper):
             print("\nChat interrupted by user. Exiting...")
             break
         except UserVisibleError as e:
-            logger.error(f"Error: {e.message}")
-            print(f"{Fore.RED}\nError: {e.message}{Style.RESET_ALL}")
+            logger.error(f"Error: {e}")
+            print(f"{Fore.RED}\nError: {e}{Style.RESET_ALL}")
             # Decide if we should break or continue
             # break
         except EOFError:
@@ -179,8 +179,8 @@ async def main():
         await chat_loop(client, whisper_instance) # Pass whisper instance
 
     except UserVisibleError as e:
-        logger.error(f"Initialization Error: {e.message}")
-        print(f"{Fore.RED}Initialization Error: {e.message}{Style.RESET_ALL}")
+        logger.error(f"Initialization Error: {e}")
+        print(f"{Fore.RED}Initialization Error: {e}{Style.RESET_ALL}")
     except Exception as e:
         logger.exception("An unexpected error occurred during setup or chat.")
         print(f"{Fore.RED}An unexpected error occurred: {e}{Style.RESET_ALL}")

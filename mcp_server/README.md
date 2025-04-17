@@ -6,7 +6,6 @@ These servers are designed to be launched independently and communicated with by
 
 ## Included Servers
 
-- **`airconditioning_server.py`**: An MCP server providing tools to control an air conditioning unit (e.g., set temperature, mode).
 - **`speaker_server.py`**: An MCP server offering tools to manage a speaker (e.g., set volume, play/pause).
 - **`wifi_server.py`**: An MCP server for interacting with WiFi networks (e.g., list networks, connect/disconnect). *Note: Functionality might vary based on the OS.*
 - **`wifi_mac_server.py`**: A variant of the WiFi server, potentially tailored for macOS specific commands or behaviors.

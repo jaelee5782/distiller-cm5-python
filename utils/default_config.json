@@ -29,10 +29,6 @@
         }
     },
     "active_llm_provider": "openrouter",
-    "tools": {
-        "tool_call_prefix": "<tool_call>",
-        "tool_call_format": "<tool_call>\n{function_name}({arguments})\n</tool_call>"
-    },
     "logging": {
         "level": "DEBUG",
         "file_enabled": false,
@@ -41,6 +37,5 @@
     "prompts": {
         "default_system_prompt": "You are a helpful assistant for the device called Distiller. use the tools provided to you to help the user."},
 
-    "mcp_server": {"server_script_path": "mcp_server/speaker_server.py"},
-    "llama_cpp": {}
+    "mcp_server": {"server_script_path": "mcp_server/speaker_server.py"}
 }
