@@ -1,0 +1,66 @@
+{%- if Messages %}
+{%- if System or Tools %}
+{%- if System %}
+{{ System }}
+{%- endif %}
+{%- if Tools %}
+The following tools are available when needed for specific tasks:
+{{ Tools }}
+
+Only use tools when the task specifically requires their functionality.
+For general questions or tasks that don't need external data, respond directly.
+
+When using a tool, format as:
+<tool_calls>
+<tool_call>
+{"name": "function_name", "parameters": {"param1": "value1"}}
+</tool_call>
+</tool_calls>
+{%- endif %}
+{%- endif %}
+{%- for message in Messages %}
+{%- set last = loop.last %}
+{%- if message.Role == "user" %}<start_of_turn>user
+{{ message.Content }}<end_of_turn>
+{%- if last %}<start_of_turn>model
+{%- endif %}
+{%- elif message.Role == "system" %}<start_of_turn>user
+{{ message.Content }}<end_of_turn>
+{%- if last %}<start_of_turn>model
+{%- endif %}
+{%- elif message.Role == "assistant" %}<start_of_turn>model
+{%- if message.ToolCalls %}
+<tool_calls>
+{%- for toolCall in message.ToolCalls %}
+<tool_call>
+{"name": "{{ toolCall.Function.Name }}", "parameters": {{ toolCall.Function.Arguments }}}
+</tool_call>
+{%- endfor %}
+</tool_calls>
+{%- else %}
+{{ message.Content }}
+{%- endif %}
+{%- if not last %}<end_of_turn>
+{%- endif %}
+{%- elif message.Role == "tool" %}
+<tool_outputs>
+<tool_output>
+{{ message.Content }}
+</tool_output>
+</tool_outputs>
+{%- if last and message.Role != "assistant" %}<start_of_turn>model
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- else %}
+{%- if System %}
+{{ System }}
+{%- endif %}
+{%- if Prompt %}
+<start_of_turn>user
+{{ Prompt }}<end_of_turn>
+<start_of_turn>model
+{%- endif %}
+{{ Response }}
+{%- if Response %}{% endif %}
+{%- endif %}

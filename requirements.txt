@@ -1,0 +1,11 @@
+fastapi>=0.104.0
+uvicorn>=0.24.0
+pydantic>=2.4.2
+llama-cpp-python
+typing-extensions>=4.8.0
+requests>=2.31.0 
+mcp
+aiohttp
+colorama
+nest_asyncio
+psutil

@@ -1,0 +1,74 @@
+{%- set system_message = 'You are a helpful assistant.' %}
+{%- if messages[0]['role'] == 'system' %}
+    {%- set system_message = messages[0]['content'] %}
+    {%- if messages[1]['role'] == 'system' %}
+        {%- set format_message = messages[1]['content'] %}
+        {%- set loop_messages = messages[2:] %}
+    {%- else %}
+        {%- set loop_messages = messages[1:] %}
+    {%- endif %}
+{%- else %}
+    {%- set loop_messages = messages %}
+{%- endif %}
+{%- if not tools is defined %}
+    {%- set tools = none %}
+{%- endif %}
+{%- if system_message is defined %}
+{{- '<|im_start|>system
+' + system_message + '<|im_end|>
+' }}
+{%- endif %}
+
+
+{%- if tools is not none %}
+{% set task_instruction %}You are a tool calling assistant. In order to complete the user's request, you need to select one or more appropriate tools from the following tools and fill in the correct values for the tool parameters. Your specific tasks are:
+1. Make one or more function/tool calls to meet the request based on the question.
+2. If none of the function can be used, point it out and refuse to answer.
+3. If the given question lacks the parameters required by the function, also point it out.
+
+The following are characters that may interact with you
+1. user: Provides query or additional information.
+2. tool: Returns the results of the tool calling.
+{% endset %}
+
+{% set format_instruction %}
+The output MUST strictly adhere to the following JSON format, and NO other text MUST be included.
+The example format is as follows. Please make sure the parameter type is correct. If no function call is needed, please directly output an empty list '[]'
+```
+[
+    {"name": "func_name1", "arguments": {"argument1": "value1", "argument2": "value2"}},
+    ... (more tool calls as required)
+]
+```
+{% endset %}
+{{- '<|im_start|>user
+[BEGIN OF TASK INSTRUCTION]
+' + task_instruction + '
+[END OF TASK INSTRUCTION]
+
+'}}
+    {{- '[BEGIN OF AVAILABLE_TOOLS]
+' }}
+    {{- tools|string }}
+    {{- '
+[END OF AVAILABLE_TOOLS]
+
+' }}
+    {{- '
+[BEGIN OF TASK INSTRUCTION]
+' + format_instruction + '
+[END OF TASK INSTRUCTION]
+
+<|im_end|>
+' }}
+{%- endif %}
+
+{%- for message in loop_messages %}
+    {%- set role = message['role'] %}
+    {%- set content = message['content'] %}
+    {{- '<|im_start|>'+ role +'
+' +  content + '<|im_end|>
+'}}
+{%- endfor %}
+{{- '<|im_start|>assistant
+' }}

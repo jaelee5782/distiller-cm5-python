@@ -1,0 +1,30 @@
+{
+    "llm": {
+        "server_url": "http://localhost:8000",
+        "model_name": "Qwen2.5-1.5B_fc-3k-full-ft-set_1-2-f-q4k_m.gguf",
+        "provider_type": "llama-cpp",
+        "api_key": "",
+        "timeout": 30,
+        "temperature": 0.3,
+        "top_p": 0.8,
+        "top_k": 20,
+        "repetition_penalty": 1.0,
+        "n_ctx": 4096,
+        "max_tokens": 4096,
+        "stop": ["\n\n"],
+        "streaming": true,
+        "streaming_chunk_size": 4
+    },
+    "tools": {
+        "tool_call_prefix": "<tool_call>",
+        "tool_call_format": "<tool_call>\n{function_name}({arguments})\n</tool_call>"
+    },
+    "logging": {
+        "level": "debug",
+        "file_enabled": false,
+        "file_path": "mcp_client.log"
+    },
+    "prompts": {
+        "default_system_prompt" : "just chat with the user, you can use the tools to express your feeling, you have option to show or tell."
+    }
+}
