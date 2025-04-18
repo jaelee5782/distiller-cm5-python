@@ -1,4 +1,6 @@
 from datetime import datetime
+import time
+from PyQt6.QtCore import QTimer
 
 
 class ConversationManager:
@@ -17,19 +19,41 @@ class ConversationManager:
         self._bridge = bridge
         self._conversation = []
         self.current_streaming_message: dict[str, str] | None = None
+        
+        # Batch update mechanism
+        self._update_pending = False
+        self._last_update_time = 0
+        self._update_interval = 0.1  # seconds, for batching UI updates
+
+    def _schedule_update(self):
+        """Schedule a batched UI update if not already pending."""
+        current_time = time.time()
+        
+        # Only schedule a new update if enough time has passed since the last one
+        if not self._update_pending or (current_time - self._last_update_time > self._update_interval):
+            self._update_pending = True
+            self._last_update_time = current_time
+            # Use QTimer for thread-safe signaling to the UI
+            QTimer.singleShot(int(self._update_interval * 1000), self._emit_update)
+    
+    def _emit_update(self):
+        """Emit the signal for the batched update."""
+        self._update_pending = False
+        self._bridge.conversationChanged.emit()
 
     def add_message(self, message):
-        """Add a message to the conversation history and emit the signal.
+        """Add a message to the conversation history and schedule a UI update.
 
         Args:
             message: A message dict with timestamp and content keys
         """
         self._conversation.append(message)
-        self._bridge.conversationChanged.emit()
+        self._schedule_update()
 
     def clear(self):
         """Clear the conversation history."""
         self._conversation = []
+        # Immediate update for clear operation (not batched)
         self._bridge.conversationChanged.emit()
 
     def get_messages(self):
@@ -55,6 +79,7 @@ class ConversationManager:
             messages: The new conversation list to use
         """
         self._conversation = messages
+        # Immediate update for set operation (not batched)
         self._bridge.conversationChanged.emit()
 
     def get_formatted_messages(self):

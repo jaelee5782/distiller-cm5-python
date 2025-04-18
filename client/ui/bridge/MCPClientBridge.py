@@ -8,6 +8,7 @@ from utils.logger import logger
 import asyncio
 import os
 import sys
+import time  # Add time import for debouncing
 
 from client.ui.bridge.ConversationManager import ConversationManager
 from client.ui.bridge.StatusManager import StatusManager
@@ -57,6 +58,10 @@ class MCPClientBridge(QObject):
         self._current_log_level = config.get("logging", "level", default="DEBUG").upper()
         self._selected_server_path = None
         self.client = None  # Will be initialized when a server is selected
+        
+        # Server discovery cache for debouncing
+        self._last_server_discovery_time = 0
+        self._server_discovery_cache_timeout = 5  # seconds
 
     @pyqtProperty(bool, notify=bridgeReady)
     def ready(self):
@@ -127,7 +132,18 @@ class MCPClientBridge(QObject):
         }
         self.conversation_manager.add_message(user_message)
         logger.info(f"User query added to conversation: {query}")
-        await self.process_query(query)
+        
+        # Process the query in a separate task to avoid blocking the UI
+        # This is particularly important for long running queries
+        asyncio.create_task(self._process_query_task(query))
+        
+    async def _process_query_task(self, query: str):
+        """Process query in a separate task to avoid blocking the UI thread."""
+        try:
+            await self.process_query(query)
+        except Exception as e:
+            logger.error(f"Error in query processing task: {e}", exc_info=True)
+            self.errorOccurred.emit(f"Error processing query: {str(e)}")
 
     @pyqtSlot()
     def clear_conversation(self):
@@ -413,6 +429,11 @@ class MCPClientBridge(QObject):
         self.conversation_manager.add_message(assistant_message)
         self.conversation_manager.current_streaming_message = assistant_message
 
+        # Use a batching mechanism for updating the UI to avoid excessive redraws
+        last_update_time = time.time()
+        update_interval = 0.05  # 50ms minimum between UI updates
+        accumulated_chunks = ""
+
         try:
             self.status_manager.update_status(StatusManager.STATUS_STREAMING)
 
@@ -422,6 +443,7 @@ class MCPClientBridge(QObject):
                     # Error messages from the MCP client
                     if self.conversation_manager.current_streaming_message:
                         self.conversation_manager.current_streaming_message["content"] += chunk
+                        # Force immediate update for error messages
                         self.conversationChanged.emit()
                     continue
                 
@@ -436,6 +458,8 @@ class MCPClientBridge(QObject):
                     }
                     self.conversation_manager.add_message(assistant_message)
                     self.conversation_manager.current_streaming_message = assistant_message
+                    # Reset accumulated chunks for the new message
+                    accumulated_chunks = ""
                     continue
 
                 # If this is a new response after tool calls (in case marker wasn't received)
@@ -448,17 +472,28 @@ class MCPClientBridge(QObject):
                     }
                     self.conversation_manager.add_message(assistant_message)
                     self.conversation_manager.current_streaming_message = assistant_message
+                    # Reset accumulated chunks for the new message
+                    accumulated_chunks = ""
 
                 if self.conversation_manager.current_streaming_message:
+                    # Accumulate chunks before updating the UI
+                    accumulated_chunks += chunk
+                    
                     # Update the message content with the new chunk
-                    self.conversation_manager.current_streaming_message[
-                        "content"
-                    ] += chunk
-                    # Ensure we emit the signal for each update
-                    self.conversationChanged.emit()
+                    self.conversation_manager.current_streaming_message["content"] += chunk
+                    
+                    # Only update the UI at the specified interval to avoid excessive redraws
+                    current_time = time.time()
+                    if current_time - last_update_time >= update_interval:
+                        self.conversationChanged.emit()
+                        last_update_time = current_time
 
             # Final update after streaming is complete
             self.status_manager.update_status(StatusManager.STATUS_IDLE)
+            
+            # Force a final UI update to ensure the last chunks are displayed
+            if accumulated_chunks:
+                self.conversationChanged.emit()
 
             # Emit the messageReceived signal when the response is complete
             if self.conversation_manager.current_streaming_message:
@@ -497,6 +532,20 @@ class MCPClientBridge(QObject):
                 logger.info("Client cleanup completed")
             except Exception as e:
                 logger.error(f"Error during cleanup: {e}", exc_info=True)
+                # Ensure client is set to None even if cleanup fails
+                self.client = None
+
+        # Reset conversation state to free memory
+        if hasattr(self, 'conversation_manager') and self.conversation_manager:
+            self.conversation_manager.reset_streaming_message()
+            # Only keep the last 5 messages to free memory
+            messages = self.conversation_manager.get_messages()
+            if len(messages) > 5:
+                self.conversation_manager.set_messages(messages[-5:])
+        
+        # Reset server discovery cache
+        if hasattr(self, '_last_server_discovery_time'):
+            self._last_server_discovery_time = 0
 
         self.is_connected = False
         self.status_manager.update_status(StatusManager.STATUS_DISCONNECTED)
@@ -576,8 +625,15 @@ class MCPClientBridge(QObject):
     @pyqtSlot()
     def getAvailableServers(self):
         """Get the list of available MCP servers."""
+        current_time = time.time()
+        if current_time - self._last_server_discovery_time < self._server_discovery_cache_timeout:
+            logger.info("Using cached server discovery results")
+            self.availableServersChanged.emit(self.server_discovery.available_servers)
+            return self.server_discovery.available_servers
+
         self.server_discovery.discover_mcp_servers()
         self.availableServersChanged.emit(self.server_discovery.available_servers)
+        self._last_server_discovery_time = current_time
         return self.server_discovery.available_servers
 
     @pyqtSlot(str)
@@ -589,7 +645,7 @@ class MCPClientBridge(QObject):
 
     @pyqtSlot(result=str)
     def connectToServer(self):
-        """Connect to the selected MCP server."""
+        """Connect to the selected MCP server without blocking the UI thread."""
         if not self._selected_server_path:
             error_msg = "No server selected"
             logger.error(error_msg)
@@ -615,13 +671,16 @@ class MCPClientBridge(QObject):
             self.errorOccurred.emit(error_msg)
             return error_msg
 
-        # Create task to connect
+        # Update UI immediately to show connecting status
+        self.status_manager.update_status(StatusManager.STATUS_CONNECTING)
+        
+        # Create task to connect in the background
         asyncio.create_task(self._connect_to_selected_server(server_name))
         return ""  # Empty string indicates success (no error)
 
     async def _connect_to_selected_server(self, server_name):
         """Connect to the selected server asynchronously."""
-        self.status_manager.update_status(StatusManager.STATUS_CONNECTING)
+        # Status update moved to the calling method for immediate UI feedback
         self.conversation_manager.add_message(
             {
                 "timestamp": self.conversation_manager.get_timestamp(),
@@ -641,8 +700,9 @@ class MCPClientBridge(QObject):
                     timeout=TIMEOUT,
                 )
 
-            # Connect to server
-            connected = await self.client.connect_to_server(self._selected_server_path)
+            # Connect to server with explicit timeout to prevent hanging
+            connect_task = self.client.connect_to_server(self._selected_server_path)
+            connected = await asyncio.wait_for(connect_task, timeout=30.0)
 
             if connected:
                 self.is_connected = True
@@ -668,6 +728,19 @@ class MCPClientBridge(QObject):
                     }
                 )
                 self.errorOccurred.emit(f"Failed to connect to {server_name}")
+        except asyncio.TimeoutError:
+            logger.error(f"Connection to server timed out after 30 seconds")
+            self.status_manager.update_status(
+                StatusManager.STATUS_ERROR, 
+                error=f"Connection to {server_name} timed out"
+            )
+            self.conversation_manager.add_message(
+                {
+                    "timestamp": self.conversation_manager.get_timestamp(),
+                    "content": f"Error: Connection to {server_name} timed out after 30 seconds",
+                }
+            )
+            self.errorOccurred.emit(f"Connection to {server_name} timed out")
         except Exception as e:
             logger.error(f"Error connecting to server: {e}", exc_info=True)
             self.status_manager.update_status(StatusManager.STATUS_ERROR, error=str(e))
