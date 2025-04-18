@@ -29,6 +29,13 @@ Rectangle {
         return textInput.text.trim();
     }
 
+    // Add a new function to reset all input state
+    function resetState() {
+        isProcessing = false;
+        textInput.readOnly = false;
+        textInput.focus = true;
+    }
+
     color: ThemeManager.backgroundColor
     height: Math.min(maxHeight, Math.max(minHeight, inputLayout.implicitHeight + 20))
     z: 10 // Ensure this is always on top
@@ -107,6 +114,8 @@ Rectangle {
             border.color: isListening ? "transparent" : ThemeManager.borderColor
             border.width: isListening ? 0 : ThemeManager.borderWidth
             radius: ThemeManager.borderRadius
+            // Visual feedback when disabled
+            opacity: inputArea.isProcessing ? 0.7 : 1.0
 
             // Stack content that switches between text area and visualizer
             Item {
@@ -133,6 +142,7 @@ Rectangle {
                         placeholderText: "Type your message here..."
                         placeholderTextColor: ThemeManager.secondaryTextColor
                         background: null
+                        readOnly: inputArea.isProcessing || inputArea.isListening
                         // Allow vertical growth but limit it
                         onTextChanged: {
                             // Update implicitHeight when text changes

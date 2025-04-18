@@ -110,6 +110,11 @@ PageBase {
                 isProcessing = false;
                 isListening = false;
                 statusText = "Ready";
+                
+                // Explicitly clear and reset the input area
+                inputArea.clearInput();
+                inputArea.resetState();
+                
                 // Delay turning off response mode slightly to ensure the final message is rendered
                 responseEndTimer.start();
             }
@@ -133,6 +138,8 @@ PageBase {
                 isProcessing = false;
                 isListening = false;
                 statusText = "Ready";
+                // Reset input area
+                inputArea.resetState();
                 // Enable scrolling on error
                 conversationView.setResponseInProgress(false);
             }
