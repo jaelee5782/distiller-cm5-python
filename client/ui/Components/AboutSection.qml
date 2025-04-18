@@ -13,7 +13,7 @@ AppSection {
         spacing: ThemeManager.spacingNormal
 
         // App logo image that changes based on theme
-        Image {
+        OptimizedImage {
             id: logoImage
             
             Layout.alignment: Qt.AlignHCenter
@@ -24,6 +24,11 @@ AppSection {
             
             source: ThemeManager.darkMode ? "../images/pamir_logo_white.webp" : "../images/pamir_logo.webp"
             fillMode: Image.PreserveAspectFit
+            sourceSize.width: 200
+            sourceSize.height: 200
+            
+            // Set fadeInDuration to match the theme animation duration
+            fadeInDuration: ThemeManager.animationDuration
             
             // Add a smooth transition when theme changes
             Behavior on source {

@@ -235,7 +235,7 @@ Rectangle {
                     contentItem: Item {
                         anchors.fill: parent
 
-                        Image {
+                        OptimizedImage {
                             id: micIcon
 
                             source: {
@@ -257,14 +257,14 @@ Rectangle {
                             anchors.centerIn: parent
                             fillMode: Image.PreserveAspectFit
                             opacity: voiceButton.checked ? 1 : (voiceButton.hovered ? 0.9 : 0.7)
+                            fadeInDuration: 150
+                            showPlaceholder: false
 
                             Behavior on opacity {
                                 NumberAnimation {
                                     duration: 150
                                 }
-
                             }
-
                         }
 
                         // Subtle pulse animation for listening state
@@ -370,7 +370,7 @@ Rectangle {
                         opacity: 0.15
                     }
 
-                    Image {
+                    OptimizedImage {
                         source: ThemeManager.darkMode ? "../images/icons/dark/arrow_right.svg" : "../images/icons/arrow_right.svg"
                         sourceSize.width: 20
                         sourceSize.height: 20
@@ -379,14 +379,14 @@ Rectangle {
                         anchors.centerIn: parent
                         fillMode: Image.PreserveAspectFit
                         opacity: parent.parent.enabled ? (sendButton.hovered ? 1 : 0.7) : 0.3
-
+                        fadeInDuration: 150
+                        showPlaceholder: false
+                        
                         Behavior on opacity {
                             NumberAnimation {
                                 duration: 150
                             }
-
                         }
-
                     }
 
                 }

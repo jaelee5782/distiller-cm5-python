@@ -238,7 +238,7 @@ ApplicationWindow {
                     radius: width / 2
                     anchors.horizontalCenter: parent.horizontalCenter
 
-                    Image {
+                    OptimizedImage {
                         id: logoImage
 
                         source: ThemeManager.darkMode ? "images/pamir_logo_white.webp" : "images/pamir_logo.webp"
@@ -246,6 +246,9 @@ ApplicationWindow {
                         height: 150
                         anchors.centerIn: parent
                         fillMode: Image.PreserveAspectFit
+                        sourceSize.width: 300
+                        sourceSize.height: 300
+                        fadeInDuration: 300
                     }
 
                 }
