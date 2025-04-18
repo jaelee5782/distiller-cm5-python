@@ -71,23 +71,42 @@ ApplicationWindow {
                     console.log("Connecting to server: " + initialServerName);
                     // Push the voice assistant page with a placeholder name
                     var voiceAssistantPage = stackView.push(voiceAssistantComponent);
-                    // Use a timer to delay updating the server name until the connection is complete
-                    var updateTimer = Qt.createQmlObject('import QtQuick 2.15; Timer {interval: 1000; repeat: false; running: true}', voiceAssistantPage);
-                    updateTimer.triggered.connect(function() {
-                        // Get the status message which should now contain the correct server name
-                        var status = bridge.get_status();
-                        console.log("Current status: " + status);
-                        if (status.indexOf("Connected to") === 0) {
-                            var extractedName = status.substring("Connected to ".length).trim();
-                            if (extractedName) {
-                                console.log("Setting server name to: " + extractedName);
-                                voiceAssistantPage.serverName = extractedName;
-                            }
-                        }
+                    
+                    var serverNameUpdateTimer = serverNameUpdateTimerComponent.createObject(voiceAssistantPage, {
+                        "targetPage": voiceAssistantPage
                     });
+                    serverNameUpdateTimer.start();
                 }
             }
-
+        }
+        
+        // Timer component for updating server name
+        Component {
+            id: serverNameUpdateTimerComponent
+            
+            Timer {
+                property var targetPage
+                
+                interval: 1000
+                repeat: false
+                running: false
+                
+                onTriggered: {
+                    // Get the status message which should now contain the correct server name
+                    var status = bridge.get_status();
+                    console.log("Current status: " + status);
+                    if (status.indexOf("Connected to") === 0) {
+                        var extractedName = status.substring("Connected to ".length).trim();
+                        if (extractedName) {
+                            console.log("Setting server name to: " + extractedName);
+                            targetPage.serverName = extractedName;
+                        }
+                    }
+                    
+                    // Destroy the timer after use
+                    destroy();
+                }
+            }
         }
 
         // Voice Assistant Page
