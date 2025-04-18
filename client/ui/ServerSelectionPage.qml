@@ -31,6 +31,20 @@ PageBase {
             console.log("Received servers: " + servers.length);
             availableServers = servers;
             isLoading = false;
+            
+            if (servers.length === 0) {
+                // Show a message to the user when no servers are found
+                messageToast.showMessage("No servers found. Please check your installation.", 4000);
+            }
+        }
+        
+        function onErrorOccurred(errorMessage) {
+            console.error("Error in server selection: " + errorMessage);
+            // Only show errors related to server discovery
+            if (errorMessage.toLowerCase().includes("server") || errorMessage.toLowerCase().includes("discover")) {
+                messageToast.showMessage("Error: " + errorMessage, 4000);
+            }
+            isLoading = false;
         }
     }
 
@@ -57,10 +71,12 @@ PageBase {
         running: false
         onTriggered: {
             if (serverSelectionPage.visible && serverSelectionPage.width > 0 && bridge && bridge.ready) {
+                isLoading = true;
                 bridge.getAvailableServers();
             } else if (serverSelectionPage.visible && serverSelectionPage.width > 0) {
                 console.error("Bridge not ready, cannot get servers");
                 isLoading = false;
+                messageToast.showMessage("Error: Application not fully initialized. Please restart.", 4000);
             }
         }
     }
@@ -275,5 +291,15 @@ PageBase {
             console.log("Server selected: " + serverPath);
             serverSelected(serverPath);
         }
+    }
+
+    // Message toast for error display
+    MessageToast {
+        id: messageToast
+        
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: footerArea.height + ThemeManager.spacingLarge
+        z: 10 // Above other content
     }
 }

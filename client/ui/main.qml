@@ -83,17 +83,30 @@ ApplicationWindow {
                     console.log("onServerSelected called with path: " + serverPath);
                     if (!bridge.ready) {
                         console.error("Bridge not ready, cannot connect to server");
+                        // Display an error message to the user
+                        globalToast.showMessage("Error: Application not fully initialized. Please restart.", 5000);
                         return;
                     }
                     
                     // Set the selected server and connect to it
                     bridge.setServerPath(serverPath);
-                    // This returns the file-based name, which may not be correct
-                    var initialServerName = bridge.connectToServer();
-                    console.log("Connecting to server: " + initialServerName);
+                    
+                    // This returns an error message if connection fails, or empty string on success
+                    var connectionResult = bridge.connectToServer();
+                    
+                    if (connectionResult) {
+                        // Connection failed, show error message
+                        console.error("Connection failed: " + connectionResult);
+                        globalToast.showMessage("Connection failed: " + connectionResult, 5000);
+                        return;
+                    }
+                    
+                    console.log("Connecting to server...");
+                    
                     // Push the voice assistant page with a placeholder name
                     var voiceAssistantPage = stackView.push(voiceAssistantComponent);
                     
+                    // Create and start the server name update timer
                     var serverNameUpdateTimer = serverNameUpdateTimerComponent.createObject(voiceAssistantPage, {
                         "targetPage": voiceAssistantPage
                     });
@@ -490,5 +503,31 @@ ApplicationWindow {
         color: ThemeManager.backgroundColor
     }
 
+    // Global toast message for application-wide errors
+    MessageToast {
+        id: globalToast
+        
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 100
+        z: 1001 // Above everything, including the splash screen
+    }
+    
+    // Handle global bridge errors
+    Connections {
+        target: bridge
+        
+        function onErrorOccurred(errorMessage) {
+            // Log all errors to console for debugging
+            console.error("Bridge error: " + errorMessage);
+            
+            // Show global error messages only for severe errors
+            if (errorMessage.toLowerCase().includes("critical") || 
+                errorMessage.toLowerCase().includes("fatal") ||
+                errorMessage.toLowerCase().includes("restart")) {
+                globalToast.showMessage("Error: " + errorMessage, 5000);
+            }
+        }
+    }
 }
 

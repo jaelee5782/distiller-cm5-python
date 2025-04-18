@@ -134,14 +134,31 @@ PageBase {
             }
             
             function onErrorOccurred(errorMessage) {
-                messageToast.showMessage("Error: " + errorMessage, 3000);
+                // Log the error to console for developer debugging
+                console.error("Error occurred in bridge: " + errorMessage);
+                
+                // Show error toast with appropriate duration based on message length
+                var displayDuration = Math.max(3000, Math.min(errorMessage.length * 75, 8000));
+                messageToast.showMessage("Error: " + errorMessage, displayDuration);
+                
+                // Update UI state
                 isProcessing = false;
                 isListening = false;
                 statusText = "Ready";
+                
                 // Reset input area
                 inputArea.resetState();
+                
                 // Enable scrolling on error
                 conversationView.setResponseInProgress(false);
+                
+                // If error is related to connection, suggest reconnecting
+                if (errorMessage.toLowerCase().includes("connect") || 
+                    errorMessage.toLowerCase().includes("server") ||
+                    errorMessage.toLowerCase().includes("timeout")) {
+                    // Show reconnection dialog after a brief delay
+                    reconnectionTimer.start();
+                }
             }
             
             function onStatusChanged(newStatus) {
@@ -213,6 +230,60 @@ PageBase {
         onTriggered: {
             // Response complete, enable scrolling again
             conversationView.setResponseInProgress(false);
+        }
+    }
+
+    // Add a reconnection suggestion timer
+    Timer {
+        id: reconnectionTimer
+        
+        interval: 1000
+        repeat: false
+        onTriggered: {
+            if (!bridge.isConnected()) {
+                confirmReconnectionDialog.open();
+            }
+        }
+    }
+    
+    // Add reconnection dialog
+    AppDialog {
+        id: confirmReconnectionDialog
+        
+        dialogTitle: "Connection Problem"
+        message: "The connection to the server appears to be lost. Would you like to try reconnecting or select a different server?"
+        
+        // Configure the standard buttons
+        standardButtonTypes: DialogButtonBox.Yes | DialogButtonBox.No
+        
+        // Button text customization
+        yesButtonText: "Select Server"
+        noButtonText: "Stay Here"
+        
+        // Secondary action configuration
+        showSecondaryAction: true
+        secondaryActionText: "Reconnect"
+        
+        // Use accent color for the positive button
+        positiveButtonColor: ThemeManager.accentColor
+        
+        onAccepted: {
+            // Go back to server selection
+            voiceAssistantPage.selectNewServer();
+        }
+        
+        onSecondaryButtonClicked: {
+            // Try to reconnect to the current server
+            if (bridge && bridge.ready) {
+                statusText = "Reconnecting...";
+                // This returns the file-based name, which may not be correct
+                var result = bridge.connectToServer();
+                if (result) {
+                    messageToast.showMessage("Reconnection failed: " + result, 3000);
+                } else {
+                    messageToast.showMessage("Reconnecting to server...", 2000);
+                }
+            }
         }
     }
 }
