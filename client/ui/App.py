@@ -41,6 +41,12 @@ class App:
             logger.error("Failed to get QML root context")
             raise RuntimeError("Failed to get QML root context")
 
+        # Initialize the bridge first
+        logger.info("Initializing bridge...")
+        await self.bridge.initialize()
+        logger.info("Bridge initialized successfully")
+
+        # Now register the initialized bridge with QML
         root_context.setContextProperty("bridge", self.bridge)
         root_context.setContextProperty("AppInfo", self.app_info)
 
@@ -58,9 +64,6 @@ class App:
             logger.error(f"QML file not found: {qml_file}")
             raise FileNotFoundError(f"QML file not found: {qml_file}")
 
-        # Create source URL from file path
-        url = QUrl.fromLocalFile(qml_file)
-
         # Make sure Qt can find its resources
         qt_conf_path = os.path.join(current_dir, "qt.conf")
         if not os.path.exists(qt_conf_path):
@@ -68,7 +71,11 @@ class App:
             with open(qt_conf_path, "w") as f:
                 f.write("[Paths]\nPrefix=.\n")
 
+        # Signal to QML that the bridge is ready
+        self.bridge.setReady(True)
+        
         # Load the QML file
+        url = QUrl.fromLocalFile(qml_file)
         self.engine.load(url)
 
         # Wait for the QML to load
@@ -78,9 +85,6 @@ class App:
         if not self.engine.rootObjects():
             logger.error("Failed to load QML")
             raise RuntimeError("Failed to load QML")
-
-        # Initialize the bridge
-        await self.bridge.initialize()
 
         logger.info("Application initialized successfully")
 
