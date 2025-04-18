@@ -45,7 +45,7 @@ class ServerDiscovery:
         ]
 
         # Add any custom server directories from config
-        custom_server_dirs = config.get("server", "custom_server_dirs")
+        custom_server_dirs = config.get("server", "custom_server_dirs", default=[])
         if custom_server_dirs and isinstance(custom_server_dirs, list):
             server_dirs.extend(custom_server_dirs)
 

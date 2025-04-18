@@ -11,6 +11,29 @@ PageBase {
     // Signal to navigate back to the previous page
     signal backClicked()
 
+    // Helper function to safely get config values with fallbacks
+    function safeGetConfigValue(section, key, fallback) {
+        if (bridge && bridge.ready) {
+            var value = bridge.getConfigValue(section, key);
+            return value !== "" ? value : fallback;
+        }
+        return fallback;
+    }
+    
+    // Connect to bridge ready signal
+    Connections {
+        target: bridge
+        
+        function onBridgeReady() {
+            // Reset all components with updated config values when bridge becomes ready
+            if (settingsPage.visible) {
+                // Force update of all settings sections
+                // This will cause them to read current values from the bridge
+                settingsColumn.forceUpdate();
+            }
+        }
+    }
+
     width: parent ? parent.width : 0
     height: parent ? parent.height : 0
 
@@ -77,6 +100,15 @@ PageBase {
             width: settingsScrollView.width
             spacing: 0 // We're using the section's bottom margin for spacing
             
+            // Function to force update of all children
+            function forceUpdate() {
+                for (var i = 0; i < children.length; i++) {
+                    if (children[i].refresh) {
+                        children[i].refresh();
+                    }
+                }
+            }
+            
             // Add top padding
             Item {
                 width: parent.width
@@ -88,14 +120,6 @@ PageBase {
                 width: parent.width - ThemeManager.spacingSmall * 2 // Wider width
                 anchors.horizontalCenter: parent.horizontalCenter
                 bottomMargin: ThemeManager.spacingNormal
-                serverUrl: bridge.getConfigValue("llm", "server_url")
-                enableStreaming: bridge.getConfigValue("llm", "streaming") === "True"
-                onServerUrlEdited: function(url) {
-                    bridge.setConfigValue("llm", "server_url", url);
-                }
-                onStreamingToggled: function(enabled) {
-                    bridge.setConfigValue("llm", "streaming", enabled.toString());
-                }
             }
             
             // Audio Settings Section
@@ -103,9 +127,15 @@ PageBase {
                 width: parent.width - ThemeManager.spacingSmall * 2 // Wider width
                 anchors.horizontalCenter: parent.horizontalCenter
                 bottomMargin: ThemeManager.spacingNormal
-                volume: parseFloat(bridge.getConfigValue("audio", "volume"))
+                
+                // Function to refresh settings from bridge
+                function refresh() {
+                    volume = parseFloat(safeGetConfigValue("audio", "volume", "0.5"));
+                }
+                
+                volume: parseFloat(safeGetConfigValue("audio", "volume", "0.5"))
                 onVolumeAdjusted: function(value) {
-                    bridge.setConfigValue("audio", "volume", value.toString());
+                    if (bridge && bridge.ready) bridge.setConfigValue("audio", "volume", value.toString());
                 }
             }
             
@@ -114,18 +144,24 @@ PageBase {
                 width: parent.width - ThemeManager.spacingSmall * 2 // Wider width
                 anchors.horizontalCenter: parent.horizontalCenter
                 bottomMargin: ThemeManager.spacingNormal
-                darkTheme: ThemeManager.darkMode
-                Component.onCompleted: {
-                    // Initialize from stored setting if available
-                    var savedTheme = bridge.getConfigValue("display", "dark_mode");
+                
+                // Function to refresh settings from bridge
+                function refresh() {
+                    var savedTheme = safeGetConfigValue("display", "dark_mode", "");
                     if (savedTheme !== "") {
                         darkTheme = (savedTheme === "true" || savedTheme === "True");
                         ThemeManager.setDarkMode(darkTheme);
                     }
                 }
+                
+                darkTheme: ThemeManager.darkMode
+                Component.onCompleted: {
+                    // Initialize from stored setting if available
+                    refresh();
+                }
                 onDarkThemeToggled: function(enabled) {
                     ThemeManager.setDarkMode(enabled);
-                    bridge.setConfigValue("display", "dark_mode", enabled.toString());
+                    if (bridge && bridge.ready) bridge.setConfigValue("display", "dark_mode", enabled.toString());
                 }
             }
             
@@ -134,9 +170,15 @@ PageBase {
                 width: parent.width - ThemeManager.spacingSmall * 2 // Wider width
                 anchors.horizontalCenter: parent.horizontalCenter
                 bottomMargin: ThemeManager.spacingNormal
-                debugMode: bridge.getConfigValue("logging", "level") === "DEBUG"
+                
+                // Function to refresh settings from bridge
+                function refresh() {
+                    debugMode = safeGetConfigValue("logging", "level", "INFO") === "DEBUG";
+                }
+                
+                debugMode: safeGetConfigValue("logging", "level", "INFO") === "DEBUG"
                 onDebugModeToggled: function(enabled) {
-                    bridge.setConfigValue("logging", "level", enabled ? "DEBUG" : "INFO");
+                    if (bridge && bridge.ready) bridge.setConfigValue("logging", "level", enabled ? "DEBUG" : "INFO");
                 }
             }
             
@@ -190,10 +232,13 @@ PageBase {
             height: ThemeManager.buttonHeight * 0.7
             text: "Apply"
             useFixedHeight: false
+            enabled: bridge && bridge.ready
             
             onClicked: {
-                bridge.saveConfigToFile();
-                bridge.applyConfig();
+                if (bridge && bridge.ready) {
+                    bridge.saveConfigToFile();
+                    bridge.applyConfig();
+                }
             }
         }
     }

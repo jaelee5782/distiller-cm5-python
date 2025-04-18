@@ -17,25 +17,43 @@ ApplicationWindow {
     height: 384
     title: AppInfo.appName
     font: FontManager.normal
-    // Update the FontManager primaryFontFamily and initialize theme when the app loads
-    Component.onCompleted: {
-        if (jetBrainsMono.status == FontLoader.Ready)
-            // Use the loaded font in the components
-            FontManager.primaryFontFamily = jetBrainsMono.name;
-
-        // Initialize theme from saved settings
-        var savedTheme = bridge.getConfigValue("display", "dark_mode");
-        if (savedTheme !== "") {
-            ThemeManager.setDarkMode(savedTheme === "true" || savedTheme === "True");
-            console.log("Theme initialized from settings: " + (ThemeManager.darkMode ? "Dark" : "Light"));
-        } else {
-            console.log("Using default theme (Light)");
+    
+    // Connect to the bridge ready signal
+    Connections {
+        target: bridge
+        
+        function onBridgeReady() {
+            console.log("Bridge is now ready!")
+            
+            // Initialize theme from saved settings once bridge is ready
+            var savedTheme = bridge.getConfigValue("display", "dark_mode");
+            if (savedTheme !== "") {
+                ThemeManager.setDarkMode(savedTheme === "true" || savedTheme === "True");
+                console.log("Theme initialized from settings: " + (ThemeManager.darkMode ? "Dark" : "Light"));
+            } else {
+                console.log("Using default theme (Light)");
+            }
         }
     }
+    
+    // Update the FontManager primaryFontFamily when the app loads
+    Component.onCompleted: {
+        if (jetBrainsMono.status == FontLoader.Ready) {
+            // Use the loaded font in the components
+            FontManager.primaryFontFamily = jetBrainsMono.name;
+        }
+        console.log("Application window initialized")
+    }
+    
     // Handle application shutdown
     onClosing: function(closeEvent) {
         closeEvent.accepted = false;
-        bridge.shutdown();
+        if (bridge && bridge.ready) {
+            bridge.shutdown();
+        } else {
+            // No bridge available or not ready, just accept the close event
+            closeEvent.accepted = true;
+        }
     }
 
     // Custom font
@@ -46,7 +64,6 @@ ApplicationWindow {
         onStatusChanged: {
             if (status == FontLoader.Ready)
                 console.log("JetBrains Mono font loaded successfully");
-
         }
     }
 
@@ -64,6 +81,11 @@ ApplicationWindow {
             ServerSelectionPage {
                 onServerSelected: function(serverPath) {
                     console.log("onServerSelected called with path: " + serverPath);
+                    if (!bridge.ready) {
+                        console.error("Bridge not ready, cannot connect to server");
+                        return;
+                    }
+                    
                     // Set the selected server and connect to it
                     bridge.setServerPath(serverPath);
                     // This returns the file-based name, which may not be correct
@@ -92,6 +114,12 @@ ApplicationWindow {
                 running: false
                 
                 onTriggered: {
+                    if (!bridge.ready) {
+                        console.error("Bridge not ready in timer, cannot update server name");
+                        destroy();
+                        return;
+                    }
+                    
                     // Get the status message which should now contain the correct server name
                     var status = bridge.get_status();
                     console.log("Current status: " + status);
@@ -118,10 +146,11 @@ ApplicationWindow {
                     // Replace the current view with the server selection page
                     stackView.replace(serverSelectionComponent);
                     // Request servers again to refresh the list
-                    bridge.getAvailableServers();
+                    if (bridge.ready) {
+                        bridge.getAvailableServers();
+                    }
                 }
             }
-
         }
 
         // Settings Page
@@ -133,7 +162,6 @@ ApplicationWindow {
                     stackView.pop();
                 }
             }
-
         }
 
         // Simple fade transitions optimized for e-ink
@@ -144,7 +172,6 @@ ApplicationWindow {
                 to: 1
                 duration: ThemeManager.animationDuration
             }
-
         }
 
         pushExit: Transition {
@@ -154,7 +181,6 @@ ApplicationWindow {
                 to: 0
                 duration: ThemeManager.animationDuration
             }
-
         }
 
         popEnter: Transition {
@@ -164,7 +190,6 @@ ApplicationWindow {
                 to: 1
                 duration: ThemeManager.animationDuration
             }
-
         }
 
         popExit: Transition {
@@ -174,9 +199,7 @@ ApplicationWindow {
                 to: 0
                 duration: ThemeManager.animationDuration
             }
-
         }
-
     }
 
     // E-ink optimized splash screen - refined for better aesthetics
@@ -465,3 +488,4 @@ ApplicationWindow {
     }
 
 }
+

@@ -1,5 +1,5 @@
 # pyright: reportArgumentType=false
-from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QTimer
+from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, QTimer, pyqtProperty
 from PyQt6.QtWidgets import QApplication
 from client.mid_layer.mcp_client import MCPClient
 from qasync import asyncSlot
@@ -34,6 +34,7 @@ class MCPClientBridge(QObject):
     listeningStarted = pyqtSignal()  # Signal for when listening starts
     listeningStopped = pyqtSignal()  # Signal for when listening stops
     errorOccurred = pyqtSignal(str)  # Signal for errors
+    bridgeReady = pyqtSignal()  # Signal for when the bridge is fully initialized
 
     def __init__(self, parent=None):
         """MCPClientBridge initializes the MCPClient and manages the conversation state."""
@@ -47,15 +48,27 @@ class MCPClientBridge(QObject):
 
         # Initialize client-related properties
         self._is_connected = False
+        self._is_ready = False
         self._loop = asyncio.get_event_loop()
         self.config_path = DEFAULT_CONFIG_PATH
-        self._current_log_level = (
-            config.get("logging", "level").upper()
-            if config.get("logging", "level")
-            else "DEBUG"
-        )
+        # Get logging level with proper default value
+        self._current_log_level = config.get("logging", "level", default="DEBUG").upper()
         self._selected_server_path = None
         self.client = None  # Will be initialized when a server is selected
+
+    @pyqtProperty(bool, notify=bridgeReady)
+    def ready(self):
+        """Return whether the bridge is fully initialized and ready for use."""
+        return self._is_ready
+
+    @pyqtSlot(bool)
+    def setReady(self, value):
+        """Set the ready state of the bridge and emit the bridgeReady signal."""
+        if self._is_ready != value:
+            self._is_ready = value
+            if self._is_ready:
+                self.bridgeReady.emit()
+            logger.info(f"Bridge ready state set to: {self._is_ready}")
 
     @property
     def is_connected(self):
@@ -71,8 +84,14 @@ class MCPClientBridge(QObject):
 
     async def initialize(self):
         """Initialize the client and connect to the server"""
+        logger.info("Initializing bridge components")
         self.status_manager.update_status(StatusManager.STATUS_INITIALIZING)
-        await self.connect_to_server()
+        
+        # Pre-discover available servers during initialization
+        self.server_discovery.discover_mcp_servers()
+        
+        logger.info("Bridge initialization completed")
+        return True
 
     @pyqtSlot(result=str)
     def get_status(self):
@@ -141,10 +160,29 @@ class MCPClientBridge(QObject):
     @pyqtSlot(str, str, result="QVariant")
     def getConfigValue(self, section: str, key: str) -> str:
         """Get a configuration value, always returning a string."""
-        value = config.get(section, key)
-        logger.debug(
-            f"Getting config value for {section}.{key}: {value} (type: {type(value)})"
-        )
+        # Get the active provider name for LLM-specific configs
+        active_provider_name = config.get("active_llm_provider")
+        
+        # Special cases for provider-specific configuration
+        if section == "llm":
+            # Map old flat "llm" section to new "llm_providers.{active_provider}" structure
+            value = config.get("llm_providers", active_provider_name, key)
+            logger.debug(
+                f"Getting provider config value {key} for {active_provider_name}: {value} (type: {type(value)})"
+            )
+        elif section == "llama_cpp" and key == "start_wait_time":
+            # Special case for llama_cpp specific settings
+            value = config.get(section, key, default=30)
+            logger.debug(
+                f"Getting config value for {section}.{key}: {value} (type: {type(value)})"
+            )
+        else:
+            # Regular configuration paths
+            value = config.get(section, key)
+            logger.debug(
+                f"Getting config value for {section}.{key}: {value} (type: {type(value)})"
+            )
+        
         if value is None:
             logger.debug(f"Value is None, returning empty string")
             return ""
@@ -165,6 +203,7 @@ class MCPClientBridge(QObject):
     @pyqtSlot(str, str, "QVariant")
     def setConfigValue(self, section: str, key: str, value):
         """Set a configuration value."""
+        # Process the value first
         if key == "stop" and isinstance(value, str):
             # For stop sequences, escape special characters for QML
             value = [
@@ -181,7 +220,18 @@ class MCPClientBridge(QObject):
         elif section == "logging" and key == "level":
             value = value.upper()
 
-        config.set(section, key, value)
+        # Special cases for provider-specific configuration
+        if section == "llm":
+            # Map flat "llm" section to proper nested path
+            active_provider_name = config.get("active_llm_provider")
+            config.set("llm_providers", active_provider_name, key, value)
+            logger.debug(f"Setting LLM provider config: llm_providers.{active_provider_name}.{key} = {value}")
+        elif section == "llama_cpp" and key == "start_wait_time":
+            # Special case for llama_cpp specific settings
+            config.set(section, key, value)
+        else:
+            # Regular configuration paths
+            config.set(section, key, value)
 
     @asyncSlot()
     async def applyConfig(self):
@@ -252,12 +302,17 @@ class MCPClientBridge(QObject):
 
             # Update global variables after config reload
             global SERVER_URL, MODEL_NAME, PROVIDER_TYPE, API_KEY, TIMEOUT, STREAMING_ENABLED
-            SERVER_URL = config.get("llm", "server_url")
-            MODEL_NAME = config.get("llm", "model_name")
-            PROVIDER_TYPE = config.get("llm", "provider_type")
-            API_KEY = config.get("llm", "api_key")
-            TIMEOUT = config.get("llm", "timeout")
-            STREAMING_ENABLED = config.get("llm", "streaming")
+            # Get the active provider configuration
+            active_provider_name = config.get("active_llm_provider")
+            active_provider_config = config.get("llm_providers", active_provider_name)
+            
+            # Update global variables from the active provider
+            SERVER_URL = active_provider_config.get("server_url")
+            MODEL_NAME = active_provider_config.get("model_name")
+            PROVIDER_TYPE = active_provider_config.get("provider_type", active_provider_name)
+            API_KEY = active_provider_config.get("api_key", "")
+            TIMEOUT = active_provider_config.get("timeout", 120)
+            STREAMING_ENABLED = active_provider_config.get("streaming", True)
 
             # Create new client with updated config
             self.conversation_manager.add_message(

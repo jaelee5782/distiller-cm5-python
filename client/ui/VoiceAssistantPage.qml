@@ -21,6 +21,18 @@ PageBase {
         _serverName = serverName;
     }
 
+    // Connect to bridge ready signal
+    Connections {
+        target: bridge
+        
+        function onBridgeReady() {
+            // Initialize conversation when bridge is ready
+            if (conversationView) {
+                conversationView.updateModel(bridge.get_conversation());
+            }
+        }
+    }
+
     // Header area with server name and status
     VoiceAssistantPageHeader {
         id: header
@@ -31,7 +43,7 @@ PageBase {
         height: 70 // Increased height to accommodate wrapping status text
         serverName: _serverName
         statusText: voiceAssistantPage.statusText
-        isConnected: bridge.isConnected
+        isConnected: bridge && bridge.ready ? bridge.isConnected : false
         onServerSelectClicked: {
             confirmServerChangeDialog.open();
         }
@@ -59,7 +71,9 @@ PageBase {
         
         onAccepted: {
             // Disconnect from current server
-            bridge.disconnectFromServer();
+            if (bridge && bridge.ready) {
+                bridge.disconnectFromServer();
+            }
             // Go back to server selection
             voiceAssistantPage.selectNewServer();
         }
@@ -78,11 +92,15 @@ PageBase {
 
         // Force model refresh when conversation changes
         Component.onCompleted: {
-            updateModel(bridge.get_conversation());
+            if (bridge && bridge.ready) {
+                updateModel(bridge.get_conversation());
+            } else {
+                updateModel([]);
+            }
         }
 
         Connections {
-            target: bridge
+            target: bridge && bridge.ready ? bridge : null
             
             function onConversationChanged() {
                 conversationView.updateModel(bridge.get_conversation());
@@ -147,13 +165,22 @@ PageBase {
         isProcessing: voiceAssistantPage.isProcessing
         compact: false
         onTextSubmitted: function(messageText) {
-            statusText = "Processing...";
-            isProcessing = true;
-            // Set response in progress to lock scrolling
-            conversationView.setResponseInProgress(true);
-            bridge.submit_query(messageText);
+            if (bridge && bridge.ready) {
+                statusText = "Processing...";
+                isProcessing = true;
+                // Set response in progress to lock scrolling
+                conversationView.setResponseInProgress(true);
+                bridge.submit_query(messageText);
+            } else {
+                messageToast.showMessage("Error: Bridge not ready", 3000);
+            }
         }
         onVoiceToggled: function(listening) {
+            if (!bridge || !bridge.ready) {
+                messageToast.showMessage("Error: Bridge not ready", 3000);
+                return;
+            }
+            
             if (listening) {
                 isListening = true;
                 statusText = "Listening...";

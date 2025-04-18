@@ -13,9 +13,23 @@ Item {
     width: parent ? parent.width : 0
     height: parent ? parent.height : 0
     
-    // Initialize theme if needed
+    // Connect to bridge ready signal if page uses the theme manager
+    Connections {
+        target: usesThemeManager ? bridge : null
+        
+        function onBridgeReady() {
+            // Initialize theme when bridge is ready
+            var savedTheme = bridge.getConfigValue("display", "dark_mode");
+            if (savedTheme !== "") {
+                ThemeManager.setDarkMode(savedTheme === "true" || savedTheme === "True");
+            }
+        }
+    }
+    
+    // Initialize component
     Component.onCompleted: {
-        if (usesThemeManager) {
+        // If bridge is already ready, initialize immediately
+        if (usesThemeManager && bridge && bridge.ready) {
             var savedTheme = bridge.getConfigValue("display", "dark_mode");
             if (savedTheme !== "") {
                 ThemeManager.setDarkMode(savedTheme === "true" || savedTheme === "True");

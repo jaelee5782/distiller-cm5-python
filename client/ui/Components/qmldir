@@ -37,5 +37,6 @@ AppSection 1.0 AppSection.qml
 AppTextArea 1.0 AppTextArea.qml
 AppTextField 1.0 AppTextField.qml
 AppToggleSwitch 1.0 AppToggleSwitch.qml
+CustomSlider 1.0 CustomSlider.qml
 PageBase 1.0 PageBase.qml
 SettingItem 1.0 SettingItem.qml

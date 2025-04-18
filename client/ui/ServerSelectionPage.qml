@@ -15,6 +15,25 @@ PageBase {
 
     signal serverSelected(string serverPath)
 
+    // Connect to bridge ready signal
+    Connections {
+        target: bridge
+        
+        function onBridgeReady() {
+            // Request server list when bridge is ready
+            if (serverSelectionPage.visible && serverSelectionPage.width > 0) {
+                serverInitTimer.stop(); // Stop the pending timer if it was running
+                bridge.getAvailableServers();
+            }
+        }
+        
+        function onAvailableServersChanged(servers) {
+            console.log("Received servers: " + servers.length);
+            availableServers = servers;
+            isLoading = false;
+        }
+    }
+
     Component.onCompleted: {
         // Call parent's onCompleted first
         // Use a small delay to ensure the component is fully constructed before requesting servers
@@ -29,17 +48,6 @@ PageBase {
             serverInitTimer.stop();
     }
 
-    // Connect to the bridge signals
-    Connections {
-        function onAvailableServersChanged(servers) {
-            console.log("Received servers: " + servers.length);
-            availableServers = servers;
-            isLoading = false;
-        }
-
-        target: bridge
-    }
-
     // Timer to delay server loading to prevent component creation during destruction
     Timer {
         id: serverInitTimer
@@ -48,8 +56,12 @@ PageBase {
         repeat: false
         running: false
         onTriggered: {
-            if (serverSelectionPage.visible && serverSelectionPage.width > 0)
+            if (serverSelectionPage.visible && serverSelectionPage.width > 0 && bridge && bridge.ready) {
                 bridge.getAvailableServers();
+            } else if (serverSelectionPage.visible && serverSelectionPage.width > 0) {
+                console.error("Bridge not ready, cannot get servers");
+                isLoading = false;
+            }
         }
     }
 
@@ -223,7 +235,10 @@ PageBase {
             Text {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: serverSelectionPage.isLoading ? "Loading servers..." : (availableServers.length === 0 ? "No servers found" : "")
+                text: serverSelectionPage.isLoading ? 
+                      "Loading servers..." : 
+                      (availableServers.length === 0 ? 
+                      (bridge && bridge.ready ? "No servers found" : "Bridge not ready") : "")
                 color: ThemeManager.secondaryTextColor
                 font: FontManager.small
                 visible: serverSelectionPage.isLoading || availableServers.length === 0 // Only show when loading or no servers
@@ -237,8 +252,12 @@ PageBase {
                 text: "Refresh"
                 useFixedHeight: false
                 onClicked: {
-                    isLoading = true;
-                    bridge.getAvailableServers();
+                    if (bridge && bridge.ready) {
+                        isLoading = true;
+                        bridge.getAvailableServers();
+                    } else {
+                        console.error("Bridge not ready, cannot refresh servers");
+                    }
                 }
             }
         }

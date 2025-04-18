@@ -15,8 +15,25 @@ Switch {
     
     checked: value
     
-    onToggled: {
-        valueToggled(checked)
+    Component.onCompleted: {
+        console.log("AppToggleSwitch initialized with value: " + value + " (type: " + (typeof value) + ")");
+    }
+    
+    onCheckedChanged: {
+        console.log("AppToggleSwitch checked changed to: " + checked);
+        // Prevent signal loops by only emitting the signal if the checked state
+        // is different from the property value
+        if (value !== checked) {
+            valueToggled(checked);
+        }
+    }
+    
+    onValueChanged: {
+        console.log("AppToggleSwitch value property changed to: " + value);
+        // Update the checked state to match the value property
+        if (checked !== value) {
+            checked = value;
+        }
     }
     
     indicator: Rectangle {
