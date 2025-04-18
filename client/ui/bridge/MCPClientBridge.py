@@ -63,6 +63,13 @@ class MCPClientBridge(QObject):
         # Server discovery cache for debouncing
         self._last_server_discovery_time = 0
         self._server_discovery_cache_timeout = 5  # seconds
+        
+        # Configuration cache for optimized access
+        self._config_cache = {}
+        self._config_dirty = False
+        self._config_save_timer = None
+        self._config_cache_timeout = 300  # seconds - how long to keep cached values
+        self._config_cache_timestamps = {}  # Track when values were cached
 
     @pyqtProperty(bool, notify=bridgeReady)
     def ready(self):
@@ -175,13 +182,29 @@ class MCPClientBridge(QObject):
 
     @pyqtSlot(str, str, result="QVariant")
     def getConfigValue(self, section: str, key: str) -> str:
-        """Get a configuration value, always returning a string."""
-        # Get the active provider name for LLM-specific configs
-        active_provider_name = config.get("active_llm_provider")
+        """Get a configuration value, always returning a string.
+        Uses an in-memory cache to reduce disk I/O and improve UI responsiveness.
+        """
+        # Generate a cache key for this config value
+        cache_key = f"{section}.{key}"
+        current_time = time.time()
         
+        # Check if the value is in the cache and not expired
+        if (cache_key in self._config_cache and 
+            current_time - self._config_cache_timestamps.get(cache_key, 0) < self._config_cache_timeout):
+            logger.debug(f"Cache hit for {cache_key}")
+            return self._config_cache[cache_key]
+        
+        # Not in cache or expired, need to fetch from config
+        logger.debug(f"Cache miss for {cache_key}, fetching from config")
+        
+        # Get the active provider name for LLM-specific configs
+        if cache_key == "active_llm_provider":
+            value = config.get("active_llm_provider")
         # Special cases for provider-specific configuration
-        if section == "llm":
+        elif section == "llm":
             # Map old flat "llm" section to new "llm_providers.{active_provider}" structure
+            active_provider_name = config.get("active_llm_provider")
             value = config.get("llm_providers", active_provider_name, key)
             logger.debug(
                 f"Getting provider config value {key} for {active_provider_name}: {value} (type: {type(value)})"
@@ -199,55 +222,89 @@ class MCPClientBridge(QObject):
                 f"Getting config value for {section}.{key}: {value} (type: {type(value)})"
             )
         
+        # Format the value for QML
         if value is None:
             logger.debug(f"Value is None, returning empty string")
-            return ""
+            result = ""
         elif isinstance(value, list):
             if key == "stop":
                 # For stop sequences, escape special characters for QML
-                return "\n".join(
+                result = "\n".join(
                     str(v).encode("unicode_escape").decode("utf-8") for v in value
                 )
-            return ",".join(str(v) for v in value)
+            else:
+                result = ",".join(str(v) for v in value)
         elif section == "logging" and key == "level":
             # Return the current log level in uppercase
-            return self._current_log_level
-        result = str(value)
-        logger.debug(f"Final value: {result}")
+            result = self._current_log_level
+        else:
+            result = str(value)
+            
+        # Cache the result
+        self._config_cache[cache_key] = result
+        self._config_cache_timestamps[cache_key] = current_time
+        
+        logger.debug(f"Cached value for {cache_key}: {result}")
         return result
 
     @pyqtSlot(str, str, "QVariant")
     def setConfigValue(self, section: str, key: str, value):
-        """Set a configuration value."""
+        """Set a configuration value and update the cache."""
+        # Cache key for consistent cache management 
+        cache_key = f"{section}.{key}"
+        logger.debug(f"Setting config value: {cache_key} = {value}")
+
         # Process the value first
         if key == "stop" and isinstance(value, str):
             # For stop sequences, escape special characters for QML
-            value = [
+            processed_value = [
                 v.encode("utf-8").decode("unicode_escape")
                 for v in value.split("\n")
                 if v
             ]
         elif key in ["timeout", "top_k", "n_ctx", "max_tokens", "streaming_chunk_size"]:
-            value = int(value) if value != "" else 0
+            processed_value = int(value) if value != "" else 0
         elif key in ["temperature", "top_p", "repetition_penalty"]:
-            value = float(value) if value != "" else 0.0
+            processed_value = float(value) if value != "" else 0.0
         elif key == "streaming" or key == "file_enabled":
-            value = bool(value)
+            processed_value = bool(value)
         elif section == "logging" and key == "level":
-            value = value.upper()
+            processed_value = value.upper()
+            # Update the current log level cache
+            self._current_log_level = processed_value
+        else:
+            processed_value = value
 
         # Special cases for provider-specific configuration
         if section == "llm":
             # Map flat "llm" section to proper nested path
-            active_provider_name = config.get("active_llm_provider")
-            config.set("llm_providers", active_provider_name, key, value)
-            logger.debug(f"Setting LLM provider config: llm_providers.{active_provider_name}.{key} = {value}")
+            active_provider_name = self.getConfigValue("active_llm_provider", "")
+            config.set("llm_providers", active_provider_name, key, processed_value)
+            logger.debug(f"Setting LLM provider config: llm_providers.{active_provider_name}.{key} = {processed_value}")
+            
+            # Update the cache for this specific provider setting
+            provider_cache_key = f"llm_providers.{active_provider_name}.{key}"
+            self._update_config_cache(provider_cache_key, str(processed_value))
         elif section == "llama_cpp" and key == "start_wait_time":
             # Special case for llama_cpp specific settings
-            config.set(section, key, value)
+            config.set(section, key, processed_value)
+            self._update_config_cache(cache_key, str(processed_value))
         else:
             # Regular configuration paths
-            config.set(section, key, value)
+            config.set(section, key, processed_value)
+            self._update_config_cache(cache_key, str(processed_value))
+        
+        # Mark configuration as dirty for delayed save
+        self._config_dirty = True
+        
+        # Signal that config has changed - might want to emit a dedicated signal if needed
+        # self.configChanged.emit(section, key)
+        
+    def _update_config_cache(self, cache_key, value):
+        """Update the configuration cache with a new value."""
+        logger.debug(f"Updating config cache: {cache_key} = {value}")
+        self._config_cache[cache_key] = value
+        self._config_cache_timestamps[cache_key] = time.time()
 
     @asyncSlot()
     async def applyConfig(self):
@@ -263,6 +320,26 @@ class MCPClientBridge(QObject):
 
             # Store the current conversation
             current_conversation = self.conversation_manager.get_messages_copy()
+
+            # Wait for any pending configuration saves to complete
+            if self._config_save_timer and not self._config_save_timer.done():
+                try:
+                    await self._config_save_timer
+                except asyncio.CancelledError:
+                    # The timer was cancelled, which is fine - just means we'll save now
+                    pass
+                except Exception as save_error:
+                    logger.warning(f"Error in pending config save: {save_error}")
+                    
+            # Ensure configuration is saved to disk if there are pending changes
+            if self._config_dirty:
+                try:
+                    config.save_to_file(self.config_path)
+                    self._config_dirty = False
+                    logger.info(f"Configuration saved successfully before apply")
+                except Exception as save_error:
+                    self._handle_error(save_error, "Config save", 
+                        user_friendly_msg=f"Warning: Could not save pending changes: {str(save_error)}")
 
             # Clean up existing client
             if self.client:
@@ -311,7 +388,11 @@ class MCPClientBridge(QObject):
             )
             
             try:
+                # Clear configuration cache before reload to ensure fresh values
+                self._config_cache = {}
+                self._config_cache_timestamps = {}
                 config.reload()
+                logger.info("Configuration cache cleared and config reloaded")
             except Exception as config_error:
                 raise ValueError(f"Failed to reload configuration: {str(config_error)}. Check your config file for syntax errors.")
 
@@ -381,9 +462,37 @@ class MCPClientBridge(QObject):
 
     @pyqtSlot()
     def saveConfigToFile(self):
-        """Save the current configuration to file."""
-        config.save_to_file(self.config_path)
-        logger.info(f"Configuration saved to {self.config_path}")
+        """Save the current configuration to file with debouncing.
+        
+        Uses a timer to debounce rapid save requests, ensuring we don't
+        repeatedly write to disk when multiple settings are changed in succession.
+        """
+        if not self._config_dirty:
+            logger.debug("Configuration not dirty, skipping save")
+            return
+            
+        logger.info(f"Scheduling configuration save to {self.config_path}")
+        
+        # Cancel existing timer if it's running
+        if self._config_save_timer and not self._config_save_timer.done():
+            self._config_save_timer.cancel()
+            
+        # Schedule a new save with a delay
+        self._config_save_timer = asyncio.create_task(self._debounced_save_config())
+        
+    async def _debounced_save_config(self):
+        """Perform the actual configuration save after a delay."""
+        # Delay for a moment to allow batching multiple changes
+        await asyncio.sleep(1.0)
+        
+        try:
+            logger.info(f"Saving configuration to {self.config_path}")
+            config.save_to_file(self.config_path)
+            self._config_dirty = False
+            logger.info(f"Configuration saved successfully to {self.config_path}")
+        except Exception as e:
+            self._handle_error(e, "Config save", 
+                user_friendly_msg=f"Failed to save configuration: {str(e)}")
 
     async def connect_to_server(self):
         """Ask the user to select a server from the list of available servers."""
