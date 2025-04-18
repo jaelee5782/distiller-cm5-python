@@ -43,6 +43,8 @@ class MCPClientBridge(QObject):
         # Initialize sub-components
         self.status_manager = StatusManager(self)
         self.conversation_manager = ConversationManager(self)
+        # Ensure streaming message is reset at startup
+        self.conversation_manager.reset_streaming_message()
         self.server_discovery = ServerDiscovery(self)
         self.network_utils = NetworkUtils()
 
@@ -399,6 +401,10 @@ class MCPClientBridge(QObject):
 
         self.status_manager.update_status(StatusManager.STATUS_PROCESSING)
 
+        # Reset any existing streaming message to ensure we don't append to it
+        # This is crucial to prevent new responses from being added to previous chat bubbles
+        self.conversation_manager.reset_streaming_message()
+        
         # Start tracking response content
         assistant_message = {
             "timestamp": self.conversation_manager.get_timestamp(),
@@ -412,6 +418,37 @@ class MCPClientBridge(QObject):
 
             # Use the MCPClient process_query interface, which now returns a generator for streaming responses
             async for chunk in self.client.process_query(query):
+                if chunk.startswith("\n[Error:") or chunk.startswith("\n[Unexpected Error:") or chunk.startswith("\n[Reached max tool iterations"):
+                    # Error messages from the MCP client
+                    if self.conversation_manager.current_streaming_message:
+                        self.conversation_manager.current_streaming_message["content"] += chunk
+                        self.conversationChanged.emit()
+                    continue
+                
+                # Handle special marker to create a new message bubble after tool calls
+                if chunk == "__NEW_RESPONSE_AFTER_TOOL_CALLS__":
+                    # Reset the current streaming message to ensure we create a new one
+                    self.conversation_manager.reset_streaming_message()
+                    # Create a new message bubble for the response after tool calls
+                    assistant_message = {
+                        "timestamp": self.conversation_manager.get_timestamp(),
+                        "content": "",
+                    }
+                    self.conversation_manager.add_message(assistant_message)
+                    self.conversation_manager.current_streaming_message = assistant_message
+                    continue
+
+                # If this is a new response after tool calls (in case marker wasn't received)
+                if chunk and chunk.strip() and not self.conversation_manager.current_streaming_message:
+                    # Create a new message bubble for the response after tool calls
+                    logger.info("Creating new message bubble for response after tool calls")
+                    assistant_message = {
+                        "timestamp": self.conversation_manager.get_timestamp(),
+                        "content": "",
+                    }
+                    self.conversation_manager.add_message(assistant_message)
+                    self.conversation_manager.current_streaming_message = assistant_message
+
                 if self.conversation_manager.current_streaming_message:
                     # Update the message content with the new chunk
                     self.conversation_manager.current_streaming_message[
@@ -429,9 +466,7 @@ class MCPClientBridge(QObject):
                     "timestamp"
                 ]
                 message = self.conversation_manager.current_streaming_message["content"]
-                self.conversation_manager.current_streaming_message = (
-                    None  # Reset current message
-                )
+                self.conversation_manager.reset_streaming_message()
                 self.messageReceived.emit(message, timestamp)
 
         except Exception as e:
@@ -441,7 +476,7 @@ class MCPClientBridge(QObject):
                 self.conversation_manager.current_streaming_message["content"] = (
                     error_msg
                 )
-                self.conversation_manager.current_streaming_message = None
+                self.conversation_manager.reset_streaming_message()
             else:
                 self.conversation_manager.add_message(
                     {

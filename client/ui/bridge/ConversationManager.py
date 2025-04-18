@@ -82,3 +82,10 @@ class ConversationManager:
             A formatted timestamp string
         """
         return datetime.now().strftime("%H:%M:%S")
+
+    def reset_streaming_message(self):
+        """Reset the current streaming message reference.
+        
+        This should be called whenever starting a fresh message stream.
+        """
+        self.current_streaming_message = None
