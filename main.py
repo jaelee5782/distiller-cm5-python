@@ -5,6 +5,8 @@ MCP Client - Main Entry Point
 This script now delegates execution to cli.py, which handles
 argument parsing and running the interactive client.
 """
+
+import argparse
 import asyncio
 import sys
 import os
@@ -17,17 +19,28 @@ if project_root not in sys.path:
 
 # Import the main function from the actual CLI entry point
 from client.cli import main as cli_main
+from client.ui.App import App
 from utils.logger import logger # Keep logger for potential top-level errors
 from utils.distiller_exception import UserVisibleError
 # Import necessary components for LLM server management
 from client.llm_infra.llama_manager import LlamaCppServerManager
 from utils.config import PROVIDER_TYPE, SERVER_URL, MODEL_NAME
 
+def parse_args():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description="MCP Client")
+    # GUI options
+    parser.add_argument("--gui", action="store_true", help="Run the graphical user interface")
+    
+    # Parse only the known arguments, ignore others to avoid errors with QML arguments
+    return parser.parse_known_args()[0]
+
 async def main():
     """Main entry point that handles optional LLM server startup and delegates to cli.py"""
     
     llama_manager: Optional[LlamaCppServerManager] = None
     started_server = False
+    args = parse_args() # Parse command line arguments
     
     try:
         # --- Llama.cpp Server Management ---
@@ -56,8 +69,12 @@ async def main():
         
         # Directly call the main function from cli.py
         # cli.py handles argument parsing, client setup, and the chat loop.
-        logger.info("Starting CLI...")
-        await cli_main()
+        if args.gui:
+            logger.info("GUI mode selected. Starting graphical user interface...")
+            await App().run() # Run the interactive client
+        else:
+            logger.info("Starting CLI...")
+            await cli_main()
         
     except KeyboardInterrupt:
         logger.info("Application terminated by user (KeyboardInterrupt).")
