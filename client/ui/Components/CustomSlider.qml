@@ -1,8 +1,8 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
 
-// Reusable custom slider component
-Item {
+// Reusable custom slider component that works with three-button navigation
+NavigableItem {
     id: customSlider
     
     // Configurable properties
@@ -16,11 +16,49 @@ Item {
     property string valueFormat: ""
     property bool showLabel: true
     
+    // Navigation properties
+    isAdjustable: true
+    adjustmentStep: stepSize
+    
     // Signal emitted when value changes
     signal valueAdjusted(real newValue)
     
     Layout.fillWidth: true
     height: showLabel ? labelText.height + sliderItem.height + 8 : sliderItem.height
+    
+    // Override the base methods for Up/Down value adjustment
+    function increaseValue() {
+        adjustValue(stepSize)
+    }
+    
+    function decreaseValue() {
+        adjustValue(-stepSize)
+    }
+    
+    // Helper function to adjust value
+    function adjustValue(delta) {
+        var newValue = value + delta
+        
+        // Clamp to range
+        newValue = Math.max(from, Math.min(to, newValue))
+        
+        // Update if changed
+        if (value !== newValue) {
+            value = newValue
+            valueAdjusted(newValue)
+        }
+    }
+    
+    // Enter key behavior
+    Keys.onReturnPressed: function() {
+        if (!FocusManager.currentMode === FocusManager.sliderMode) {
+            // Enter slider adjustment mode
+            FocusManager.enterSliderMode()
+        } else {
+            // Exit slider adjustment mode
+            FocusManager.exitSpecialMode()
+        }
+    }
     
     // Label text if enabled
     Text {
@@ -29,7 +67,7 @@ Item {
         text: label + (valueFormat !== "" ? " (" + valueFormat + ")" : "")
         font.pixelSize: FontManager.fontSizeNormal
         font.family: FontManager.primaryFontFamily
-        color: ThemeManager.secondaryTextColor
+        color: customSlider.visualFocus ? ThemeManager.accentColor : ThemeManager.secondaryTextColor
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
@@ -53,8 +91,8 @@ Item {
             height: 6
             radius: 3
             color: ThemeManager.buttonColor
-            border.color: ThemeManager.borderColor
-            border.width: ThemeManager.borderWidth
+            border.color: customSlider.visualFocus ? ThemeManager.accentColor : ThemeManager.borderColor
+            border.width: customSlider.visualFocus ? 2 : ThemeManager.borderWidth
 
             // Filled portion
             Rectangle {
@@ -73,9 +111,9 @@ Item {
             width: 20
             height: 20
             radius: 10
-            color: mouseArea.pressed ? ThemeManager.buttonColor : ThemeManager.backgroundColor
-            border.color: ThemeManager.borderColor
-            border.width: ThemeManager.borderWidth
+            color: customSlider.visualFocus || mouseArea.pressed ? ThemeManager.accentColor : ThemeManager.backgroundColor
+            border.color: customSlider.visualFocus ? ThemeManager.accentColor : ThemeManager.borderColor
+            border.width: customSlider.visualFocus ? 2 : ThemeManager.borderWidth
         }
         
         // Touch/mouse area
@@ -105,6 +143,7 @@ Item {
             
             onPressed: function(mouse) {
                 updateValue(mouse.x);
+                customSlider.forceActiveFocus();
             }
             
             onPositionChanged: function(mouse) {

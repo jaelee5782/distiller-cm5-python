@@ -18,6 +18,68 @@ ApplicationWindow {
     title: AppInfo.appName
     font: FontManager.normal
     
+    // Dedicated key handler that stays on top of everything
+    FocusScope {
+        id: keyHandler
+        
+        anchors.fill: parent
+        focus: true
+        z: 2000 // Make sure it's above everything else
+        
+        // Use this Item to capture all key events
+        Item {
+            anchors.fill: parent
+            focus: true
+            
+            Keys.onPressed: function(event) {
+                console.log("Key pressed: " + event.key);
+                
+                // Handle navigation keys
+                if (event.key === Qt.Key_Up) {
+                    console.log("Key UP pressed");
+                    FocusManager.moveFocusUp();
+                    event.accepted = true;
+                }
+                else if (event.key === Qt.Key_Down) {
+                    console.log("Key DOWN pressed");
+                    FocusManager.moveFocusDown();
+                    event.accepted = true;
+                }
+                else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                    console.log("Key ENTER/RETURN pressed");
+                    FocusManager.handleEnterKey();
+                    event.accepted = true;
+                }
+            }
+            
+            // Explicitly grab focus whenever anything else tries to take it
+            onActiveFocusChanged: {
+                if (!activeFocus) {
+                    console.log("Key handler lost focus - reclaiming");
+                    forceActiveFocus();
+                }
+            }
+        }
+        
+        Component.onCompleted: {
+            console.log("Key handler initialized");
+            forceActiveFocus();
+        }
+        
+        // Timer to periodically ensure key handler has focus
+        Timer {
+            interval: 200
+            running: true
+            repeat: true
+            onTriggered: {
+                if (!keyHandler.activeFocus) {
+                    console.log("Key handler regaining focus");
+                    keyHandler.forceActiveFocus();
+                }
+            }
+        }
+    }
+    
     // Connect to the bridge ready signal
     Connections {
         target: bridge
@@ -43,6 +105,9 @@ ApplicationWindow {
             FontManager.primaryFontFamily = jetBrainsMono.name;
         }
         console.log("Application window initialized")
+        
+        // Set initial focus to key handler
+        keyHandler.forceActiveFocus()
     }
     
     // Handle application shutdown
@@ -67,12 +132,50 @@ ApplicationWindow {
         }
     }
 
-    // Main content area
+    // Main content area - full width since we removed the navigation buttons
     StackView {
         id: stackView
 
         anchors.fill: parent
         initialItem: serverSelectionComponent
+        
+        // Set focus to the new current item when it changes
+        onCurrentItemChanged: {
+            if (currentItem) {
+                console.log("StackView current item changed");
+                Qt.callLater(function() {
+                    // Reset focus to the key handler when changing pages
+                    console.log("Resetting focus to key handler");
+                    keyHandler.forceActiveFocus();
+                    
+                    // Initialize focusable items on the current page
+                    if (currentItem.collectFocusItems) {
+                        console.log("Collecting focusable items on current page");
+                        try {
+                            currentItem.collectFocusItems();
+                            
+                            // Ensure the key handler gets focus after a small delay
+                            focusTimer.restart();
+                        } catch (e) {
+                            console.error("Error collecting focus items: " + e);
+                        }
+                    } else {
+                        console.log("Current page does not have collectFocusItems method");
+                    }
+                });
+            }
+        }
+        
+        // Timer to ensure focus returns to key handler
+        Timer {
+            id: focusTimer
+            interval: 100
+            repeat: false
+            onTriggered: {
+                console.log("Focus timer triggered - forcing focus to key handler");
+                keyHandler.forceActiveFocus();
+            }
+        }
 
         // Server Selection Page
         Component {
@@ -263,7 +366,6 @@ ApplicationWindow {
                         sourceSize.height: 300
                         fadeInDuration: 300
                     }
-
                 }
 
                 // Improved typography
@@ -297,11 +399,8 @@ ApplicationWindow {
                         font.family: FontManager.primaryFontFamily
                         topPadding: 4
                     }
-
                 }
-
             }
-
         }
 
         // Simple loading indicator optimized for e-ink and Qt6
@@ -345,9 +444,7 @@ ApplicationWindow {
                     color: ThemeManager.textColor
                     opacity: 0.3
                 }
-
             }
-
         }
 
         // Start fade out after a longer delay to give e-ink time to render
@@ -371,7 +468,6 @@ ApplicationWindow {
                 splashScreen.visible = false;
             }
         }
-
     }
 
     // Debug console overlay (press F12 to toggle)
@@ -407,7 +503,6 @@ ApplicationWindow {
                     color: ThemeManager.tertiaryTextColor
                     font.pixelSize: FontManager.fontSizeNormal
                 }
-
             }
 
             Rectangle {
@@ -441,24 +536,20 @@ ApplicationWindow {
                         // Sample logs
                         text: "Application starting...\n"
                     }
-
                 }
-
             }
-
         }
-
     }
 
     // Log messages to debug console
     Connections {
-        function onLog(message) {
+        target: console
+        
+        // Need a signal handler that matches console signals
+        function onMessageLogged(message) {
             if (logTextArea)
                 logTextArea.append(message);
-
         }
-
-        target: console
     }
 
     // Create a signal handler for console.log that the text area can connect to
@@ -469,21 +560,24 @@ ApplicationWindow {
 
         Component.onCompleted: {
             // Override the console.log function
+            var originalLog = console.log;
             console.log = function(message) {
+                // Call the original log function
+                originalLog.call(console, message);
+                // Emit our custom signal
                 consoleHelper.logMessage(message);
             };
         }
     }
-
+    
     // Connect the debug console text area to the log helper
     Connections {
+        target: consoleHelper
+        
         function onLogMessage(message) {
             if (logTextArea)
                 logTextArea.append(message);
-
         }
-
-        target: consoleHelper
     }
 
     // Handle F12 key to toggle debug console

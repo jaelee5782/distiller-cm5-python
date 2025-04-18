@@ -14,11 +14,71 @@ PageBase {
     property bool isListening: false
     property bool isProcessing: false
     property string statusText: "Ready"
+    property string inputBuffer: ""
+    property var focusableItems: []
 
     signal selectNewServer()
 
     onServerNameChanged: {
         _serverName = serverName;
+    }
+    
+    // Collect all focusable items on this page
+    function collectFocusItems() {
+        console.log("VoiceAssistantPage: Collecting focusable items");
+        focusableItems = []
+        
+        // Add buttons from InputArea
+        if (inputArea) {
+            console.log("InputArea found, adding buttons");
+            
+            // Access buttons through the exposed properties
+            if (inputArea.settingsButton && inputArea.settingsButton.navigable) {
+                console.log("Adding settings button to focusable items");
+                focusableItems.push(inputArea.settingsButton)
+            }
+            
+            if (inputArea.voiceButton && inputArea.voiceButton.navigable) {
+                console.log("Adding voice button to focusable items");
+                focusableItems.push(inputArea.voiceButton)
+            }
+            
+            if (inputArea.sendButton && inputArea.sendButton.navigable) {
+                console.log("Adding send button to focusable items");
+                focusableItems.push(inputArea.sendButton)
+            }
+        } else {
+            console.log("InputArea not found or not fully initialized yet");
+        }
+        
+        // Add server select button in header if present
+        if (header && header.serverSelectButton && header.serverSelectButton.navigable) {
+            console.log("Adding server select button to focusable items");
+            focusableItems.push(header.serverSelectButton)
+        }
+        
+        console.log("Total focusable items: " + focusableItems.length);
+        
+        // Initialize focus manager with conversation view for scrolling
+        FocusManager.initializeFocusItems(focusableItems, conversationView)
+    }
+    
+    Component.onCompleted: {
+        // Collect focusable items after component is fully loaded
+        console.log("VoiceAssistantPage completed, scheduling focus collection");
+        Qt.callLater(collectFocusItems);
+    }
+
+    // Add a timer to ensure focus items are collected after everything is fully loaded
+    Timer {
+        id: focusInitTimer
+        interval: 500
+        running: true
+        repeat: false
+        onTriggered: {
+            console.log("Focus init timer triggered");
+            collectFocusItems();
+        }
     }
 
     // Connect to bridge ready signal
@@ -44,6 +104,7 @@ PageBase {
         serverName: _serverName
         statusText: voiceAssistantPage.statusText
         isConnected: bridge && bridge.ready ? bridge.isConnected : false
+        
         onServerSelectClicked: {
             confirmServerChangeDialog.open();
         }
@@ -112,8 +173,7 @@ PageBase {
                 statusText = "Ready";
                 
                 // Explicitly clear and reset the input area
-                inputArea.clearInput();
-                inputArea.resetState();
+                inputBuffer = "";
                 
                 // Delay turning off response mode slightly to ensure the final message is rendered
                 responseEndTimer.start();
@@ -146,9 +206,6 @@ PageBase {
                 isListening = false;
                 statusText = "Ready";
                 
-                // Reset input area
-                inputArea.resetState();
-                
                 // Enable scrolling on error
                 conversationView.setResponseInProgress(false);
                 
@@ -176,114 +233,74 @@ PageBase {
         anchors.bottomMargin: ThemeManager.spacingNormal
     }
 
-    // Input area
+    // Full input area with buttons row
     InputArea {
         id: inputArea
-
+        
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 8
-        z: 2 // Ensure input area is above other elements
+        anchors.margins: 8
+        
         isListening: voiceAssistantPage.isListening
         isProcessing: voiceAssistantPage.isProcessing
-        compact: false
-        onTextSubmitted: function(messageText) {
-            if (bridge && bridge.ready) {
-                statusText = "Processing...";
-                isProcessing = true;
-                // Set response in progress to lock scrolling
-                conversationView.setResponseInProgress(true);
-                bridge.submit_query(messageText);
-            } else {
-                messageToast.showMessage("Error: Bridge not ready", 3000);
-            }
-        }
-        onVoiceToggled: function(listening) {
-            if (!bridge || !bridge.ready) {
-                messageToast.showMessage("Error: Bridge not ready", 3000);
-                return;
-            }
-            
-            if (listening) {
-                isListening = true;
-                statusText = "Listening...";
-                bridge.start_listening();
-            } else {
-                isListening = false;
-                statusText = "Processing...";
-                isProcessing = true;
-                // Set response in progress to lock scrolling
-                conversationView.setResponseInProgress(true);
-                bridge.stop_listening();
-            }
-        }
-        onSettingsClicked: pushSettingsPage()
-    }
-
-    // Timer to delay disabling response mode to ensure UI is updated
-    Timer {
-        id: responseEndTimer
-
-        interval: 500 // Half-second delay
-        repeat: false
-        onTriggered: {
-            // Response complete, enable scrolling again
-            conversationView.setResponseInProgress(false);
-        }
-    }
-
-    // Add a reconnection suggestion timer
-    Timer {
-        id: reconnectionTimer
         
-        interval: 1000
-        repeat: false
-        onTriggered: {
-            if (!bridge.isConnected()) {
-                confirmReconnectionDialog.open();
+        onTextSubmitted: function(text) {
+            if (bridge && bridge.ready && bridge.isConnected && !isProcessing) {
+                inputBuffer = text;
+                if (bridge.sendTextMessage(text)) {
+                    isProcessing = true;
+                    statusText = "Processing...";
+                    // Set response in progress to lock scrolling
+                    conversationView.setResponseInProgress(true);
+                }
+            }
+        }
+        
+        onVoiceToggled: function(listening) {
+            if (bridge && bridge.ready && bridge.isConnected && !isProcessing) {
+                if (listening) {
+                    bridge.startListening();
+                } else {
+                    bridge.stopListening();
+                }
+            }
+        }
+        
+        onSettingsClicked: {
+            // Navigate to the settings page using the application-defined function
+            if (mainWindow && typeof mainWindow.pushSettingsPage === "function") {
+                mainWindow.pushSettingsPage();
             }
         }
     }
     
-    // Add reconnection dialog
-    AppDialog {
-        id: confirmReconnectionDialog
+    // Reconnection suggestion timer
+    Timer {
+        id: reconnectionTimer
         
-        dialogTitle: "Connection Problem"
-        message: "The connection to the server appears to be lost. Would you like to try reconnecting or select a different server?"
+        interval: 500
+        repeat: false
+        running: false
         
-        // Configure the standard buttons
-        standardButtonTypes: DialogButtonBox.Yes | DialogButtonBox.No
-        
-        // Button text customization
-        yesButtonText: "Select Server"
-        noButtonText: "Stay Here"
-        
-        // Secondary action configuration
-        showSecondaryAction: true
-        secondaryActionText: "Reconnect"
-        
-        // Use accent color for the positive button
-        positiveButtonColor: ThemeManager.accentColor
-        
-        onAccepted: {
-            // Go back to server selection
-            voiceAssistantPage.selectNewServer();
+        onTriggered: {
+            // Show reconnection dialog
+            confirmServerChangeDialog.open();
         }
+    }
+    
+    // Response end timer to delay turning off response in progress mode
+    Timer {
+        id: responseEndTimer
         
-        onSecondaryButtonClicked: {
-            // Try to reconnect to the current server
-            if (bridge && bridge.ready) {
-                statusText = "Reconnecting...";
-                // This returns the file-based name, which may not be correct
-                var result = bridge.connectToServer();
-                if (result) {
-                    messageToast.showMessage("Reconnection failed: " + result, 3000);
-                } else {
-                    messageToast.showMessage("Reconnecting to server...", 2000);
-                }
-            }
+        interval: 300
+        repeat: false
+        running: false
+        
+        onTriggered: {
+            // Turn off response in progress mode
+            conversationView.setResponseInProgress(false);
         }
     }
 }
+

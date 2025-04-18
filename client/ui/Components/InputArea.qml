@@ -17,6 +17,11 @@ Rectangle {
     property bool isProcessing: false
     property bool compact: true
 
+    // Expose buttons as properties
+    property alias settingsButton: settingsButton
+    property alias voiceButton: voiceButton
+    property alias sendButton: sendButton
+
     signal textSubmitted(string text)
     signal voiceToggled(bool listening)
     signal settingsClicked()
@@ -196,29 +201,31 @@ Rectangle {
                     width: 36
                     height: 36
                     flat: true
+                    property bool navigable: true
+                    property bool isActiveItem: false
                     onClicked: inputArea.settingsClicked()
 
                     background: Rectangle {
-                        color: parent.pressed ? ThemeManager.pressedColor : "transparent"
-                        border.width: 0
+                        color: parent.isActiveItem ? ThemeManager.accentColor : (parent.pressed ? ThemeManager.pressedColor : "transparent")
+                        opacity: parent.isActiveItem ? 0.2 : 1.0
+                        border.width: parent.isActiveItem ? 1 : 0
+                        border.color: ThemeManager.accentColor
                         radius: width / 2
                     }
 
                     contentItem: Text {
-                        text: ""
+                        text: "⚙"  // Gear icon as text
                         font: FontManager.heading
                         color: ThemeManager.textColor
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
-                        opacity: settingsButton.hovered ? 1 : 0.7
+                        opacity: settingsButton.isActiveItem ? 1.0 : (settingsButton.hovered ? 1 : 0.7)
 
                         Behavior on opacity {
                             NumberAnimation {
                                 duration: 150
                             }
-
                         }
-
                     }
 
                 }
@@ -231,14 +238,18 @@ Rectangle {
                     height: 36
                     flat: true
                     checkable: true
+                    property bool navigable: true
+                    property bool isActiveItem: false
                     checked: inputArea.isListening
                     onClicked: {
                         inputArea.voiceToggled(checked);
                     }
 
                     background: Rectangle {
-                        color: parent.checked ? ThemeManager.subtleColor : "transparent"
-                        border.width: 0
+                        color: parent.isActiveItem ? ThemeManager.accentColor : (parent.checked ? ThemeManager.subtleColor : "transparent")
+                        opacity: parent.isActiveItem ? 0.2 : 1.0
+                        border.width: parent.isActiveItem ? 1 : 0
+                        border.color: ThemeManager.accentColor
                         radius: width / 2
                     }
 
@@ -355,6 +366,8 @@ Rectangle {
                 width: 36
                 height: 36
                 flat: true
+                property bool navigable: true
+                property bool isActiveItem: false
                 enabled: textInput.text.trim() !== ""
                 onClicked: {
                     if (textInput.text.trim() !== "") {
@@ -364,8 +377,10 @@ Rectangle {
                 }
 
                 background: Rectangle {
-                    color: !parent.enabled ? "transparent" : (parent.pressed ? ThemeManager.pressedColor : "transparent")
-                    border.width: 0
+                    color: !parent.enabled ? "transparent" : (parent.isActiveItem ? ThemeManager.accentColor : (parent.pressed ? ThemeManager.pressedColor : "transparent"))
+                    opacity: parent.isActiveItem ? 0.2 : 1.0
+                    border.width: parent.isActiveItem ? 1 : 0
+                    border.color: ThemeManager.accentColor
                     radius: width / 2
                 }
 

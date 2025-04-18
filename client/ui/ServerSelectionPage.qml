@@ -12,8 +12,42 @@ PageBase {
     property bool isLoading: true
     property real cardSize: 200
     property real gridSpacing: 16
+    property var focusableItems: []
 
     signal serverSelected(string serverPath)
+
+    // Collect all focusable items on this page
+    function collectFocusItems() {
+        focusableItems = []
+        console.log("ServerSelectionPage: Collecting focusable items");
+        
+        // Add server grid cards if available
+        if (serverGrid && availableServers.length > 0) {
+            console.log("ServerSelectionPage: Processing server grid with " + serverGrid.children.length + " potential items");
+            for (var i = 0; i < serverGrid.children.length; i++) {
+                var child = serverGrid.children[i]
+                if (child && child.navigable) {
+                    console.log("ServerSelectionPage: Adding server card to focusable items: " + child.serverName);
+                    child.objectName = "ServerCard_" + i; // Add a name for debugging
+                    focusableItems.push(child)
+                }
+            }
+        } else {
+            console.log("ServerSelectionPage: No server cards available");
+        }
+        
+        // Add the refresh button
+        if (refreshButton && refreshButton.navigable) {
+            console.log("ServerSelectionPage: Adding refresh button to focusable items");
+            refreshButton.objectName = "RefreshButton"; // Add a name for debugging
+            focusableItems.push(refreshButton)
+        }
+        
+        console.log("ServerSelectionPage: Total focusable items: " + focusableItems.length);
+        
+        // Initialize focus with our FocusManager, passing the scroll view
+        FocusManager.initializeFocusItems(focusableItems, serverScrollView)
+    }
 
     // Connect to bridge ready signal
     Connections {
@@ -35,6 +69,10 @@ PageBase {
             if (servers.length === 0) {
                 // Show a message to the user when no servers are found
                 messageToast.showMessage("No servers found. Please check your installation.", 4000);
+            } else {
+                // Use a small delay to ensure the Repeater has created all items
+                console.log("ServerSelectionPage: Servers changed, scheduling focus collection");
+                focusCollectionTimer.restart();
             }
         }
         
@@ -200,6 +238,7 @@ PageBase {
                             serverName: modelData.name
                             serverDescription: modelData.description || ""
                             serverPath: modelData.path
+                            navigable: true
                             
                             onCardClicked: function(path) {
                                 // Add a delay to allow e-ink display to refresh
@@ -250,56 +289,65 @@ PageBase {
             // Status text
             Text {
                 Layout.fillWidth: true
-                horizontalAlignment: Text.AlignHCenter
-                text: serverSelectionPage.isLoading ? 
-                      "Loading servers..." : 
-                      (availableServers.length === 0 ? 
-                      (bridge && bridge.ready ? "No servers found" : "Bridge not ready") : "")
+                text: "Tap refresh to check for new servers"
+                font.pixelSize: FontManager.fontSizeSmall
+                font.family: FontManager.primaryFontFamily
                 color: ThemeManager.secondaryTextColor
-                font: FontManager.small
-                visible: serverSelectionPage.isLoading || availableServers.length === 0 // Only show when loading or no servers
+                horizontalAlignment: Text.AlignCenter
             }
             
-            // Refresh button
+            // Refresh button (converted to AppButton)
             AppButton {
+                id: refreshButton
+                text: "Refresh Server List"
+                Layout.preferredWidth: Math.min(parent.width, 200)
                 Layout.alignment: Qt.AlignHCenter
-                Layout.preferredWidth: parent.width / 2
-                Layout.preferredHeight: ThemeManager.buttonHeight * 0.7
-                text: "Refresh"
-                useFixedHeight: false
+                navigable: true
+                
                 onClicked: {
                     if (bridge && bridge.ready) {
-                        isLoading = true;
-                        bridge.getAvailableServers();
+                        isLoading = true
+                        bridge.getAvailableServers()
                     } else {
-                        console.error("Bridge not ready, cannot refresh servers");
+                        messageToast.showMessage("Error: Application not fully initialized.", 3000)
                     }
                 }
             }
         }
     }
-
-    // Timer to allow e-ink display to refresh before navigation
+    
+    // Click timer to allow e-ink to update before proceeding
     Timer {
         id: clickTimer
-
+        
         property string serverPath: ""
-
-        interval: 300
+        
+        interval: 200
         repeat: false
+        running: false
+        
         onTriggered: {
-            console.log("Server selected: " + serverPath);
-            serverSelected(serverPath);
+            serverSelectionPage.serverSelected(serverPath)
         }
     }
-
-    // Message toast for error display
+    
+    // Page-specific toast for messages
     MessageToast {
         id: messageToast
         
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: footerArea.height + ThemeManager.spacingLarge
-        z: 10 // Above other content
+        anchors.bottom: footerArea.top
+        anchors.bottomMargin: ThemeManager.spacingNormal
+    }
+
+    // Timer to collect focus items after server list changes
+    Timer {
+        id: focusCollectionTimer
+        interval: 100
+        repeat: false
+        onTriggered: {
+            console.log("ServerSelectionPage: Running delayed focus collection");
+            collectFocusItems();
+        }
     }
 }

@@ -9,6 +9,7 @@ Rectangle {
     property string statusText: "Ready"
     property bool isConnected: false
     property bool compact: true
+    property alias serverSelectButton: backButton
 
     signal serverSelectClicked()
 
@@ -34,30 +35,17 @@ Rectangle {
         spacing: ThemeManager.spacingNormal
 
         // Back button (server select)
-        AppRoundButton {
+        AppButton {
             id: backButton
             
-            Layout.preferredWidth: 32
+            Layout.preferredWidth: 40
             Layout.preferredHeight: 32
             Layout.alignment: Qt.AlignVCenter
             
-            flat: true
-            
-            contentItem: Text {
-                text: "←"
-                font.pixelSize: FontManager.fontSizeLarge
-                color: ThemeManager.accentColor
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
-            }
+            text: "←"
+            navigable: true
             
             onClicked: header.serverSelectClicked()
-            
-            ToolTip {
-                visible: parent.hovered
-                text: "Change server"
-                delay: 500
-            }
         }
 
         // Server name and status column
@@ -97,11 +85,21 @@ Rectangle {
                 elide: Text.ElideRight
                 maximumLineCount: 2
                 clip: true
+                
+                property bool hovered: false
+                property bool truncated: (elide === Text.ElideRight) && (text.length > 0) && (paintedWidth < implicitWidth)
             
                 ToolTip {
                     visible: statusTextItem.truncated && statusTextItem.hovered
                     text: statusText
                     delay: 500
+                }
+                
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onEntered: statusTextItem.hovered = true
+                    onExited: statusTextItem.hovered = false
                 }
             }
         }

@@ -13,6 +13,10 @@ AppSection {
     property alias enableStreaming: streamingItem.toggleValue
     property alias maxTokens: maxTokensInput.text
     readonly property string providerTypeText: providerComboBox.currentText
+    property bool isDirty: false
+    
+    // Focus handling
+    property bool canFocus: true
 
     // Signal for when configuration changes are applied
     signal configChanged()
@@ -48,8 +52,21 @@ AppSection {
         return fallback;
     }
 
+    // Function to get configuration for saving
+    function getConfig() {
+        return {
+            "server_url": serverUrl,
+            "provider_type": providerTypeText,
+            "model_name": modelName,
+            "api_key": apiKey,
+            "temperature": temperature.toString(),
+            "streaming": enableStreaming.toString(),
+            "max_tokens": maxTokens
+        };
+    }
+
     // Function to refresh all settings from bridge
-    function refresh() {
+    function updateFromBridge() {
         if (bridge && bridge.ready) {
             serverUrl = safeGetConfigValue("llm", "server_url", "http://localhost:8000");
             providerTypeIndex = getProviderTypeIndex(safeGetConfigValue("llm", "provider_type", "llama-cpp"));
@@ -62,6 +79,9 @@ AppSection {
             var streamingValue = safeGetConfigValue("llm", "streaming", "true");
             console.log("Streaming value from config: " + streamingValue);
             enableStreaming = (streamingValue === "true" || streamingValue === "True" || streamingValue === true);
+            
+            // Reset dirty flag
+            isDirty = false;
         }
     }
 
@@ -71,17 +91,40 @@ AppSection {
         
         function onBridgeReady() {
             // Refresh values when bridge becomes ready
-            refresh();
+            updateFromBridge();
         }
     }
 
     // Initialize with default values or from config
     Component.onCompleted: {
-        refresh();
+        updateFromBridge();
     }
 
     title: "LLM SETTINGS"
     compact: true
+    navigable: true
+    
+    // Support keyboard navigation with Up/Down/Enter keys only
+    Keys.onUpPressed: {
+        forceActiveFocus();
+        temperatureSlider.forceActiveFocus();
+        event.accepted = true;
+    }
+    
+    Keys.onDownPressed: {
+        forceActiveFocus();
+        providerComboBox.forceActiveFocus();
+        event.accepted = true;
+    }
+    
+    // Tab key handling removed - not available on hardware
+    
+    // Override forceActiveFocus to focus the first control
+    function forceActiveFocus() {
+        if (canFocus) {
+            providerComboBox.forceActiveFocus();
+        }
+    }
 
     ColumnLayout {
         width: parent.width
@@ -104,7 +147,7 @@ AppSection {
                 Layout.preferredHeight: 48
                 radius: ThemeManager.borderRadius
                 color: ThemeManager.backgroundColor
-                border.color: ThemeManager.borderColor
+                border.color: providerComboBox.activeFocus ? ThemeManager.accentColor : ThemeManager.borderColor
                 border.width: ThemeManager.borderWidth
 
                 ComboBox {
@@ -132,6 +175,7 @@ AppSection {
                                 bridge.setConfigValue("llm", "server_url", serverUrl);
                             }
                             
+                            llmSettingsSection.isDirty = true;
                             configChanged();
                         }
                     }
@@ -188,6 +232,17 @@ AppSection {
                         
                         highlighted: providerComboBox.highlightedIndex === index
                     }
+                    
+                    // Add focus handling
+                    Keys.onUpPressed: {
+                        maxTokensInput.forceActiveFocus();
+                        event.accepted = true;
+                    }
+                    
+                    Keys.onDownPressed: {
+                        serverUrlInput.forceActiveFocus();
+                        event.accepted = true;
+                    }
                 }
             }
         }
@@ -229,9 +284,23 @@ AppSection {
                         
                         if (bridge && bridge.ready) {
                             bridge.setConfigValue("llm", "server_url", text);
+                            llmSettingsSection.isDirty = true;
                             configChanged();
                         }
                     }
+                    
+                    // Add focus handling
+                    Keys.onUpPressed: {
+                        providerComboBox.forceActiveFocus();
+                        event.accepted = true;
+                    }
+                    
+                    Keys.onDownPressed: {
+                        modelNameInput.forceActiveFocus();
+                        event.accepted = true;
+                    }
+                    
+                    // Tab key handling removed - not available on hardware
                 }
             }
         }
@@ -267,12 +336,26 @@ AppSection {
                     selectByMouse: true
                     verticalAlignment: TextEdit.AlignVCenter
                     
+                    // Add focus handling
+                    Keys.onUpPressed: {
+                        serverUrlInput.forceActiveFocus();
+                        event.accepted = true;
+                    }
+                    
+                    Keys.onDownPressed: {
+                        apiKeyInput.forceActiveFocus();
+                        event.accepted = true;
+                    }
+                    
+                    // Tab key handling removed - not available on hardware
+                    
                     onTextChanged: {
                         var contentHeight = modelNameInput.contentHeight
                         modelNameContainer.height = Math.max(48, contentHeight + 16)
                         
                         if (bridge && bridge.ready) {
                             bridge.setConfigValue("llm", "model_name", text);
+                            llmSettingsSection.isDirty = true;
                             configChanged();
                         }
                     }
@@ -313,9 +396,23 @@ AppSection {
                     selectByMouse: true
                     echoMode: showPassword.checked ? TextInput.Normal : TextInput.Password
                     
+                    // Add focus handling
+                    Keys.onUpPressed: {
+                        modelNameInput.forceActiveFocus();
+                        event.accepted = true;
+                    }
+                    
+                    Keys.onDownPressed: {
+                        temperatureSlider.forceActiveFocus();
+                        event.accepted = true;
+                    }
+                    
+                    // Tab key handling removed - not available on hardware
+                    
                     onTextChanged: {
                         if (bridge && bridge.ready) {
                             bridge.setConfigValue("llm", "api_key", text);
+                            llmSettingsSection.isDirty = true;
                             configChanged();
                         }
                     }
@@ -372,9 +469,21 @@ AppSection {
                 value: 0.7
                 showLabel: false
                 
+                // Add focus handling
+                Keys.onUpPressed: {
+                    apiKeyInput.forceActiveFocus();
+                    event.accepted = true;
+                }
+                
+                Keys.onDownPressed: {
+                    streamingItem.forceActiveFocus();
+                    event.accepted = true;
+                }
+                
                 onValueAdjusted: function(newValue) {
                     if (bridge && bridge.ready) {
                         bridge.setConfigValue("llm", "temperature", newValue.toString());
+                        llmSettingsSection.isDirty = true;
                         configChanged();
                     }
                 }
@@ -422,9 +531,23 @@ AppSection {
                     selectByMouse: true
                     validator: IntValidator { bottom: 10; top: 32768 }
                     
+                    // Add focus handling
+                    Keys.onUpPressed: {
+                        streamingItem.forceActiveFocus();
+                        event.accepted = true;
+                    }
+                    
+                    Keys.onDownPressed: {
+                        providerComboBox.forceActiveFocus();
+                        event.accepted = true;
+                    }
+                    
+                    // Tab key handling removed - not available on hardware
+                    
                     onTextChanged: {
                         if (bridge && bridge.ready) {
                             bridge.setConfigValue("llm", "max_tokens", text);
+                            llmSettingsSection.isDirty = true;
                             configChanged();
                         }
                     }
@@ -452,7 +575,7 @@ AppSection {
                 console.log("Streaming toggle initialized with value: " + toggleValue);
             }
             
-            onToggleChanged: function(newValue) {
+            onUserToggled: function(newValue) {
                 console.log("Streaming toggle changed to: " + newValue);
                 if (bridge && bridge.ready) {
                     // Update the configuration value
@@ -466,8 +589,20 @@ AppSection {
                         console.log("Client not connected, cannot apply streaming setting immediately");
                     }
                     
+                    llmSettingsSection.isDirty = true;
                     configChanged();
                 }
+            }
+            
+            // Add focus handling
+            Keys.onUpPressed: {
+                temperatureSlider.forceActiveFocus();
+                event.accepted = true;
+            }
+            
+            Keys.onDownPressed: {
+                maxTokensInput.forceActiveFocus();
+                event.accepted = true;
             }
         }
     }

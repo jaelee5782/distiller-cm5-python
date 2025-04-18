@@ -26,6 +26,9 @@ ProcessingAnimation 1.0 ProcessingAnimation.qml
 singleton AppInfo 1.0 AppInfo.qml
 singleton ThemeManager 1.0 ThemeManager.qml
 singleton FontManager 1.0 FontManager.qml
+NavigableItem 1.0 NavigableItem.qml
+NavigableRoundButton 1.0 NavigableRoundButton.qml
+singleton FocusManager 1.0 FocusManager.qml
 
 # Reusable UI components
 AppButton 1.0 AppButton.qml

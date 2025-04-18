@@ -10,7 +10,13 @@ ScrollView {
     property int touchScrollSensitivity: 1
     property int keyNavigationSpeed: 40
     
+    // Expose the scroll animation for external use
+    property alias scrollAnimation: scrollAnimation
+    
     clip: true
+    
+    // Disable the internal keyboard handling since we'll handle it through FocusManager
+    Keys.enabled: false
     
     ScrollBar.horizontal: ScrollBar {
         policy: ScrollBar.AlwaysOff

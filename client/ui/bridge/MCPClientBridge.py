@@ -830,7 +830,7 @@ class MCPClientBridge(QObject):
         return self._is_connected
 
     @pyqtSlot()
-    def start_listening(self):
+    def startListening(self):
         """Start voice listening (emit the signal for UI update)."""
         try:
             logger.info("Voice activation requested")
@@ -853,7 +853,7 @@ class MCPClientBridge(QObject):
             self.listeningStopped.emit()
 
     @pyqtSlot()
-    def stop_listening(self):
+    def stopListening(self):
         """Stop voice listening (emit the signal for UI update)."""
         try:
             logger.info("Voice deactivation requested")

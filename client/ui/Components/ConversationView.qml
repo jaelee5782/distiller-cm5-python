@@ -11,6 +11,18 @@ ListView {
     property real lastContentY: 0
     property real lastContentHeight: 0
     property bool responseInProgress: false // Track if a response is being generated
+    
+    // Expose scroll animation for FocusManager
+    property alias scrollAnimation: smoothScrollAnimation
+    
+    // Animation for smooth scrolling when used with FocusManager
+    NumberAnimation {
+        id: smoothScrollAnimation
+        target: conversationView
+        property: "contentY"
+        duration: 150
+        easing.type: Easing.OutCubic
+    }
 
     // Update function for external callers
     function setResponseInProgress(inProgress) {
