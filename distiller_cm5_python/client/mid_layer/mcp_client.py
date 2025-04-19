@@ -16,6 +16,9 @@ from distiller_cm5_python.utils.config import (STREAMING_ENABLED, LOGGING_LEVEL,
 from contextlib import AsyncExitStack
 # Remove colorama import
 from distiller_cm5_python.utils.distiller_exception import UserVisibleError, LogOnlyError
+import signal
+import traceback
+import concurrent.futures
 
 
 class MCPClient:
@@ -319,12 +322,93 @@ class MCPClient:
         logger.info("--- Query Processing Complete ---")
 
     async def cleanup(self):
-        """Cleanup resources, like closing the session"""
-        logger.debug("Cleaning up resources")
+        """Clean up resources used by the client."""
+        logger.info("Starting MCP client cleanup")
+        
+        # Cancel all running tasks first
+        self._cancel_all_running_tasks()
+        
+        # If we have a process, terminate it
+        if hasattr(self, "_proc") and self._proc:
+            try:
+                logger.info("Terminating MCP server process")
+                # Send SIGTERM to allow graceful shutdown
+                if sys.platform == "win32":
+                    # Windows doesn't have SIGTERM
+                    self._proc.terminate()
+                else:
+                    os.kill(self._proc.pid, signal.SIGTERM)
+                
+                # Wait a bit for the process to exit
+                try:
+                    await asyncio.wait_for(self._proc.wait(), timeout=2.0)
+                except asyncio.TimeoutError:
+                    logger.warning("MCP server process didn't terminate, forcing kill")
+                    if sys.platform == "win32":
+                        self._proc.kill()
+                    else:
+                        os.kill(self._proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                # Process is already gone
+                logger.info("MCP server process already terminated")
+            except Exception as e:
+                logger.error(f"Error terminating MCP server process: {e}", exc_info=True)
+            finally:
+                self._proc = None
+        else:
+            logger.debug("No server process to terminate")
 
-        # Perform any cleanup
-        await self.exit_stack.aclose()
+        # Now safely close the exit stack
+        if hasattr(self, "_exit_stack") and self._exit_stack:
+            await self._safe_aclose_exit_stack()
+            self._exit_stack = None
+        
+        logger.info("MCP client cleanup completed")
 
-        logger.debug("Cleanup complete")
+    def _cancel_all_running_tasks(self):
+        """Cancel all running tasks safely."""
+        logger.info("Cancelling all MCP client tasks")
+        
+        try:
+            # Get all tasks in the current event loop
+            for task in asyncio.all_tasks():
+                # Skip the current task (cleanup)
+                if task is asyncio.current_task():
+                    continue
+                
+                # Only cancel tasks that belong to our client
+                task_name = task.get_name()
+                if "mcp_client" in task_name.lower():
+                    logger.info(f"Cancelling task: {task_name}")
+                    task.cancel()
+                    
+            logger.info("All MCP client tasks cancelled")
+        except Exception as e:
+            logger.error(f"Error cancelling tasks: {e}", exc_info=True)
 
-        return True
+    async def _safe_aclose_exit_stack(self):
+        """Safely close the exit stack with error handling."""
+        logger.info("Closing MCP client exit stack")
+        
+        if not self._exit_stack:
+            return
+            
+        try:
+            # Set a timeout for closing the exit stack
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                # Create a future that will close the exit stack
+                future = executor.submit(lambda: asyncio.run_coroutine_threadsafe(
+                    self._exit_stack.aclose(), asyncio.get_event_loop()))
+                
+                # Wait for the future to complete with a timeout
+                try:
+                    future.result(timeout=3.0)
+                    logger.info("Exit stack closed successfully")
+                except concurrent.futures.TimeoutError:
+                    logger.warning("Timeout while closing exit stack")
+                except Exception as e:
+                    logger.error(f"Error closing exit stack: {e}", exc_info=True)
+        except Exception as e:
+            logger.error(f"Critical error during exit stack closure: {e}", exc_info=True)
+            # Log the full traceback for debugging
+            logger.error(traceback.format_exc())

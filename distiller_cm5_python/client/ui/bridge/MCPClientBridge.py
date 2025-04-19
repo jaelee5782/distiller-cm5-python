@@ -9,6 +9,10 @@ import asyncio
 import os
 import sys
 import time  # Add time import for debouncing
+import psutil
+import threading
+import subprocess
+import signal
 
 from distiller_cm5_python.client.ui.bridge.ConversationManager import ConversationManager
 from distiller_cm5_python.client.ui.bridge.StatusManager import StatusManager
@@ -16,6 +20,8 @@ from distiller_cm5_python.client.ui.bridge.ServerDiscovery import ServerDiscover
 from distiller_cm5_python.client.ui.utils.NetworkUtils import NetworkUtils
 from distiller_cm5_python.utils.distiller_exception import UserVisibleError, LogOnlyError
 
+# Exit delay constant
+EXIT_DELAY_MS = 500  # Reduced delay from 1000ms to 500ms
 
 class MCPClientBridge(QObject):
     """
@@ -619,34 +625,183 @@ class MCPClientBridge(QObject):
             self._handle_error(e, "Query processing", 
                 user_friendly_msg="Failed to process your query. Please check your connection and try again.")
 
-    async def cleanup(self):
-        """Clean up resources."""
-        logger.info("Cleaning up MCPClientBridge resources")
-        if self.client:
-            try:
-                await self.client.cleanup()
-                self.client = None
-                logger.info("Client cleanup completed")
-            except Exception as e:
-                logger.error(f"Error during cleanup: {e}", exc_info=True)
-                # Ensure client is set to None even if cleanup fails
-                self.client = None
+    @pyqtSlot()
+    def shutdown(self):
+        """Handle application shutdown gracefully."""
+        logger.info("Bridge shutdown requested")
+        self.status_manager.update_status(StatusManager.STATUS_SHUTTING_DOWN)
 
-        # Reset conversation state to free memory
-        if hasattr(self, 'conversation_manager') and self.conversation_manager:
-            self.conversation_manager.reset_streaming_message()
-            # Only keep the last 5 messages to free memory
-            messages = self.conversation_manager.get_messages()
-            if len(messages) > 5:
-                self.conversation_manager.set_messages(messages[-5:])
+        try:
+            # Cancel any pending tasks first
+            if hasattr(self, '_pending_tasks') and self._pending_tasks:
+                for task in self._pending_tasks:
+                    if not task.done():
+                        task.cancel()
+                self._pending_tasks = []
+
+            # Cancel any pending save config task
+            if hasattr(self, '_save_config_task') and self._save_config_task and not self._save_config_task.done():
+                self._save_config_task.cancel()
+                self._save_config_task = None
+
+            # Schedule cleanup to run on the event loop
+            coro = self._do_shutdown_cleanup()
+            shutdown_task = asyncio.create_task(coro)
+            
+            # Add to pending tasks so it can be tracked
+            if not hasattr(self, '_pending_tasks'):
+                self._pending_tasks = []
+            self._pending_tasks.append(shutdown_task)
+
+            logger.info("Bridge shutdown initiated")
+        except Exception as e:
+            logger.error(f"Error during bridge shutdown: {e}", exc_info=True)
+            self._force_quit()
+
+    def _force_quit(self):
+        """Force the application to quit if normal shutdown doesn't complete."""
+        logger.warning("Bridge is forcing application to quit")
+        app_instance = QApplication.instance()
+        if app_instance:
+            app_instance.quit()
+        else:
+            logger.error("Failed to get QApplication instance for quit")
+            # Force exit as fallback
+            os._exit(1)  # Use os._exit for more forceful exit than sys.exit
+
+    async def _do_shutdown_cleanup(self):
+        """
+        Clean up resources when shutting down the application.
+        This is a critical method to ensure proper cleanup.
+        """
+        try:
+            logger.info("Starting shutdown cleanup")
+            # First, try normal cleanup - directly await the coroutine instead of using run_until_complete
+            if self.client:
+                try:
+                    await self.client.cleanup()
+                    logger.info("Completed normal cleanup")
+                except Exception as e:
+                    logger.error(f"Error during client cleanup: {e}", exc_info=True)
+            else:
+                logger.info("No client to clean up")
+        except Exception as e:
+            logger.error(f"Error during normal cleanup: {e}", exc_info=True)
         
-        # Reset server discovery cache
-        if hasattr(self, '_last_server_discovery_time'):
-            self._last_server_discovery_time = 0
+        try:
+            # Ensure any dangling processes are terminated
+            self._terminate_dangling_processes()
+            logger.info("Completed dangling process termination")
+        except Exception as e:
+            logger.error(f"Error terminating dangling processes: {e}", exc_info=True)
+        
+        # Force exit with a short delay to allow logs to be written
+        logger.info("Force quitting application from bridge")
+        # Schedule force exit but don't wait
+        threading.Thread(target=self._final_force_exit, daemon=True).start()
+        # Start immediate exit as well (in case the thread doesn't work)
+        await asyncio.sleep(0.1)  # Very short sleep to let logs flush, using asyncio.sleep
+        os._exit(0)  # Force immediate exit
 
-        self.is_connected = False
-        self.status_manager.update_status(StatusManager.STATUS_DISCONNECTED)
-        logger.info("MCPClientBridge cleanup completed")
+    def _final_force_exit(self):
+        """
+        Final force exit after a short delay to allow logs to be written.
+        This is a safety measure in case the application doesn't exit properly.
+        """
+        time.sleep(EXIT_DELAY_MS / 1000.0)
+        logger.info("Executing final force exit")
+        # Kill any remaining processes before exiting
+        self._terminate_dangling_processes(force=True)
+        # Force exit the application
+        os._exit(0)
+
+    def _terminate_dangling_processes(self, force=False):
+        """
+        Find and terminate any dangling MCP processes.
+        """
+        logger.info("Checking for dangling MCP processes")
+        
+        # Find our process ID
+        current_pid = os.getpid()
+        
+        try:
+            # Get all child processes of our process
+            current_process = psutil.Process(current_pid)
+            children = current_process.children(recursive=True)
+            
+            for child in children:
+                try:
+                    # Check if it's an MCP-related process
+                    if force or any(mcp_name in ' '.join(child.cmdline()).lower() 
+                                  for mcp_name in ['mcp', 'model-control']):
+                        logger.info(f"Terminating process {child.pid}: {' '.join(child.cmdline())}")
+                        if force:
+                            # Force kill
+                            child.kill()
+                        else:
+                            # Try graceful termination first
+                            child.terminate()
+                            # Wait briefly for it to terminate
+                            try:
+                                child.wait(timeout=1)
+                            except psutil.TimeoutExpired:
+                                # Force kill if it doesn't terminate
+                                logger.info(f"Process {child.pid} didn't terminate, force killing")
+                                child.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    # Process already gone or can't be accessed
+                    pass
+                except Exception as e:
+                    logger.error(f"Error terminating process {child.pid}: {e}")
+        
+        except Exception as e:
+            logger.error(f"Error finding/terminating dangling processes: {e}", exc_info=True)
+
+    async def cleanup(self):
+        """Complete cleanup of all bridge resources."""
+        logger.info("Bridge full cleanup started")
+        
+        try:
+            # First perform shutdown cleanup which handles the client
+            await self._do_shutdown_cleanup()
+            
+            # Clean up all other resources
+            # Stop all background tasks
+            if hasattr(self, '_background_tasks') and self._background_tasks:
+                for task in self._background_tasks:
+                    if not task.done():
+                        task.cancel()
+                
+                # Wait for background tasks to finish
+                try:
+                    if self._background_tasks:
+                        await asyncio.wait_for(
+                            asyncio.gather(*self._background_tasks, return_exceptions=True),
+                            timeout=2.0
+                        )
+                except asyncio.TimeoutError:
+                    logger.warning("Some background tasks did not cancel in time")
+                
+                self._background_tasks = []
+                
+            # Clean up any server discovery resources
+            if hasattr(self, "server_discovery") and self.server_discovery:
+                try:
+                    self.server_discovery.cleanup()
+                except Exception as e:
+                    logger.error(f"Error cleaning up server discovery: {e}", exc_info=True)
+            
+            # Clean up any audio resources if applicable
+            if hasattr(self, "_audio_enabled") and self._audio_enabled:
+                try:
+                    # Add specific audio cleanup code here if needed
+                    logger.info("Cleaning up audio resources")
+                except Exception as e:
+                    logger.error(f"Error cleaning up audio resources: {e}", exc_info=True)
+            
+            logger.info("Bridge full cleanup completed")
+        except Exception as e:
+            logger.error(f"Error during bridge full cleanup: {e}", exc_info=True)
 
     @pyqtSlot()
     def reset_status(self):
@@ -655,69 +810,6 @@ class MCPClientBridge(QObject):
             self.status_manager.update_status(StatusManager.STATUS_IDLE)
         else:
             self.status_manager.update_status(StatusManager.STATUS_DISCONNECTED)
-
-    @pyqtSlot()
-    def shutdown(self):
-        """Handle application shutdown gracefully."""
-        logger.info("Shutdown requested")
-        self.status_manager.update_status(StatusManager.STATUS_SHUTTING_DOWN)
-
-        try:
-            # Schedule cleanup to run on the event loop
-            coro = self._do_shutdown_cleanup()
-            asyncio.create_task(coro)
-
-            # We'll also set a timer to force quit after a timeout
-            # This ensures the app exits even if async cleanup hangs
-            QTimer.singleShot(5000, self._force_quit)
-
-            logger.info("Shutdown initiated")
-        except Exception as e:
-            logger.error(f"Error during shutdown: {e}", exc_info=True)
-            self._force_quit()
-
-    def _force_quit(self):
-        """Force the application to quit if normal shutdown doesn't complete."""
-        logger.warning("Forcing application to quit")
-        app_instance = QApplication.instance()
-        if app_instance:
-            app_instance.quit()
-        else:
-            logger.error("Failed to get QApplication instance for quit")
-            # Force exit as fallback
-            sys.exit(1)
-
-    async def _do_shutdown_cleanup(self):
-        """Perform cleanup operations during shutdown."""
-        try:
-            logger.info("Performing shutdown cleanup")
-
-            # Disconnect from server
-            if self.client:
-                logger.info("Cleaning up client during shutdown")
-                try:
-                    await asyncio.wait_for(self.client.cleanup(), timeout=3.0)
-                except asyncio.TimeoutError:
-                    logger.warning("Client cleanup timeout during shutdown")
-                except Exception as e:
-                    logger.error(
-                        f"Error cleaning up client during shutdown: {e}", exc_info=True
-                    )
-                finally:
-                    self.client = None
-
-            logger.info("Shutdown cleanup completed")
-        except Exception as e:
-            logger.error(f"Error during shutdown cleanup: {e}", exc_info=True)
-        finally:
-            # Ensure the application quits
-            app_instance = QApplication.instance()
-            if app_instance:
-                app_instance.quit()
-            else:
-                logger.error("Failed to get QApplication instance for quit")
-                # Force exit as fallback
-                sys.exit(1)
 
     @pyqtSlot()
     def getAvailableServers(self):
@@ -871,8 +963,19 @@ class MCPClientBridge(QObject):
         async def _do_disconnect():
             try:
                 if self.client:
-                    await self.client.cleanup()
-                    self.client = None
+                    try:
+                        # Timeout the cleanup operation to prevent hanging
+                        cleanup_task = self.client.cleanup()
+                        await asyncio.wait_for(cleanup_task, timeout=5.0)
+                    except asyncio.TimeoutError:
+                        logger.warning("Client cleanup timed out during disconnection")
+                    except Exception as e:
+                        logger.error(f"Error during client cleanup in disconnection: {e}", exc_info=True)
+                    finally:
+                        # Always reset the client reference and connection state
+                        self.client = None
+                        
+                # Always update the connection state
                 self.is_connected = False
                 self.status_manager.update_status(StatusManager.STATUS_DISCONNECTED)
                 self.conversation_manager.add_message(
