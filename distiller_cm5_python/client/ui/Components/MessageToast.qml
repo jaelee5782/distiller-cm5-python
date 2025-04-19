@@ -3,6 +3,7 @@ import QtQuick.Controls 2.15
 
 Rectangle {
     id: messageToast
+    objectName: "toastBackground"
 
     function showMessage(message, duration) {
         messageText.text = message;

@@ -6,6 +6,7 @@ ServerStatusIndicator 1.0 ServerStatusIndicator.qml
 VoiceAssistantPageHeader 1.0 VoiceAssistantPageHeader.qml
 MessageItem 1.0 MessageItem.qml
 InputArea 1.0 InputArea.qml
+VoiceInputArea 1.0 VoiceInputArea.qml
 MessageToast 1.0 MessageToast.qml
 ConversationView 1.0 ConversationView.qml
 LoadingIndicator 1.0 LoadingIndicator.qml
