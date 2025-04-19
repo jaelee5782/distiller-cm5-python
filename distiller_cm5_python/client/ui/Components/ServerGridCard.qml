@@ -44,9 +44,9 @@ NavigableItem {
                 width: parent.width * 0.4
                 height: width
                 radius: width / 2
-                color: "transparent"
+                color: ThemeManager.transparentColor
                 border.width: 1
-                border.color: root.visualFocus ? "white" : ThemeManager.borderColor
+                border.color: root.visualFocus ? ThemeManager.textOnAccentColor : ThemeManager.borderColor
                 anchors.horizontalCenter: parent.horizontalCenter
                 
                 // Server initial in the center of the icon
@@ -55,7 +55,7 @@ NavigableItem {
                     anchors.centerIn: parent
                     font.pixelSize: parent.width * 0.6
                     font.family: FontManager.primaryFontFamily
-                    color: root.visualFocus ? "white" : ThemeManager.textColor
+                    color: root.visualFocus ? ThemeManager.textOnAccentColor : ThemeManager.textColor
                 }
             }
             
@@ -66,7 +66,7 @@ NavigableItem {
                 horizontalAlignment: Text.AlignHCenter
                 font.pixelSize: FontManager.fontSizeNormal
                 font.family: FontManager.primaryFontFamily
-                color: root.visualFocus ? "white" : ThemeManager.textColor
+                color: root.visualFocus ? ThemeManager.textOnAccentColor : ThemeManager.textColor
                 wrapMode: Text.WordWrap
                 maximumLineCount: 2
                 elide: Text.ElideRight
@@ -80,7 +80,7 @@ NavigableItem {
                 horizontalAlignment: Text.AlignHCenter
                 font.pixelSize: FontManager.fontSizeSmall
                 font.family: FontManager.primaryFontFamily
-                color: root.visualFocus ? "white" : ThemeManager.secondaryTextColor
+                color: root.visualFocus ? ThemeManager.textOnAccentColor : ThemeManager.secondaryTextColor
                 wrapMode: Text.WordWrap
                 maximumLineCount: 2
                 elide: Text.ElideRight

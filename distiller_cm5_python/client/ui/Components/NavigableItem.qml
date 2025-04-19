@@ -38,9 +38,9 @@ Item {
     Rectangle {
         id: focusIndicator
         anchors.fill: parent
-        color: "transparent"
+        color: ThemeManager.transparentColor
         border.width: parent.visualFocus ? 3 : 0 // Increased border width
-        border.color: ThemeManager.accentColor || "#000000"
+        border.color: ThemeManager.accentColor
         radius: 4
         visible: parent.visualFocus
         
@@ -48,7 +48,7 @@ Item {
         Rectangle {
             anchors.fill: parent
             anchors.margins: 2
-            color: ThemeManager.accentColor || "#000000"
+            color: ThemeManager.accentColor
             opacity: 0.2 // Increased opacity
             radius: 3
             visible: parent.visible

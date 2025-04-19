@@ -83,7 +83,7 @@ ScrollView {
         background: Rectangle {
             implicitWidth: 6
             radius: width / 2
-            color: Qt.rgba(0, 0, 0, 0.1)
+            color: ThemeManager.shadowColor
             opacity: 0.3
         }
     }
@@ -195,7 +195,7 @@ ScrollView {
         Text {
             anchors.centerIn: parent
             text: Math.round((root.contentItem.contentY / (root.contentItem.contentHeight - root.height)) * 100) + "%"
-            color: "white"
+            color: ThemeManager.textOnAccentColor
             font.pixelSize: 12
             font.bold: true
             visible: root.contentItem.contentHeight > root.height

@@ -23,8 +23,8 @@ Dialog {
     property color defaultButtonColor: ThemeManager.buttonColor
     property color acceptButtonColor: ThemeManager.accentColor
     property color focusButtonColor: ThemeManager.darkMode ? 
-                                    Qt.darker(ThemeManager.accentColor, 1.3) : 
-                                    Qt.lighter(ThemeManager.accentColor, 1.5)
+                                    ThemeManager.darkAccentColor : 
+                                    ThemeManager.lightAccentColor
     
     // Dialog setup
     title: dialogTitle

@@ -21,7 +21,7 @@ NavigableItem {
     // Visual feedback for focused state
     Rectangle {
         anchors.fill: parent
-        color: "transparent"
+        color: ThemeManager.transparentColor
         border.width: root.visualFocus ? 2 : 0
         border.color: ThemeManager.accentColor
         visible: root.visualFocus
@@ -35,7 +35,7 @@ NavigableItem {
         id: sectionBackground
         anchors.fill: parent
         anchors.bottomMargin: bottomMargin
-        color: "transparent"
+        color: ThemeManager.transparentColor
 
         // Add subtle shadow for better visual separation (optional)
         Rectangle {
@@ -45,8 +45,8 @@ NavigableItem {
             anchors.leftMargin: -1
             anchors.rightMargin: -1
             anchors.bottomMargin: 2
-            color: "transparent"
-            border.color: Qt.rgba(0, 0, 0, 0.05)
+            color: ThemeManager.transparentColor
+            border.color: ThemeManager.borderShadowColor
             border.width: 1
             radius: ThemeManager.borderRadius + 1
             z: -1
@@ -60,8 +60,8 @@ NavigableItem {
 
         width: parent.width
         height: headerRow.height + (compact ? ThemeManager.spacingNormal * 1.25 : ThemeManager.spacingNormal * 1.5)
-        color: root.visualFocus ? Qt.lighter(ThemeManager.headerColor, 1.1) : ThemeManager.headerColor
-        border.color: showBorder ? ThemeManager.borderColor : "transparent"
+        color: root.visualFocus ? ThemeManager.lightAccentColor : ThemeManager.headerColor
+        border.color: showBorder ? ThemeManager.borderColor : ThemeManager.transparentColor
         border.width: showBorder ? ThemeManager.borderWidth : 0
         radius: ThemeManager.borderRadius
 

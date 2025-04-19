@@ -145,12 +145,12 @@ PageBase {
             id: contentBackground
             width: settingsScrollView.width
             height: settingsColumn.height
-            color: "transparent"
+            color: ThemeManager.transparentColor
             
             // Light background shading for scrollable area
             Rectangle {
                 anchors.fill: parent
-                color: Qt.darker(ThemeManager.backgroundColor, 1.02) // Very subtle darkening
+                color: ThemeManager.lightShadeColor
                 visible: ThemeManager.darkMode ? false : true
                 opacity: 0.5
             }
@@ -248,9 +248,9 @@ PageBase {
                             Rectangle {
                                 anchors.fill: parent
                                 radius: 4
-                                color: parent.visualFocus ? "#CCCCCC" : "#EEEEEE"
+                                color: parent.visualFocus ? ThemeManager.focusBackgroundColor : ThemeManager.buttonColor
                                 border.width: parent.visualFocus ? 2 : 1
-                                border.color: parent.visualFocus ? "#000000" : "#CCCCCC"
+                                border.color: parent.visualFocus ? ThemeManager.focusBorderColor : ThemeManager.borderColor
                                 
                                 // Button text
                                 Text {
@@ -259,7 +259,7 @@ PageBase {
                                     text: displaySettings.darkTheme ? "ON" : "OFF"
                                     font.pixelSize: FontManager.fontSizeSmall
                                     font.family: FontManager.primaryFontFamily
-                                    color: "#000000" // Always black for visibility
+                                    color: parent.parent.visualFocus ? ThemeManager.focusTextColor : ThemeManager.textColor
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
