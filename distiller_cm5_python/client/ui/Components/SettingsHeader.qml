@@ -7,6 +7,8 @@ Rectangle {
     
     property bool showApplyButton: true
     property alias backButton: backBtn
+    property alias applyButton: applyBtn
+    property bool applyButtonVisible: false
     
     signal backClicked()
     signal applyClicked()
@@ -34,5 +36,23 @@ Rectangle {
         font.family: FontManager.primaryFontFamily
         anchors.centerIn: parent
         color: ThemeManager.textColor
+    }
+    
+    // Apply button with checkmark icon
+    AppRoundButton {
+        id: applyBtn
+        iconText: "✓"
+        anchors.right: parent.right
+        anchors.rightMargin: ThemeManager.spacingNormal
+        anchors.verticalCenter: parent.verticalCenter
+        width: 40
+        height: 32
+        showBorder: true
+        visible: applyButtonVisible
+        navigable: true
+        
+        onClicked: {
+            header.applyClicked();
+        }
     }
 }

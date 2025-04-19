@@ -11,9 +11,8 @@ PageBase {
     // Signal to navigate back to the previous page
     signal backClicked()
 
-    // Track currently focused section
+    // Track navigable items
     property var focusableItems: []
-    property var allFocusableItems: [] // Contains both sections and their internal controls
     
     // Helper function to safely get config values with fallbacks
     function safeGetConfigValue(section, key, fallback) {
@@ -26,69 +25,56 @@ PageBase {
     
     // Collect all focusable items on this page
     function collectFocusItems() {
-        console.log("SettingsPage: Collecting focusable items");
-        focusableItems = []
-        allFocusableItems = []
+        focusableItems = [];
         
         // Add header back button
         if (header && header.backButton && header.backButton.navigable) {
-            console.log("SettingsPage: Adding back button");
-            focusableItems.push(header.backButton)
-            allFocusableItems.push(header.backButton)
+            focusableItems.push(header.backButton);
         }
         
-        // Add settings sections' focusable items
-        var sections = settingsColumn.getSettingSections()
-        console.log("SettingsPage: Found " + sections.length + " settings sections");
-        
-        for (var i = 0; i < sections.length; i++) {
-            var section = sections[i]
-            if (section.visible && section.navigable) {
-                console.log("SettingsPage: Adding section: " + section.title);
-                focusableItems.push(section)
-                allFocusableItems.push(section)
-                
-                // If the section has internal controls, collect them too
-                if (section.getNavigableControls && typeof section.getNavigableControls === "function") {
-                    var controls = section.getNavigableControls();
-                    for (var j = 0; j < controls.length; j++) {
-                        if (controls[j] && controls[j].navigable) {
-                            console.log("SettingsPage: Adding control from " + section.title);
-                            allFocusableItems.push(controls[j]);
-                        }
-                    }
-                }
-            }
+        // Add header apply button
+        if (header && header.applyButton && header.applyButton.navigable && header.applyButtonVisible) {
+            focusableItems.push(header.applyButton);
         }
         
-        // Add apply button
-        if (applyButton && applyButton.navigable) {
-            console.log("SettingsPage: Adding apply button");
-            focusableItems.push(applyButton)
-            allFocusableItems.push(applyButton)
+        // Add dark theme button
+        if (darkModeButton && darkModeButton.navigable) {
+            focusableItems.push(darkModeButton);
         }
         
-        console.log("SettingsPage: Total focusable sections: " + focusableItems.length);
-        console.log("SettingsPage: Total focusable items including controls: " + allFocusableItems.length);
+        // Add network refresh button
+        if (networkInfoSection && networkInfoSection.refreshButton && networkInfoSection.refreshButton.navigable) {
+            focusableItems.push(networkInfoSection.refreshButton);
+        }
         
         // Initialize focus with our FocusManager, passing the scroll view
-        FocusManager.initializeFocusItems(focusableItems, settingsScrollView)
+        FocusManager.initializeFocusItems(focusableItems, settingsScrollView);
+    }
+    
+    // Ensure focus is set to first item after initialization
+    function setInitialFocus() {
+        if (focusableItems.length > 0) {
+            FocusManager.setFocusToItem(focusableItems[0]);
+        }
     }
     
     Component.onCompleted: {
         // Collect focusable items after a short delay to ensure they're created
-        console.log("SettingsPage: Component completed");
-        Qt.callLater(collectFocusItems)
+        Qt.callLater(function() {
+            collectFocusItems();
+            setInitialFocus();
+        });
     }
     
     // Timer to ensure collection after full initialization
     Timer {
         id: initTimer
-        interval: 200
+        interval: 300
         running: true
         repeat: false
         onTriggered: {
             collectFocusItems();
+            setInitialFocus();
         }
     }
     
@@ -100,8 +86,7 @@ PageBase {
             // Reset all components with updated config values when bridge becomes ready
             if (settingsPage.visible) {
                 // Force update of all settings sections
-                // This will cause them to read current values from the bridge
-                settingsColumn.forceUpdate();
+                displaySettings.updateFromBridge();
             }
         }
     }
@@ -124,9 +109,16 @@ PageBase {
         anchors.right: parent.right
         height: 60 // Adjusted height without subtitle
         z: 2 // Ensure header stays above content
-        showApplyButton: false // Hide the apply button from header
+        
+        // Configure apply button
+        applyButtonVisible: anySettingsDirty() 
+        
         onBackClicked: {
             settingsPage.backClicked();
+        }
+        
+        onApplyClicked: {
+            saveAllSettings();
         }
     }
 
@@ -137,11 +129,10 @@ PageBase {
         anchors.top: header.bottom
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.bottom: applyButton.top
+        anchors.bottom: parent.bottom
         anchors.topMargin: 1 // Connect with header
         anchors.leftMargin: ThemeManager.spacingSmall // Reduced left margin
         anchors.rightMargin: ThemeManager.spacingSmall // Reduced right margin
-        anchors.bottomMargin: ThemeManager.spacingNormal // Make room for the apply button
         
         // Setting contentHeight explicitly for proper scrolling
         contentHeight: settingsColumn.height
@@ -170,91 +161,229 @@ PageBase {
             id: settingsColumn
             // This ensures the column fills exactly the width of the ScrollView's content area
             width: settingsScrollView.width
-            spacing: 0 // We're using the section's bottom margin for spacing
+            spacing: ThemeManager.spacingNormal
             
-            // Function to force update of all children
-            function forceUpdate() {
-                for (var i = 0; i < children.length; i++) {
-                    var child = children[i];
-                    if (child && typeof child.updateFromBridge === "function") {
-                        child.updateFromBridge();
-                    }
-                }
-            }
-            
-            // Get all setting sections for navigation
-            function getSettingSections() {
-                var sections = [];
-                for (var i = 0; i < children.length; i++) {
-                    var child = children[i];
-                    if (child && typeof child.updateFromBridge === "function") {
-                        sections.push(child);
-                    }
-                }
-                return sections;
-            }
-            
-            // Display Settings
-            DisplaySettingsSection {
+            // Enhanced Display Settings
+            AppSection {
                 id: displaySettings
+                
+                property bool isDirty: false
+                property bool darkTheme: false
+                property alias darkThemeButton: darkModeButton
+                
+                title: "DISPLAY SETTINGS"
+                compact: true
                 width: parent.width
-                navigable: true
                 
-                onConfigChanged: {
-                    applyButton.dirty = true;
+                function updateFromBridge() {
+                    if (bridge && bridge.ready) {
+                        var savedTheme = bridge.getConfigValue("display", "dark_mode");
+                        if (savedTheme !== "") {
+                            darkTheme = (savedTheme === "true" || savedTheme === "True");
+                            // Update the button text to reflect current state
+                            if (darkModeButtonText) {
+                                darkModeButtonText.text = darkTheme ? "ON" : "OFF";
+                            }
+                        }
+                        isDirty = false;
+                        updateApplyButtonVisibility();
+                    }
                 }
                 
-                // Must manually apply changes for dark mode since it's not persisted yet
-                onDarkThemeToggled: function(enabled) {
-                    ThemeManager.setDarkMode(enabled);
+                function getConfig() {
+                    return {
+                        "dark_mode": darkTheme.toString()
+                    };
                 }
-            }
-            
-            // Audio Settings (simplified)
-            AudioSettingsSection {
-                id: audioSettings
-                width: parent.width
-                navigable: true
                 
-                onConfigChanged: {
-                    applyButton.dirty = true;
-                }
-            }
-            
-            // LLM Settings
-            LlmSettingsSection {
-                id: llmSettings
-                width: parent.width 
-                navigable: true
-                
-                onConfigChanged: {
-                    applyButton.dirty = true;
-                }
-            }
-            
-            // Developer Settings
-            DeveloperSettingsSection {
-                id: developerSettings
-                width: parent.width
-                navigable: true
-                
-                onConfigChanged: {
-                    applyButton.dirty = true;
+                ColumnLayout {
+                    width: parent.width
+                    spacing: ThemeManager.spacingLarge
+                    
+                    // Description text
+                    Text {
+                        text: "Choose a theme optimized for e-ink display"
+                        font.pixelSize: FontManager.fontSizeNormal
+                        font.family: FontManager.primaryFontFamily
+                        color: ThemeManager.secondaryTextColor
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: ThemeManager.spacingNormal
+                        wrapMode: Text.WordWrap
+                    }
+                    
+                    // Dark theme toggle
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: ThemeManager.spacingLarge
+                        
+                        // Label
+                        Text {
+                            text: "DARK THEME"
+                            font.pixelSize: FontManager.fontSizeNormal
+                            font.family: FontManager.primaryFontFamily
+                            color: ThemeManager.secondaryTextColor
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        
+                        // Dark theme button - implemented as a NavigableItem
+                        NavigableItem {
+                            id: darkModeButton
+                            width: 80
+                            height: 36
+                            navigable: true
+                            
+                            // Set the clicked signal
+                            onClicked: {
+                                // Toggle dark theme
+                                var newValue = !displaySettings.darkTheme;
+                                displaySettings.darkTheme = newValue;
+                                darkModeButtonText.text = newValue ? "ON" : "OFF";
+                                ThemeManager.setDarkMode(newValue);
+                                displaySettings.isDirty = true;
+                                updateApplyButtonVisibility();
+                            }
+                            
+                            // Visual rectangle
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: 4
+                                color: parent.visualFocus ? "#CCCCCC" : "#EEEEEE"
+                                border.width: parent.visualFocus ? 2 : 1
+                                border.color: parent.visualFocus ? "#000000" : "#CCCCCC"
+                                
+                                // Button text
+                                Text {
+                                    id: darkModeButtonText
+                                    anchors.centerIn: parent
+                                    text: displaySettings.darkTheme ? "ON" : "OFF"
+                                    font.pixelSize: FontManager.fontSizeSmall
+                                    font.family: FontManager.primaryFontFamily
+                                    color: "#000000" // Always black for visibility
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                
+                                // Optional: touch/mouse handling
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: darkModeButton.clicked()
+                                }
+                            }
+                        }
+                    }
                 }
             }
             
             // Network Information
-            NetworkInfoSection {
+            AppSection {
                 id: networkInfoSection
+                
+                property alias refreshButton: ipRefreshButton
+
+                title: "WI-FI INFORMATION"
+                compact: true
                 width: parent.width
-                navigable: true
+                
+                // Connect to bridge ready signal to update network info
+                Connections {
+                    target: bridge
+                    
+                    function onBridgeReady() {
+                        // Update IP address when bridge is ready
+                        if (wifiIpAddress) {
+                            var ipAddress = bridge.getWifiIpAddress();
+                            wifiIpAddress.ipAddress = ipAddress;
+                            wifiIpAddress.text = ipAddress ? ipAddress : "Not available";
+                        }
+                    }
+                }
+                
+                ColumnLayout {
+                    width: parent.width
+                    spacing: ThemeManager.spacingLarge
+                    
+                    // Description text
+                    Text {
+                        text: "View wifi details for this device"
+                        font.pixelSize: FontManager.fontSizeNormal
+                        font.family: FontManager.primaryFontFamily
+                        color: ThemeManager.secondaryTextColor
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: ThemeManager.spacingNormal
+                        wrapMode: Text.WordWrap
+                    }
+                    
+                    // WiFi IP Address section with refresh button
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: ThemeManager.spacingNormal
+                        
+                        // Left column with label and value
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: ThemeManager.spacingSmall
+                            
+                            // WiFi IP Address Label
+                            Text {
+                                text: "IP ADDRESS"
+                                font.pixelSize: FontManager.fontSizeNormal
+                                font.family: FontManager.primaryFontFamily
+                                color: ThemeManager.secondaryTextColor
+                                Layout.fillWidth: true
+                            }
+                            
+                            // WiFi IP Address Value
+                            Text {
+                                id: wifiIpAddress
+                                property string ipAddress: ""
+                                
+                                Component.onCompleted: {
+                                    if (bridge && bridge.ready) {
+                                        ipAddress = bridge.getWifiIpAddress();
+                                        text = ipAddress ? ipAddress : "Not available";
+                                    } else {
+                                        text = "Bridge not ready";
+                                    }
+                                }
+                                
+                                font.pixelSize: FontManager.fontSizeNormal
+                                font.family: FontManager.primaryFontFamily
+                                color: ThemeManager.textColor
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                                Layout.topMargin: 4
+                            }
+                        }
+                        
+                        // Refresh button
+                        AppRoundButton {
+                            id: ipRefreshButton
+                            iconText: "↻"
+                            width: 32
+                            height: 32
+                            showBorder: true
+                            navigable: true
+                            
+                            onClicked: {
+                                if (bridge && bridge.ready) {
+                                    // Update the IP address display
+                                    var newIpAddress = bridge.getWifiIpAddress();
+                                    wifiIpAddress.ipAddress = newIpAddress;
+                                    wifiIpAddress.text = newIpAddress ? newIpAddress : "Not available";
+                                } else {
+                                    wifiIpAddress.text = "Bridge not ready";
+                                }
+                            }
+                        }
+                    }
+                }
             }
             
             // About Section
             AboutSection {
                 id: aboutSection
                 width: parent.width
-                navigable: true
             }
             
             // Final bottom spacing
@@ -265,63 +394,34 @@ PageBase {
         }
     }
     
-    // Apply button (fixed to bottom)
-    AppButton {
-        id: applyButton
-        text: "Apply Changes"
-        property bool dirty: false
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom  
-        anchors.bottomMargin: ThemeManager.spacingNormal
-        width: Math.min(parent.width - ThemeManager.spacingLarge * 2, 220)
-        visible: dirty
-        navigable: true
-        
-        onClicked: {
-            // Collect settings from all sections
-            if (bridge && bridge.ready) {
-                // Display settings
-                if (displaySettings.isDirty) {
-                    var displayConfig = displaySettings.getConfig();
-                    for (var key in displayConfig) {
-                        bridge.setConfigValue("display", key, displayConfig[key]);
-                    }
+    // Helper function to check if any settings are dirty
+    function anySettingsDirty() {
+        return displaySettings.isDirty;
+    }
+    
+    // Update apply button visibility based on dirty state
+    function updateApplyButtonVisibility() {
+        header.applyButtonVisible = anySettingsDirty();
+        collectFocusItems(); // Refresh focus items when visibility changes
+    }
+    
+    // Save all settings
+    function saveAllSettings() {
+        if (bridge && bridge.ready) {
+            // Display settings
+            if (displaySettings.isDirty) {
+                var displayConfig = displaySettings.getConfig();
+                for (var key in displayConfig) {
+                    bridge.setConfigValue("display", key, displayConfig[key]);
                 }
-                
-                // Audio settings
-                if (audioSettings.isDirty) {
-                    var audioConfig = audioSettings.getConfig();
-                    for (var key in audioConfig) {
-                        bridge.setConfigValue("audio", key, audioConfig[key]);
-                    }
-                }
-                
-                // LLM settings
-                if (llmSettings.isDirty) {
-                    var llmConfig = llmSettings.getConfig();
-                    for (var key in llmConfig) {
-                        bridge.setConfigValue("llm", key, llmConfig[key]);
-                    }
-                }
-                
-                // Developer settings
-                if (developerSettings.isDirty) {
-                    var devConfig = developerSettings.getConfig();
-                    for (var key in devConfig) {
-                        bridge.setConfigValue("developer", key, devConfig[key]);
-                    }
-                }
-                
-                // Save changes to config file
-                bridge.saveConfig();
-                
-                // Reset dirty state
-                applyButton.dirty = false;
-                displaySettings.isDirty = false;
-                audioSettings.isDirty = false;
-                llmSettings.isDirty = false;
-                developerSettings.isDirty = false;
             }
+            
+            // Save changes to config file
+            bridge.saveConfig();
+            
+            // Reset dirty state
+            displaySettings.isDirty = false;
+            updateApplyButtonVisibility();
         }
     }
 }

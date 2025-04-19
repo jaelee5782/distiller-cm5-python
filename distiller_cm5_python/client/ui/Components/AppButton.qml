@@ -8,7 +8,9 @@ NavigableItem {
     property bool useFixedHeight: true
     property string text: ""
     property color backgroundColor: getBackgroundColor()
-    property color textColor: root.visualFocus ? "#FFFFFF" : (ThemeManager.textColor || "#000000")
+    property color textColor: root.visualFocus ? 
+                             (ThemeManager.darkMode ? "#000000" : "#FFFFFF") : 
+                             (ThemeManager.textColor || "#000000")
     property int fontSize: FontManager.fontSizeSmall
     
     width: parent ? parent.width : implicitWidth

@@ -32,7 +32,9 @@ NavigableItem {
         id: textItem
         text: root.iconText || root.text
         font: FontManager.heading
-        color: root.visualFocus ? "white" : ThemeManager.textColor
+        color: root.visualFocus ? 
+               (ThemeManager.darkMode ? "#000000" : "#FFFFFF") : 
+               ThemeManager.textColor
         anchors.centerIn: parent
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter

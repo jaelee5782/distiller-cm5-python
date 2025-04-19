@@ -15,7 +15,7 @@ Item {
                                   (ThemeManager.accentColor || "#000000") : 
                                   (ThemeManager.buttonColor || "#EEEEEE")
     property color textColor: highlighted ? 
-                            "#FFFFFF" : 
+                            (ThemeManager.darkMode ? "#000000" : "#FFFFFF") : 
                             (ThemeManager.textColor || "#000000")
     
     // Function that will be called when Enter is pressed on this item
