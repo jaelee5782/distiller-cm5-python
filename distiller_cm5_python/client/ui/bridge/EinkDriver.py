@@ -4,20 +4,7 @@ import platform
 import uuid
 import os
 from typing import List
-
-# TODO: Remove this once we have a proper config file
-config = {
-    "display": {
-        "eink_dithering_enabled": True,
-        "eink_full_refresh_interval": 30,
-        "eink_refresh_interval": 500,
-        "eink_enabled": False,
-        "eink_buffer_size": 2,
-        "dark_mode": False,
-        "width": 240,
-        "height": 416
-    }
-}
+from ..display_config import config
 
 # Check if we're on a Rockchip platform
 _ROCK = 'rockchip' in platform.release()

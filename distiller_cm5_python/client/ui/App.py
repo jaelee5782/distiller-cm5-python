@@ -1,17 +1,16 @@
 # pyright: reportArgumentType=false
-from PyQt6.QtCore import QUrl, QTimer, Qt
+from PyQt6.QtCore import QUrl, QTimer, Qt, QObject, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtWidgets import QApplication
+from contextlib import AsyncExitStack
+from .display_config import config
 from distiller_cm5_python.client.ui.AppInfoManager import AppInfoManager
 from distiller_cm5_python.client.ui.bridge.MCPClientBridge import MCPClientBridge
-from distiller_cm5_python.client.ui.bridge.EInkRenderer import EInkRenderer, config
-from distiller_cm5_python.client.ui.bridge.EInkRendererBridge import EInkRendererBridge
-from contextlib import AsyncExitStack
-from qasync import QEventLoop
 from distiller_cm5_python.utils.logger import logger
+from distiller_cm5_sdk.whisper import Whisper # Assuming whisper.py is in this path
+from qasync import QEventLoop
 import asyncio
-import evdev
 import os
 import sys
 import signal
@@ -19,8 +18,21 @@ from concurrent.futures import ThreadPoolExecutor
 import atexit
 
 
-class App:
+if config.get("display").get("eink_enabled"):
+    from distiller_cm5_python.client.ui.bridge.EInkRenderer import EInkRenderer
+    from distiller_cm5_python.client.ui.bridge.EInkRendererBridge import EInkRendererBridge
+    import evdev
+
+
+class App(QObject): # Inherit from QObject to support signals/slots
+    # --- Signals ---
+    transcriptionUpdate = pyqtSignal(str, arguments=['transcription'])
+    transcriptionComplete = pyqtSignal(str, arguments=['full_text'])
+    recordingStateChanged = pyqtSignal(bool, arguments=['is_recording'])
+    # --- End Signals ---
+
     def __init__(self):
+        QObject.__init__(self)
         """Initialize the Qt application and QML engine."""
         # Register a global exit handler at process exit
         atexit.register(self._emergency_exit_handler)
@@ -28,6 +40,7 @@ class App:
         # Set platform to offscreen before creating QApplication if E-Ink is enabled
         # TODO: Make this conditional based on configuration
         if config.get("display").get("eink_enabled"):
+            # Import E-Ink Renderer and Bridge
             os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
         self.app = QApplication(sys.argv)
@@ -71,6 +84,13 @@ class App:
         # Set up signal handlers for graceful shutdown on system signals
         self._setup_signal_handlers()
 
+        # --- Whisper Initialization ---
+        # TODO: Load model path/size from config if needed
+        self.whisper = Whisper() 
+        self._is_actively_recording = False # Separate state for UI feedback
+        self._transcription_task = None
+        # --- End Whisper Initialization ---
+
     async def initialize(self):
         """Initialize the application."""
         # Register the bridge object with QML
@@ -87,6 +107,8 @@ class App:
         # Now register the initialized bridge with QML
         root_context.setContextProperty("bridge", self.bridge)
         root_context.setContextProperty("AppInfo", self.app_info)
+        # Expose App instance to QML for signals/slots
+        root_context.setContextProperty("AppController", self) 
 
         # Set display dimensions from config
         self._set_display_dimensions()
@@ -134,15 +156,15 @@ class App:
             self._init_eink_renderer()
             self._eink_initialized = True
 
-        # Start monitoring input device
-        root_objects = self.engine.rootObjects()
-        if root_objects:
-            main_window = root_objects[0]
-            input_device_path = '/dev/input/event5' # TODO: Make this configurable?
-            logger.info(f"Starting input device monitor for {input_device_path}...")
-            self._input_monitor_task = self.loop.create_task(self.monitor_input_device(input_device_path, main_window))
-        else:
-            logger.error("Cannot start input monitor: No root QML object found.")
+            # Start monitoring input device
+            root_objects = self.engine.rootObjects()
+            if root_objects:
+                main_window = root_objects[0]
+                input_device_path = '/dev/input/event5' # TODO: Make this configurable?
+                logger.info(f"Starting input device monitor for {input_device_path}...")
+                self._input_monitor_task = self.loop.create_task(self.monitor_input_device(input_device_path, main_window))
+            else:
+                logger.error("Cannot start input monitor: No root QML object found.")
 
         logger.info("Application initialized successfully")
 
@@ -191,6 +213,19 @@ class App:
         finally:
             logger.info(f"Stopped monitoring input device: {device_path}")
             dev.close() # Ensure device is closed
+
+        self._input_monitor_task = None
+
+        # --- Whisper Cleanup ---
+        if hasattr(self, "whisper") and self.whisper:
+            self.whisper.cleanup()
+            logger.info("Whisper resources cleaned up.")
+        # --- End Whisper Cleanup ---
+
+        # Clean up asyncio loop resources if necessary
+        # Example: await self.loop.shutdown_asyncgens()
+
+        logger.info("Resource cleanup complete")
 
     async def run(self):
         """Run the application with async event loop."""
@@ -293,6 +328,12 @@ class App:
                     logger.error(f"Error during input monitor task cancellation: {e}", exc_info=True)
             self._input_monitor_task = None
 
+            # --- Whisper Cleanup ---
+            if hasattr(self, "whisper") and self.whisper:
+                self.whisper.cleanup()
+                logger.info("Whisper resources cleaned up.")
+            # --- End Whisper Cleanup ---
+
         except Exception as e:
             logger.error(f"Error during bridge shutdown notification: {e}", exc_info=True)
         
@@ -382,8 +423,11 @@ class App:
         os._exit(0)
 
     def handle_quit(self):
-        """Handle application quit event."""
+        """Handle application quit signal."""
         logger.info("Application quit requested")
+        # Stop the asyncio event loop when the Qt application quits
+        if hasattr(self, "loop") and self.loop.is_running():
+            self.loop.stop()
 
         # Clean up the E-Ink renderer if it exists
         if config.get("display").get("eink_enabled"):
@@ -541,6 +585,69 @@ class App:
         
         # Force exit at the process level
         os._exit(0)
+
+    # --- Whisper Slots ---
+    @pyqtSlot()
+    def startRecording(self):
+        if self._is_actively_recording:
+            logger.warning("Already recording.")
+            return
+        if self.whisper.start_recording():
+            self._is_actively_recording = True
+            self.recordingStateChanged.emit(True)
+            logger.info("UI Recording Started")
+        else:
+            logger.error("Failed to start Whisper recording")
+
+    @pyqtSlot()
+    def stopAndTranscribe(self):
+        if not self._is_actively_recording:
+            logger.warning("Not recording.")
+            return
+        
+        audio_data = self.whisper.stop_recording()
+        self._is_actively_recording = False
+        self.recordingStateChanged.emit(False)
+        logger.info("UI Recording Stopped")
+
+        if audio_data:
+            logger.info("Scheduling transcription...")
+            # Run transcription in a separate thread to avoid blocking UI
+            if self._transcription_task and not self._transcription_task.done():
+                 logger.warning("Previous transcription task still running. Skipping new one.")
+                 return
+
+            self._transcription_task = asyncio.create_task(self._transcribe_audio_async(audio_data))
+        else:
+            logger.warning("No audio data captured to transcribe.")
+            self.transcriptionComplete.emit("") # Emit empty string if no audio
+
+    async def _transcribe_audio_async(self, audio_data):
+        """Run transcription in a separate thread and emit signals."""
+        try:
+            logger.info("Transcription task started.")
+            # Use asyncio.to_thread for blocking I/O or CPU-bound tasks
+            transcription_generator = await asyncio.to_thread(
+                self.whisper.transcribe_buffer, audio_data
+            )
+            
+            full_transcription = []
+            for segment in transcription_generator:
+                self.transcriptionUpdate.emit(segment)
+                full_transcription.append(segment)
+                await asyncio.sleep(0) # Yield control briefly
+
+            complete_text = " ".join(full_transcription)
+            self.transcriptionComplete.emit(complete_text)
+            logger.info(f"Transcription task finished. Full text: {complete_text}")
+
+        except Exception as e:
+            logger.error(f"Error during transcription: {e}", exc_info=True)
+            self.transcriptionComplete.emit("[Transcription Error]") # Notify UI of error
+        finally:
+            self._transcription_task = None # Clear task handle
+
+    # --- End Whisper Slots ---
 
 
 if __name__ == "__main__":

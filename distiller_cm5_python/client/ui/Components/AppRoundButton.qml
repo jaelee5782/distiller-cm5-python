@@ -4,6 +4,10 @@ import QtQuick.Controls 2.15
 NavigableItem {
     id: root
     
+    // Add signals
+    signal pressed()
+    signal released()
+
     property string iconText: ""
     property string text: ""
     property real iconOpacity: 0.7
@@ -55,16 +59,13 @@ NavigableItem {
         
         onPressed: {
             pressed = true
+            root.pressed()
         }
         
         onReleased: {
             pressed = false
+            root.released()
         }
-    }
-    
-    // Add keyboard handling for Enter/Return
-    Keys.onReturnPressed: function() {
-        clicked();
     }
     
     property bool hovered: mouseArea.containsMouse

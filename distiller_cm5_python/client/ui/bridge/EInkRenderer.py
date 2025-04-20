@@ -5,7 +5,7 @@ from PyQt6.QtQuick import QQuickWindow
 from threading import Lock
 import logging
 import numpy as np
-from .Eink_Driver import config
+from ..display_config import config
 
 logger = logging.getLogger(__name__)
 

@@ -539,87 +539,93 @@ class MCPClientBridge(QObject):
             # This is crucial to prevent new responses from being added to previous chat bubbles
             self.conversation_manager.reset_streaming_message()
             
-            # Start tracking response content
-            assistant_message = {
-                "timestamp": self.conversation_manager.get_timestamp(),
-                "content": "",
-            }
-            self.conversation_manager.add_message(assistant_message)
-            self.conversation_manager.current_streaming_message = assistant_message
-
-            # Use a batching mechanism for updating the UI to avoid excessive redraws
+            # --- Define the callback function ---
+            # Keep track of throttling within the scope of the query processing
             last_update_time = time.time()
-            update_interval = 0.05  # 50ms minimum between UI updates
-            accumulated_chunks = ""
+            update_interval = 0.1 # seconds (adjust as needed)
 
-            self.status_manager.update_status(StatusManager.STATUS_STREAMING)
+            def _handle_mcp_data(data: str):
+                nonlocal last_update_time # Allow modification of the outer scope variable
+                current_time = time.time()
 
-            # Use the MCPClient process_query interface, which now returns a generator for streaming responses
-            async for chunk in self.client.process_query(query):
-                if chunk.startswith("\n[Error:") or chunk.startswith("\n[Unexpected Error:") or chunk.startswith("\n[Reached max tool iterations"):
-                    # Error messages from the MCP client
+                logger.debug(f"Bridge received callback data: {data[:100]}...") # Log received data
+
+                # Handle Status/Info Messages from MCPClient first
+                if data.startswith("\\n\\n thinking") or data.startswith("\\n\\n executing"):
+                    status_text = data.strip().replace("\\n", "") # Clean up status message
+                    self.status_manager.update_status(status_text)
+                    logger.info(f"Status update from MCPClient: {status_text}")
+                    # Don't add these to conversation
+                    return
+
+                # Handle Error Messages
+                if data.startswith("\\n[Error:") or data.startswith("\\n[Unexpected Error:") or data.startswith("\\n[Reached max tool iterations"):
+                    error_msg = data.strip()
+                    logger.error(f"Error received from MCPClient: {error_msg}")
+                    # Show error to user via status/toast
+                    self.status_manager.update_status("Error Processing Query")
+                    self.errorOccurred.emit(error_msg.replace("\\n", " ")) # Emit cleaned-up error
+                    # Optionally add a marker to the conversation
                     if self.conversation_manager.current_streaming_message:
-                        self.conversation_manager.current_streaming_message["content"] += chunk
-                        # Force immediate update for error messages
-                        self.conversationChanged.emit()
-                    continue
-                
-                # Handle special marker to create a new message bubble after tool calls
-                if chunk == "__NEW_RESPONSE_AFTER_TOOL_CALLS__":
-                    # Reset the current streaming message to ensure we create a new one
+                         self.conversation_manager.current_streaming_message["content"] += f" {error_msg}"
+                    else:
+                         # Create a new message bubble if needed just for the error
+                         error_message_bubble = {
+                             "timestamp": self.conversation_manager.get_timestamp(),
+                             "content": error_msg,
+                         }
+                         self.conversation_manager.add_message(error_message_bubble)
+                    self.conversationChanged.emit() # Force update for errors
+                    # Potentially reset streaming message state here if error is final
                     self.conversation_manager.reset_streaming_message()
-                    # Create a new message bubble for the response after tool calls
-                    assistant_message = {
-                        "timestamp": self.conversation_manager.get_timestamp(),
-                        "content": "",
-                    }
-                    self.conversation_manager.add_message(assistant_message)
-                    self.conversation_manager.current_streaming_message = assistant_message
-                    # Reset accumulated chunks for the new message
-                    accumulated_chunks = ""
-                    continue
+                    return
 
-                # If this is a new response after tool calls (in case marker wasn't received)
-                if chunk and chunk.strip() and not self.conversation_manager.current_streaming_message:
-                    # Create a new message bubble for the response after tool calls
-                    logger.info("Creating new message bubble for response after tool calls")
-                    assistant_message = {
-                        "timestamp": self.conversation_manager.get_timestamp(),
-                        "content": "",
-                    }
-                    self.conversation_manager.add_message(assistant_message)
-                    self.conversation_manager.current_streaming_message = assistant_message
-                    # Reset accumulated chunks for the new message
-                    accumulated_chunks = ""
+                # --- Handle Content Chunks ---
+                # If no streaming message exists, create a new one
+                if not self.conversation_manager.current_streaming_message:
+                     logger.info("Creating new message bubble for LLM response.")
+                     assistant_message = {
+                         "timestamp": self.conversation_manager.get_timestamp(),
+                         "content": "", # Start with empty content
+                     }
+                     # Important: Add message first *then* assign to current_streaming_message
+                     self.conversation_manager.add_message(assistant_message)
+                     self.conversation_manager.current_streaming_message = assistant_message
+                     # Immediately emit change for the new bubble
+                     self.conversationChanged.emit()
+                     last_update_time = current_time # Reset timer for new bubble
 
-                if self.conversation_manager.current_streaming_message:
-                    # Accumulate chunks before updating the UI
-                    accumulated_chunks += chunk
-                    
-                    # Update the message content with the new chunk
-                    self.conversation_manager.current_streaming_message["content"] += chunk
-                    
-                    # Only update the UI at the specified interval to avoid excessive redraws
-                    current_time = time.time()
+                # Append the content chunk
+                if data and self.conversation_manager.current_streaming_message:
+                    self.conversation_manager.current_streaming_message["content"] += data
+
+                    # Throttle UI updates
                     if current_time - last_update_time >= update_interval:
                         self.conversationChanged.emit()
                         last_update_time = current_time
 
-            # Final update after streaming is complete
-            self.status_manager.update_status(StatusManager.STATUS_IDLE)
-            
-            # Force a final UI update to ensure the last chunks are displayed
-            if accumulated_chunks:
-                self.conversationChanged.emit()
+            # --- Call MCPClient process_query with the callback ---
+            try:
+                logger.info(f"Calling self.client.process_query for query: '{query}'")
+                # The process_query function is now awaited directly,
+                # and the callback handles the data processing.
+                await self.client.process_query(query, callback=_handle_mcp_data)
 
-            # Emit the messageReceived signal when the response is complete
-            if self.conversation_manager.current_streaming_message:
-                timestamp = self.conversation_manager.current_streaming_message[
-                    "timestamp"
-                ]
-                message = self.conversation_manager.current_streaming_message["content"]
+                # After process_query finishes (successfully or not), reset streaming state
+                logger.info("Finished processing query in bridge.")
                 self.conversation_manager.reset_streaming_message()
-                self.messageReceived.emit(message, timestamp)
+                # Emit one final update to ensure the last chunks are displayed
+                self.conversationChanged.emit()
+                # Reset status after completion (unless an error occurred)
+                if not self.status_manager.status.startswith("Error"):
+                     self.status_manager.update_status(StatusManager.STATUS_IDLE)
+
+            except Exception as e:
+                # Handle potential errors from the process_query call itself
+                self._handle_error(e, "Bridge query processing")
+                # Ensure streaming state is reset on exception
+                self.conversation_manager.reset_streaming_message()
+                self.conversationChanged.emit() # Update UI to show any potential error message added by _handle_error
 
         except Exception as e:
             self._handle_error(e, "Query processing", 
