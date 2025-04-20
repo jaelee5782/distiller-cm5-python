@@ -1,6 +1,6 @@
 import QtQuick 2.15
 
-// Optimized image component with performance enhancements
+// Optimized image component with performance enhancements for e-ink
 Image {
     id: optimizedImage
 
@@ -10,9 +10,9 @@ Image {
     mipmap: smooth
     smooth: true
 
-    // Properties for fade-in effect
-    property bool fadeInEffect: true
-    property int fadeInDuration: 250
+    // Properties for fade-in effect (disabled for e-ink)
+    property bool fadeInEffect: false
+    property int fadeInDuration: 0
 
     // Optional error handling
     property string fallbackSource: ""
@@ -31,14 +31,8 @@ Image {
         }
     }
 
-    // Fade-in effect when image is loaded
-    opacity: fadeInEffect ? (isReady ? 1.0 : 0.3) : 1.0
-    Behavior on opacity {
-        enabled: optimizedImage.fadeInEffect
-        NumberAnimation {
-            duration: optimizedImage.fadeInDuration
-        }
-    }
+    // No fade-in effect for e-ink display
+    opacity: 1.0
 
     // Placeholder rectangle shown during loading or on error
     Rectangle {

@@ -39,12 +39,6 @@ NavigableItem {
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         opacity: (useHoverEffect && root.hovered) ? hoverOpacity : iconOpacity
-        
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 150
-            }
-        }
     }
     
     // Mouse area to handle clicks

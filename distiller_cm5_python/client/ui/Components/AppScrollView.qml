@@ -4,13 +4,13 @@ import QtQuick.Controls 2.15
 ScrollView {
     id: root
     
-    property bool showEdgeEffects: true
-    property bool showScrollIndicator: true
+    property bool showEdgeEffects: false
+    property bool showScrollIndicator: false
     property int wheelScrollLines: 3
     property int touchScrollSensitivity: 1
     property int keyNavigationSpeed: 40
     
-    // Expose the scroll animation for external use
+    // Expose the scroll animation for external use but set duration to 0
     property alias scrollAnimation: scrollAnimation
     
     clip: true
@@ -30,49 +30,39 @@ ScrollView {
         acceptedButtons: Qt.NoButton // Don't steal clicks from children
         propagateComposedEvents: true // Allow events to pass through
         
-        // Optimize wheel scrolling speed for e-ink
+        // Direct scrolling without animation for e-ink
         onWheel: function(wheel) {
-            // Adjust contentY directly for smoother scrolling
             if (wheel.angleDelta.y !== 0) {
                 var delta = wheel.angleDelta.y > 0 ? -wheelScrollLines * 20 : wheelScrollLines * 20;
-                var newContentY = Math.max(0, Math.min(root.contentHeight - root.height, root.contentItem.contentY + delta));
-                
-                // Apply scrolling with easing for smoother motion
-                scrollAnimation.stop();
-                scrollAnimation.from = root.contentItem.contentY;
-                scrollAnimation.to = newContentY;
-                scrollAnimation.start();
+                // Apply directly with no animation
+                root.contentItem.contentY = Math.max(0, Math.min(root.contentHeight - root.height, root.contentItem.contentY + delta));
             }
             wheel.accepted = true;
         }
     }
     
-    // Animation for smoother scrolling
+    // Animation with zero duration for compatibility with code expecting the animation
     NumberAnimation {
         id: scrollAnimation
         target: root.contentItem
         property: "contentY"
-        duration: 150
-        easing.type: Easing.OutCubic
+        duration: 0
+        easing.type: Easing.Linear
     }
     
-    // Custom ScrollBar styling
+    // Custom ScrollBar styling - simplified for e-ink
     ScrollBar.vertical: ScrollBar {
         id: verticalScrollBar
         anchors.right: parent.right
         anchors.rightMargin: 4
         policy: ScrollBar.AsNeeded
         
-        // Keep partially visible even when inactive for better usability
-        opacity: active || hovered ? 0.9 : 0.4
+        // Static opacity for e-ink
+        opacity: 0.6
         interactive: true
         
         // Make scrollbar wider for better touch targets
         implicitWidth: 8
-        
-        Behavior on opacity {
-            NumberAnimation { duration: 200 }
-        }
         
         contentItem: Rectangle {
             implicitWidth: 8
@@ -88,97 +78,61 @@ ScrollView {
         }
     }
     
-    // Keyboard navigation support
+    // Keyboard navigation support - direct movement without animation
     Keys.onPressed: function(event) {
         var contentItem = root.contentItem;
         
         if (event.key === Qt.Key_PageDown) {
-            var newY = Math.min(contentItem.contentY + root.height * 0.9, contentItem.contentHeight - root.height);
-            scrollAnimation.stop();
-            scrollAnimation.from = contentItem.contentY;
-            scrollAnimation.to = newY;
-            scrollAnimation.start();
+            contentItem.contentY = Math.min(contentItem.contentY + root.height * 0.9, contentItem.contentHeight - root.height);
             event.accepted = true;
         } else if (event.key === Qt.Key_PageUp) {
-            var newY = Math.max(contentItem.contentY - root.height * 0.9, 0);
-            scrollAnimation.stop();
-            scrollAnimation.from = contentItem.contentY;
-            scrollAnimation.to = newY;
-            scrollAnimation.start();
+            contentItem.contentY = Math.max(contentItem.contentY - root.height * 0.9, 0);
             event.accepted = true;
         } else if (event.key === Qt.Key_Home) {
-            scrollAnimation.stop();
-            scrollAnimation.from = contentItem.contentY;
-            scrollAnimation.to = 0;
-            scrollAnimation.start();
+            contentItem.contentY = 0;
             event.accepted = true;
         } else if (event.key === Qt.Key_End) {
-            scrollAnimation.stop();
-            scrollAnimation.from = contentItem.contentY;
-            scrollAnimation.to = contentItem.contentHeight - root.height;
-            scrollAnimation.start();
+            contentItem.contentY = contentItem.contentHeight - root.height;
             event.accepted = true;
         } else if (event.key === Qt.Key_Down) {
-            var newY = Math.min(contentItem.contentY + keyNavigationSpeed, contentItem.contentHeight - root.height);
-            scrollAnimation.stop();
-            scrollAnimation.from = contentItem.contentY;
-            scrollAnimation.to = newY;
-            scrollAnimation.start();
+            contentItem.contentY = Math.min(contentItem.contentY + keyNavigationSpeed, contentItem.contentHeight - root.height);
             event.accepted = true;
         } else if (event.key === Qt.Key_Up) {
-            var newY = Math.max(contentItem.contentY - keyNavigationSpeed, 0);
-            scrollAnimation.stop();
-            scrollAnimation.from = contentItem.contentY;
-            scrollAnimation.to = newY;
-            scrollAnimation.start();
+            contentItem.contentY = Math.max(contentItem.contentY - keyNavigationSpeed, 0);
             event.accepted = true;
         }
     }
     
-    // Visual feedback for edge bounces
+    // Edge indicators - simplified to static elements
     Rectangle {
         id: topEdgeIndicator
         
-        visible: showEdgeEffects
+        visible: showEdgeEffects && root.contentItem && root.contentItem.contentY <= 0
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
         height: 2
         color: ThemeManager.accentColor
-        // Check if we're at the top edge
-        opacity: root.contentItem && root.contentItem.contentY <= 0 ? 0.8 : 0
+        opacity: 0.8
         z: 1
-        
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 200
-            }
-        }
     }
     
     Rectangle {
         id: bottomEdgeIndicator
         
-        visible: showEdgeEffects
+        visible: showEdgeEffects && root.contentItem && 
+                root.contentItem.contentHeight > root.height &&
+                (root.contentItem.contentY + root.height) >= root.contentItem.contentHeight
         anchors.bottom: parent.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         height: 2
         color: ThemeManager.accentColor
-        // Check if we're at the bottom edge
-        opacity: root.contentItem && 
-                root.contentItem.contentHeight > root.height &&
-                (root.contentItem.contentY + root.height) >= root.contentItem.contentHeight ? 0.8 : 0
+        opacity: 0.8
         z: 1
-        
-        Behavior on opacity {
-            NumberAnimation {
-                duration: 200
-            }
-        }
     }
     
-    // Scroll indicator for user feedback
+    // Scroll indicator - simplified for e-ink display
     Rectangle {
         id: scrollPositionIndicator
         anchors.right: parent.right
@@ -188,9 +142,9 @@ ScrollView {
         height: 40
         radius: width / 2
         color: ThemeManager.accentColor
-        opacity: 0
+        visible: root.showScrollIndicator && root.contentItem.contentHeight > root.height * 1.5
+        opacity: 0.7
         z: 10
-        visible: root.showScrollIndicator
         
         Text {
             anchors.centerIn: parent
@@ -200,24 +154,5 @@ ScrollView {
             font.bold: true
             visible: root.contentItem.contentHeight > root.height
         }
-        
-        // Show indicator during fast scrolling
-        states: State {
-            name: "visible"
-            when: scrollAnimation.running && root.contentItem.contentHeight > root.height * 1.5
-            PropertyChanges {
-                target: scrollPositionIndicator
-                opacity: 0.7
-            }
-        }
-        
-        transitions: Transition {
-            from: "*"
-            to: "*"
-            NumberAnimation {
-                properties: "opacity"
-                duration: 200
-            }
-        }
     }
-} 
+}

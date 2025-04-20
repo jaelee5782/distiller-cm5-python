@@ -241,9 +241,8 @@ PageBase {
                             navigable: true
                             
                             onCardClicked: function(path) {
-                                // Add a delay to allow e-ink display to refresh
-                                clickTimer.serverPath = path
-                                clickTimer.start()
+                                // Call directly without animation delay
+                                serverSelectionPage.serverSelected(path)
                             }
                         }
                     }
@@ -317,21 +316,6 @@ PageBase {
                     }
                 }
             }
-        }
-    }
-    
-    // Click timer to allow e-ink to update before proceeding
-    Timer {
-        id: clickTimer
-        
-        property string serverPath: ""
-        
-        interval: 200
-        repeat: false
-        running: false
-        
-        onTriggered: {
-            serverSelectionPage.serverSelected(serverPath)
         }
     }
     

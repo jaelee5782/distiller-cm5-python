@@ -12,16 +12,16 @@ ListView {
     property real lastContentHeight: 0
     property bool responseInProgress: false // Track if a response is being generated
     
-    // Expose scroll animation for FocusManager
+    // Expose scroll animation for FocusManager but with zero duration
     property alias scrollAnimation: smoothScrollAnimation
     
-    // Animation for smooth scrolling when used with FocusManager
+    // Animation with zero duration for compatibility with code expecting the animation
     NumberAnimation {
         id: smoothScrollAnimation
         target: conversationView
         property: "contentY"
-        duration: 150
-        easing.type: Easing.OutCubic
+        duration: 0 // No animation for e-ink
+        easing.type: Easing.Linear
     }
 
     // Update function for external callers
@@ -88,7 +88,7 @@ ListView {
     // Enable caching for better performance
     cacheBuffer: 1000
 
-    // Add a scroll-to-bottom button
+    // Add a scroll-to-bottom button with no animations
     AppRoundButton {
         id: scrollToBottomButton
         

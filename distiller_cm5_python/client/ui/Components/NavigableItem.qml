@@ -34,7 +34,7 @@ Item {
         // Override in derived components
     }
     
-    // Ensure focus is visible by using a more pronounced visual indicator
+    // Static focus indicator optimized for e-ink
     Rectangle {
         id: focusIndicator
         anchors.fill: parent
@@ -43,6 +43,7 @@ Item {
         border.color: ThemeManager.accentColor
         radius: 4
         visible: parent.visualFocus
+        opacity: 1.0 // Fixed opacity for e-ink
         
         // Add a more visible background highlighting for better visibility
         Rectangle {
@@ -52,28 +53,6 @@ Item {
             opacity: 0.2 // Increased opacity
             radius: 3
             visible: parent.visible
-        }
-        
-        // Add pulsing animation for better visibility
-        SequentialAnimation {
-            running: parent.visible
-            loops: Animation.Infinite
-            
-            NumberAnimation {
-                target: focusIndicator
-                property: "opacity"
-                from: 1.0
-                to: 0.7
-                duration: 800
-            }
-            
-            NumberAnimation {
-                target: focusIndicator
-                property: "opacity"
-                from: 0.7
-                to: 1.0
-                duration: 800
-            }
         }
     }
     

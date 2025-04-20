@@ -21,26 +21,6 @@ Rectangle {
         text: "Loading"
         font: FontManager.heading
         color: ThemeManager.textColor
-
-        // Simple opacity animation that works better on e-ink
-        SequentialAnimation on opacity {
-            running: busyIndicator.isLoading
-            loops: Animation.Infinite
-
-            NumberAnimation {
-                from: 1
-                to: 0.3
-                duration: ThemeManager.animationDuration
-            }
-
-            NumberAnimation {
-                from: 0.3
-                to: 1
-                duration: ThemeManager.animationDuration
-            }
-
-        }
-
     }
 
 }

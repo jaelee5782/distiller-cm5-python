@@ -280,45 +280,14 @@ ApplicationWindow {
             }
         }
 
-        // Simple fade transitions optimized for e-ink
-        pushEnter: Transition {
-            PropertyAnimation {
-                property: "opacity"
-                from: 0
-                to: 1
-                duration: ThemeManager.animationDuration
-            }
-        }
-
-        pushExit: Transition {
-            PropertyAnimation {
-                property: "opacity"
-                from: 1
-                to: 0
-                duration: ThemeManager.animationDuration
-            }
-        }
-
-        popEnter: Transition {
-            PropertyAnimation {
-                property: "opacity"
-                from: 0
-                to: 1
-                duration: ThemeManager.animationDuration
-            }
-        }
-
-        popExit: Transition {
-            PropertyAnimation {
-                property: "opacity"
-                from: 1
-                to: 0
-                duration: ThemeManager.animationDuration
-            }
-        }
+        // No transitions for e-ink display
+        pushEnter: null
+        pushExit: null
+        popEnter: null
+        popExit: null
     }
 
-    // E-ink optimized splash screen - refined for better aesthetics
+    // E-ink optimized splash screen without animations
     Rectangle {
         id: splashScreen
 
@@ -364,7 +333,7 @@ ApplicationWindow {
                         fillMode: Image.PreserveAspectFit
                         sourceSize.width: 300
                         sourceSize.height: 300
-                        fadeInDuration: 300
+                        fadeInDuration: 0 // No fade in animation
                     }
                 }
 
@@ -403,7 +372,7 @@ ApplicationWindow {
             }
         }
 
-        // Simple loading indicator optimized for e-ink and Qt6
+        // Static loading indicator for e-ink
         Row {
             id: loadingIndicator
 
@@ -411,25 +380,6 @@ ApplicationWindow {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: ThemeManager.spacingLarge
             spacing: ThemeManager.spacingSmall
-
-            // Use a Timer-based approach instead of SequentialAnimation for better compatibility
-            Timer {
-                id: dotTimer
-
-                property int currentDot: 0
-
-                interval: 400
-                running: true
-                repeat: true
-                onTriggered: {
-                    // Update the opacity of current dot and reset previous dot
-                    var prevDot = (currentDot + 4) % 5;
-                    loadingRepeater.itemAt(prevDot).opacity = 0.3;
-                    loadingRepeater.itemAt(currentDot).opacity = 1;
-                    // Move to next dot
-                    currentDot = (currentDot + 1) % 5;
-                }
-            }
 
             // Static loading dots
             Repeater {
@@ -442,29 +392,16 @@ ApplicationWindow {
                     height: 6
                     radius: 3
                     color: ThemeManager.textColor
-                    opacity: 0.3
+                    opacity: index === 0 ? 1.0 : 0.3 // Only first dot is highlighted
                 }
             }
         }
 
-        // Start fade out after a longer delay to give e-ink time to render
+        // Show splash for fixed time without animation
         Timer {
-            interval: 3000
+            interval: 2000
             running: true
             onTriggered: {
-                splashFadeOut.start();
-            }
-        }
-
-        // Simple fade out with longer duration for e-ink
-        NumberAnimation on opacity {
-            id: splashFadeOut
-
-            from: 1
-            to: 0
-            duration: ThemeManager.animationDuration * 2
-            running: false
-            onFinished: {
                 splashScreen.visible = false;
             }
         }

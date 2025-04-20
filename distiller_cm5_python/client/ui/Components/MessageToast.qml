@@ -7,6 +7,7 @@ Rectangle {
 
     function showMessage(message, duration) {
         messageText.text = message;
+        visible = true;
         opacity = 1;
         fadeTimer.interval = duration || 3000;
         fadeTimer.restart();
@@ -19,8 +20,8 @@ Rectangle {
     color: ThemeManager.backgroundColor
     border.color: ThemeManager.borderColor
     border.width: ThemeManager.borderWidth
-    opacity: 0
-    visible: opacity > 0
+    opacity: 1
+    visible: false
 
     Text {
         id: messageText
@@ -35,21 +36,12 @@ Rectangle {
         horizontalAlignment: Text.AlignCenter
     }
 
-    NumberAnimation {
-        id: fadeAnimation
-
-        target: messageToast
-        property: "opacity"
-        duration: 500
-        from: 1
-        to: 0
-        running: false
-    }
-
+    // Timer to hide message
     Timer {
         id: fadeTimer
-
         interval: 3000
-        onTriggered: fadeAnimation.start()
+        onTriggered: {
+            messageToast.visible = false;
+        }
     }
 }

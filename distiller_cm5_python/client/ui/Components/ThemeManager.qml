@@ -3,7 +3,7 @@ pragma Singleton
 
 QtObject {
     // Subtle overlay for hover effects
-    // Longer animation duration for e-ink
+    // No animations for e-ink display
     // Standard button height
 
     id: themeManager
@@ -64,7 +64,7 @@ QtObject {
     // Border radius for rectangles
     readonly property real borderWidth: 1
     // Border width
-    readonly property real animationDuration: 500
+    readonly property real animationDuration: 0 // No animations for e-ink
     // Spacing
     readonly property real spacingSmall: 8
     readonly property real spacingNormal: 16
