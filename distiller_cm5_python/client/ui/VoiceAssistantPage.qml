@@ -52,19 +52,21 @@ PageBase {
         }
         
         if (voiceInputArea) {
+            // First add the voice button
             if (voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
                 focusableItems.push(voiceInputArea.voiceButton)
             }
             
-            let settingsButton = findChild(voiceInputArea, "settingsButton")
-            if (settingsButton && settingsButton.navigable) {
-                focusableItems.push(settingsButton)
-            }
-            
-            // Add reset button to focusable items
+            // Then add the reset button
             let resetButton = findChild(voiceInputArea, "resetButton")
             if (resetButton && resetButton.navigable) {
                 focusableItems.push(resetButton)
+            }
+            
+            // Finally add the settings button
+            let settingsButton = findChild(voiceInputArea, "settingsButton")
+            if (settingsButton && settingsButton.navigable) {
+                focusableItems.push(settingsButton)
             }
         }
         

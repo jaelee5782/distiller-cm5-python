@@ -108,125 +108,7 @@ Rectangle {
             anchors.centerIn: parent
             spacing: 24 // Increased spacing for better touch targets
 
-            // Settings button (on the left)
-            RoundButton {
-                id: settingsButton
-                objectName: "settingsButton"
-
-                width: buttonRow.buttonSize
-                height: buttonRow.buttonSize
-                flat: true
-                property bool navigable: true
-                property bool isActiveItem: false
-                onClicked: voiceInputArea.settingsClicked()
-
-                background: Rectangle {
-                    color: "transparent"
-                    antialiasing: true
-                    
-                    // Clear border for focus state (e-ink optimized)
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: settingsButton.isActiveItem ? 0 : -buttonRow.borderWidth
-                        color: "transparent"
-                        border {
-                            width: settingsButton.isActiveItem ? buttonRow.borderWidth : 0
-                            color: ThemeManager.accentColor
-                        }
-                        radius: width / 2
-                        antialiasing: true
-                        opacity: settingsButton.isActiveItem ? 1.0 : 0
-                    }
-                }
-
-                contentItem: Item {
-                    anchors.fill: parent
-                    
-                    // High contrast highlight for e-ink
-                    Rectangle {
-                        visible: settingsButton.isActiveItem || settingsButton.hovered || settingsButton.pressed
-                        anchors.fill: parent
-                        radius: width / 2
-                        color: settingsButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
-                        border.width: 1
-                        border.color: ThemeManager.borderColor
-                        opacity: settingsButton.isActiveItem ? 0.3 : 0.1
-                        antialiasing: true
-                    }
-
-                    Text {
-                        text: "⚙"  // Gear icon as text
-                        font.pixelSize: parent.width * 0.45 // Slightly smaller for cleaner look
-                        font.family: FontManager.primaryFontFamily
-                        color: ThemeManager.textColor
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        anchors.centerIn: parent
-                        opacity: 1.0 // Always full opacity for better e-ink visibility
-                    }
-                }
-            }
-            
-            // Reset button
-            RoundButton {
-                id: resetButton
-                objectName: "resetButton"
-
-                width: buttonRow.buttonSize
-                height: buttonRow.buttonSize
-                flat: true
-                property bool navigable: true
-                property bool isActiveItem: false
-                onClicked: voiceInputArea.resetClicked()
-
-                background: Rectangle {
-                    color: "transparent"
-                    antialiasing: true
-                    
-                    // Clear border for focus state (e-ink optimized)
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: resetButton.isActiveItem ? 0 : -buttonRow.borderWidth
-                        color: "transparent"
-                        border {
-                            width: resetButton.isActiveItem ? buttonRow.borderWidth : 0
-                            color: ThemeManager.accentColor
-                        }
-                        radius: width / 2
-                        antialiasing: true
-                        opacity: resetButton.isActiveItem ? 1.0 : 0
-                    }
-                }
-
-                contentItem: Item {
-                    anchors.fill: parent
-                    
-                    // High contrast highlight for e-ink
-                    Rectangle {
-                        visible: resetButton.isActiveItem || resetButton.hovered || resetButton.pressed
-                        anchors.fill: parent
-                        radius: width / 2
-                        color: resetButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
-                        border.width: 1
-                        border.color: ThemeManager.borderColor
-                        opacity: resetButton.isActiveItem ? 0.3 : 0.1
-                        antialiasing: true
-                    }
-
-                    Text {
-                        text: "↻"  // Reset icon as text
-                        font.pixelSize: parent.width * 0.5
-                        font.family: FontManager.primaryFontFamily
-                        color: ThemeManager.textColor
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        anchors.centerIn: parent
-                        opacity: 1.0 // Always full opacity for better e-ink visibility
-                    }
-                }
-            }
-
-            // Center microphone button - now same size as settings button
+            // 1st button: Voice/Mic button in the center position
             RoundButton {
                 id: voiceButton
                 width: buttonRow.buttonSize
@@ -349,6 +231,149 @@ Rectangle {
                         antialiasing: true
                         
                         // Remove animations for e-ink display
+                    }
+                }
+            }
+            
+            // 2nd button: Reset button
+            RoundButton {
+                id: resetButton
+                objectName: "resetButton"
+
+                width: buttonRow.buttonSize
+                height: buttonRow.buttonSize
+                flat: true
+                property bool navigable: true
+                property bool isActiveItem: false
+                onClicked: voiceInputArea.resetClicked()
+
+                background: Rectangle {
+                    color: "transparent"
+                    antialiasing: true
+                    
+                    // Clear border for focus state (e-ink optimized)
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: resetButton.isActiveItem ? 0 : -buttonRow.borderWidth
+                        color: "transparent"
+                        border {
+                            width: resetButton.isActiveItem ? buttonRow.borderWidth : 0
+                            color: ThemeManager.accentColor
+                        }
+                        radius: width / 2
+                        antialiasing: true
+                        opacity: resetButton.isActiveItem ? 1.0 : 0
+                    }
+                }
+
+                contentItem: Item {
+                    anchors.fill: parent
+                    
+                    // High contrast highlight for e-ink
+                    Rectangle {
+                        visible: resetButton.isActiveItem || resetButton.hovered || resetButton.pressed
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: resetButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
+                        border.width: 1
+                        border.color: ThemeManager.borderColor
+                        opacity: resetButton.isActiveItem ? 0.3 : 0.1
+                        antialiasing: true
+                    }
+
+                    Text {
+                        text: "↻"  // Reset icon as text
+                        font.pixelSize: parent.width * 0.5
+                        font.family: FontManager.primaryFontFamily
+                        color: ThemeManager.textColor
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        anchors.centerIn: parent
+                        opacity: 1.0 // Always full opacity for better e-ink visibility
+                    }
+                }
+                
+                // Hint text that appears when button has focus
+                Rectangle {
+                    id: resetButtonHint
+                    visible: resetButton.isActiveItem
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.top
+                    anchors.bottomMargin: 8
+                    height: resetHintText.contentHeight + 10
+                    width: resetHintText.contentWidth + 16
+                    color: ThemeManager.backgroundColor
+                    border.width: 1
+                    border.color: ThemeManager.borderColor
+                    radius: 4
+                    z: 100
+                    
+                    Text {
+                        id: resetHintText
+                        anchors.centerIn: parent
+                        text: "Restart App"
+                        font.pixelSize: FontManager.fontSizeSmall
+                        font.family: FontManager.primaryFontFamily
+                        color: ThemeManager.textColor
+                    }
+                }
+            }
+
+            // 3rd button: Settings button
+            RoundButton {
+                id: settingsButton
+                objectName: "settingsButton"
+
+                width: buttonRow.buttonSize
+                height: buttonRow.buttonSize
+                flat: true
+                property bool navigable: true
+                property bool isActiveItem: false
+                onClicked: voiceInputArea.settingsClicked()
+
+                background: Rectangle {
+                    color: "transparent"
+                    antialiasing: true
+                    
+                    // Clear border for focus state (e-ink optimized)
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: settingsButton.isActiveItem ? 0 : -buttonRow.borderWidth
+                        color: "transparent"
+                        border {
+                            width: settingsButton.isActiveItem ? buttonRow.borderWidth : 0
+                            color: ThemeManager.accentColor
+                        }
+                        radius: width / 2
+                        antialiasing: true
+                        opacity: settingsButton.isActiveItem ? 1.0 : 0
+                    }
+                }
+
+                contentItem: Item {
+                    anchors.fill: parent
+                    
+                    // High contrast highlight for e-ink
+                    Rectangle {
+                        visible: settingsButton.isActiveItem || settingsButton.hovered || settingsButton.pressed
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: settingsButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
+                        border.width: 1
+                        border.color: ThemeManager.borderColor
+                        opacity: settingsButton.isActiveItem ? 0.3 : 0.1
+                        antialiasing: true
+                    }
+
+                    Text {
+                        text: "⚙"  // Gear icon as text
+                        font.pixelSize: parent.width * 0.45 // Slightly smaller for cleaner look
+                        font.family: FontManager.primaryFontFamily
+                        color: ThemeManager.textColor
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        anchors.centerIn: parent
+                        opacity: 1.0 // Always full opacity for better e-ink visibility
                     }
                 }
             }
