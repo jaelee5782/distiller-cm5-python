@@ -4,7 +4,6 @@ from typing import List, Optional
 from threading import Lock
 from PyQt6.QtCore import QObject, pyqtSlot, QTimer
 from PyQt6.QtGui import QImage
-from numba import jit
 from .Eink_Driver import EinkDriver, config
 
 class EInkRendererBridge(QObject):

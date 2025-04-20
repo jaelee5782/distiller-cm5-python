@@ -26,7 +26,7 @@ _RPI = (not _ROCK) and (
 
 if _RPI:
     import lgpio
-else:
+elif _ROCK:
     from gpiod.line import Direction, Value, Bias
     from .rock_gpio import RockGPIO
 
