@@ -1,5 +1,6 @@
 # pyright: reportArgumentType=false
-from PyQt6.QtCore import QUrl, QTimer
+from PyQt6.QtCore import QUrl, QTimer, Qt
+from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtWidgets import QApplication
 from distiller_cm5_python.client.ui.AppInfoManager import AppInfoManager
@@ -9,6 +10,7 @@ from qasync import QEventLoop
 from distiller_cm5_python.utils.logger import logger
 from distiller_cm5_python.utils.config import EINK_ENABLED, EINK_CAPTURE_INTERVAL, EINK_BUFFER_SIZE, EINK_DITHERING_ENABLED
 import asyncio
+import evdev
 import os
 import sys
 import signal
@@ -82,6 +84,9 @@ class App:
         root_context.setContextProperty("bridge", self.bridge)
         root_context.setContextProperty("AppInfo", self.app_info)
 
+        # Set display dimensions from config
+        self._set_display_dimensions()
+
         # Get the directory containing the QML files
         current_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -119,10 +124,66 @@ class App:
             raise RuntimeError("Failed to load QML")
 
         if EINK_ENABLED:
+            self._apply_window_constraints()
             # E-Ink Initialization Call
             self._init_eink_renderer()
+        # Start monitoring input device
+        root_objects = self.engine.rootObjects()
+        if root_objects:
+            main_window = root_objects[0]
+            input_device_path = '/dev/input/event5' # TODO: Make this configurable?
+            logger.info(f"Starting input device monitor for {input_device_path}...")
+            self._input_monitor_task = self.loop.create_task(self.monitor_input_device(input_device_path, main_window))
+        else:
+            logger.error("Cannot start input monitor: No root QML object found.")
 
         logger.info("Application initialized successfully")
+
+
+    async def monitor_input_device(self, device_path, target_widget):
+        """Monitor the specified input device for key presses and post Qt events."""
+        try:
+            dev = evdev.InputDevice(device_path)
+            logger.info(f"Monitoring input device: {dev.path} ({dev.name})")
+        except FileNotFoundError:
+            logger.error(f"Input device not found: {device_path}. Is the button script running?")
+            return
+        except PermissionError:
+            logger.error(f"Permission denied for input device: {device_path}. Check user permissions.")
+            return
+        except Exception as e:
+            logger.error(f"Failed to open input device {device_path}: {e}", exc_info=True)
+            return
+
+        try:
+            async for event in dev.async_read_loop():
+                if event.type == evdev.ecodes.EV_KEY and event.value == 1: # Key press events
+                    key_to_post = None
+                    if event.code == evdev.ecodes.KEY_ENTER:
+                        key_to_post = Qt.Key.Key_Enter
+                        logger.debug("Detected ENTER key press")
+                    elif event.code == evdev.ecodes.KEY_UP:
+                        key_to_post = Qt.Key.Key_Up
+                        logger.debug("Detected UP key press")
+                    elif event.code == evdev.ecodes.KEY_DOWN:
+                        key_to_post = Qt.Key.Key_Down
+                        logger.debug("Detected DOWN key press")
+                    
+                    if key_to_post and target_widget:
+                        press_event = QKeyEvent(QKeyEvent.Type.KeyPress, key_to_post, Qt.KeyboardModifier.NoModifier)
+                        release_event = QKeyEvent(QKeyEvent.Type.KeyRelease, key_to_post, Qt.KeyboardModifier.NoModifier)
+                        QApplication.postEvent(target_widget, press_event)
+                        # Optionally post release event immediately or based on event.value == 0 if needed
+                        QApplication.postEvent(target_widget, release_event) 
+                        logger.debug(f"Posted {key_to_post} event to {target_widget}")
+
+        except OSError as e:
+             logger.error(f"Error reading from input device {device_path}: {e}. Device might have been disconnected.", exc_info=True)
+        except Exception as e:
+             logger.error(f"Unexpected error in input monitoring loop for {device_path}: {e}", exc_info=True)
+        finally:
+            logger.info(f"Stopped monitoring input device: {device_path}")
+            dev.close() # Ensure device is closed
 
     async def run(self):
         """Run the application with async event loop."""
@@ -180,6 +241,21 @@ class App:
         try:
             if self.bridge:
                 self.bridge.shutdown()
+            # Cancel the input monitoring task if running
+            if self._input_monitor_task and not self._input_monitor_task.done():
+                logger.info("Cancelling input monitor task...")
+                self._input_monitor_task.cancel()
+                try:
+                    # Give the task a moment to cancel
+                    await asyncio.wait_for(self._input_monitor_task, timeout=1.0) 
+                except asyncio.CancelledError:
+                    logger.info("Input monitor task successfully cancelled.")
+                except asyncio.TimeoutError:
+                     logger.warning("Input monitor task did not cancel within timeout.")
+                except Exception as e:
+                    logger.error(f"Error during input monitor task cancellation: {e}", exc_info=True)
+            self._input_monitor_task = None
+
         except Exception as e:
             logger.error(f"Error during bridge shutdown notification: {e}", exc_info=True)
         
@@ -285,10 +361,53 @@ class App:
                 self.eink_bridge.cleanup()
                 logger.info("E-Ink bridge cleaned up")
                 self.eink_bridge = None
+    def _set_display_dimensions(self):
+        """Set display dimensions from the config file as context properties for QML."""
+        # Get width and height from config or use defaults
+        width = int(config.get("display").get("width") or 240)
+        height = int(config.get("display").get("height") or 416)
+        
+        # Set as context properties for QML
+        rc = self.engine.rootContext()
+        rc.setContextProperty("configWidth", width)
+        rc.setContextProperty("configHeight", height)
+        logger.info(f"Set display dimensions from config: {width}x{height}")
+
+
+    def _apply_window_constraints(self):
+        """Apply fixed size constraints to the main window after QML is loaded."""
+        # Get display dimensions from config
+        width = int(config.get("display").get("width") or 240)
+        height = int(config.get("display").get("height") or 416)
+        
+        # Find the root window object
+        root_objects = self.engine.rootObjects()
+        if not root_objects:
+            logger.error("No root objects found to apply size constraints")
+            return
+
+        main_window = root_objects[0]
+        
+        try:
+            # Set fixed size - use QML properties for ApplicationWindow
+            main_window.setProperty("width", width)
+            main_window.setProperty("height", height)
+            
+            # These may or may not be available, depending on the window type
+            try:
+                main_window.setProperty("minimumWidth", width)
+                main_window.setProperty("maximumWidth", width)
+                main_window.setProperty("minimumHeight", height)
+                main_window.setProperty("maximumHeight", height)
                 
-            self._eink_initialized = False
+                # For ApplicationWindow, we set the flag in QML directly
+                # So we don't need to do main_window.setFlags() here
+            except Exception as e:
+                logger.warning(f"Could not set all window constraints: {e}")
+                
+            logger.info(f"Applied fixed size constraints: {width}x{height}")
         except Exception as e:
-            logger.error(f"Error during E-Ink cleanup: {e}", exc_info=True)
+            logger.error(f"Error applying window constraints: {e}", exc_info=True)
 
     # E-Ink Methods
     def _init_eink_renderer(self):
