@@ -15,6 +15,8 @@ PageBase {
     property string statusText: "Ready"
     property var focusableItems: []
     property var previousFocusedItem: null
+    property string transcribedText: ""
+    property bool transcriptionInProgress: false
 
     signal selectNewServer()
 
@@ -56,6 +58,7 @@ PageBase {
             focusableItems.push(header.serverSelectButton)
         }
         
+        // Initialize focus manager with proper activation handling
         FocusManager.initializeFocusItems(focusableItems, conversationView)
     }
     
@@ -95,6 +98,49 @@ PageBase {
         function onBridgeReady() {
             if (conversationView) {
                 conversationView.updateModel(bridge.get_conversation());
+            }
+        }
+
+        function onTranscriptionUpdate(transcription) {
+            transcribedText += transcription + " ";
+            voiceInputArea.transcribedText = transcribedText;
+            transcriptionInProgress = true;
+        }
+
+        function onTranscriptionComplete(full_text) {
+            if (full_text && full_text.trim().length > 0) {
+                transcribedText = full_text;
+                voiceInputArea.transcribedText = transcribedText;
+                
+                // Submit the transcribed text to the server after a short delay
+                transcriptionTimer.start();
+            }
+            transcriptionInProgress = false;
+        }
+
+        function onRecordingStateChanged(is_recording) {
+            isListening = is_recording;
+            if (is_recording) {
+                statusText = "Listening...";
+                transcribedText = "";
+                voiceInputArea.transcribedText = "";
+            } else if (!transcriptionInProgress) {
+                statusText = "Processing...";
+                isProcessing = true;
+            }
+        }
+    }
+
+    Timer {
+        id: transcriptionTimer
+        interval: 500
+        repeat: false
+        running: false
+        onTriggered: {
+            if (transcribedText && transcribedText.trim().length > 0 && bridge && bridge.ready) {
+                bridge.submit_query(transcribedText.trim());
+                transcribedText = "";
+                voiceInputArea.transcribedText = "";
             }
         }
     }
@@ -198,6 +244,8 @@ PageBase {
             function onListeningStarted() {
                 isListening = true;
                 statusText = "Listening...";
+                transcribedText = "";
+                voiceInputArea.transcribedText = "";
             }
             
             function onListeningStopped() {
@@ -258,13 +306,14 @@ PageBase {
         
         isListening: voiceAssistantPage.isListening
         isProcessing: voiceAssistantPage.isProcessing
+        property string transcribedText: ""
         
         onVoiceToggled: function(listening) {
             if (bridge && bridge.ready && bridge.isConnected && !isProcessing) {
                 if (listening) {
-                    bridge.startListening();
+                    bridge.startRecording();
                 } else {
-                    bridge.stopListening();
+                    bridge.stopAndTranscribe();
                 }
             }
         }

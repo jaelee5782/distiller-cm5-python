@@ -43,6 +43,9 @@ class MCPClientBridge(QObject):
     listeningStopped = pyqtSignal()  # Signal for when listening stops
     errorOccurred = pyqtSignal(str)  # Signal for errors
     bridgeReady = pyqtSignal()  # Signal for when the bridge is fully initialized
+    transcriptionUpdate = pyqtSignal(str)  # Signal for transcription updates
+    transcriptionComplete = pyqtSignal(str)  # Signal for completed transcription
+    recordingStateChanged = pyqtSignal(bool)  # Signal for recording state changes
 
     def __init__(self, parent=None):
         """MCPClientBridge initializes the MCPClient and manages the conversation state."""
@@ -66,6 +69,9 @@ class MCPClientBridge(QObject):
         self._selected_server_path = None
         self.client = None  # Will be initialized when a server is selected
         
+        # Reference to the App instance
+        self._app_instance = None
+        
         # Server discovery cache for debouncing
         self._last_server_discovery_time = 0
         self._server_discovery_cache_timeout = 5  # seconds
@@ -76,6 +82,11 @@ class MCPClientBridge(QObject):
         self._config_save_timer = None
         self._config_cache_timeout = 300  # seconds - how long to keep cached values
         self._config_cache_timestamps = {}  # Track when values were cached
+
+    def set_app_instance(self, app_instance):
+        """Set the reference to the App instance."""
+        self._app_instance = app_instance
+        logger.info("App instance reference set in bridge")
 
     @pyqtProperty(bool, notify=bridgeReady)
     def ready(self):
@@ -607,10 +618,17 @@ class MCPClientBridge(QObject):
             # --- Call MCPClient process_query with the callback ---
             try:
                 logger.info(f"Calling self.client.process_query for query: '{query}'")
-                # The process_query function is now awaited directly,
-                # and the callback handles the data processing.
-                await self.client.process_query(query, callback=_handle_mcp_data)
-
+                
+                # The client.process_query function returns an async generator
+                # We need to iterate through it using async for
+                async_generator = self.client.process_query(query, callback=_handle_mcp_data)
+                
+                # Consume the generator
+                async for _ in async_generator:
+                    # Each yielded value can be processed here if needed
+                    # For now, we're using the callback for handling data
+                    pass
+                    
                 # After process_query finishes (successfully or not), reset streaming state
                 logger.info("Finished processing query in bridge.")
                 self.conversation_manager.reset_streaming_message()
@@ -940,13 +958,12 @@ class MCPClientBridge(QObject):
             # Emit signal for UI update
             self.listeningStarted.emit()
             
-            # In this version, we indicate that voice is not yet implemented
-            # This is a placeholder for future implementation with Whisper or similar
-            raise NotImplementedError("Voice activation is not implemented in this version.")
+            # Call startRecording
+            self.startRecording()
             
         except Exception as e:
             self._handle_error(e, "Voice activation", 
-                user_friendly_msg="Voice activation is not available in this version.")
+                user_friendly_msg="Voice activation failed. Please check your microphone settings.")
             # Still emit the signal to update UI appropriately
             self.listeningStopped.emit()
 
@@ -958,9 +975,50 @@ class MCPClientBridge(QObject):
             # Emit signal for UI update
             self.listeningStopped.emit()
             self.status_manager.update_status(StatusManager.STATUS_IDLE)
+            
+            # Call stopAndTranscribe
+            self.stopAndTranscribe()
         except Exception as e:
             self._handle_error(e, "Voice deactivation")
             
+    @pyqtSlot()
+    def startRecording(self):
+        """Start recording audio with Whisper."""
+        try:
+            logger.info("Starting Whisper recording")
+            
+            # Check if client is connected
+            if not self._is_connected:
+                raise ConnectionError("Cannot record: not connected to any server.")
+                
+            # Use direct app instance reference
+            if self._app_instance:
+                self._app_instance.startRecording()
+            else:
+                raise RuntimeError("No App instance reference available")
+            
+        except Exception as e:
+            self._handle_error(e, "Voice recording", 
+                user_friendly_msg="Failed to start recording. Please check your microphone settings.")
+
+    @pyqtSlot()
+    def stopAndTranscribe(self):
+        """Stop recording and transcribe the audio with Whisper."""
+        try:
+            logger.info("Stopping recording and starting transcription")
+            
+            # Use direct app instance reference
+            if self._app_instance:
+                self._app_instance.stopAndTranscribe()
+            else:
+                raise RuntimeError("No App instance reference available")
+            
+        except Exception as e:
+            self._handle_error(e, "Voice transcription", 
+                user_friendly_msg="Failed to transcribe audio.")
+            # Still emit the signal to update UI appropriately
+            self.listeningStopped.emit()
+
     @pyqtSlot()
     def disconnectFromServer(self):
         """Disconnect from the MCP server."""

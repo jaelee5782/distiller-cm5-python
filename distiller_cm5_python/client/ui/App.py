@@ -102,6 +102,10 @@ class App(QObject): # Inherit from QObject to support signals/slots
         # Initialize the bridge first
         logger.info("Initializing bridge...")
         await self.bridge.initialize()
+        
+        # Set a reference to this App instance in the bridge
+        self.bridge.set_app_instance(self)
+        
         logger.info("Bridge initialized successfully")
 
         # Now register the initialized bridge with QML
@@ -595,6 +599,9 @@ class App(QObject): # Inherit from QObject to support signals/slots
         if self.whisper.start_recording():
             self._is_actively_recording = True
             self.recordingStateChanged.emit(True)
+            # Also forward to the bridge if it exists
+            if hasattr(self, "bridge") and self.bridge:
+                self.bridge.recordingStateChanged.emit(True)
             logger.info("UI Recording Started")
         else:
             logger.error("Failed to start Whisper recording")
@@ -608,6 +615,9 @@ class App(QObject): # Inherit from QObject to support signals/slots
         audio_data = self.whisper.stop_recording()
         self._is_actively_recording = False
         self.recordingStateChanged.emit(False)
+        # Also forward to the bridge if it exists
+        if hasattr(self, "bridge") and self.bridge:
+            self.bridge.recordingStateChanged.emit(False)
         logger.info("UI Recording Stopped")
 
         if audio_data:
@@ -634,16 +644,25 @@ class App(QObject): # Inherit from QObject to support signals/slots
             full_transcription = []
             for segment in transcription_generator:
                 self.transcriptionUpdate.emit(segment)
+                # Also forward to the bridge if it exists
+                if hasattr(self, "bridge") and self.bridge:
+                    self.bridge.transcriptionUpdate.emit(segment)
                 full_transcription.append(segment)
                 await asyncio.sleep(0) # Yield control briefly
 
             complete_text = " ".join(full_transcription)
             self.transcriptionComplete.emit(complete_text)
+            # Also forward to the bridge if it exists
+            if hasattr(self, "bridge") and self.bridge:
+                self.bridge.transcriptionComplete.emit(complete_text)
             logger.info(f"Transcription task finished. Full text: {complete_text}")
 
         except Exception as e:
             logger.error(f"Error during transcription: {e}", exc_info=True)
             self.transcriptionComplete.emit("[Transcription Error]") # Notify UI of error
+            # Also forward to the bridge if it exists
+            if hasattr(self, "bridge") and self.bridge:
+                self.bridge.transcriptionComplete.emit("[Transcription Error]")
         finally:
             self._transcription_task = None # Clear task handle
 

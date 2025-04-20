@@ -291,7 +291,9 @@ QtObject {
         if (currentMode === normalMode) {
             // Normal mode - activate the current item
             console.log("FocusManager: Activating item");
-            if (item.clicked && typeof item.clicked === "function") {
+            if (item.activate && typeof item.activate === "function") {
+                item.activate();
+            } else if (item.clicked && typeof item.clicked === "function") {
                 item.clicked();
             } else if (item.toggle && typeof item.toggle === "function") {
                 item.toggle();

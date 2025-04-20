@@ -9,6 +9,7 @@ Rectangle {
     // Properties
     property bool isListening: false
     property bool isProcessing: false
+    property string transcribedText: ""
     
     // Expose button as property
     property alias voiceButton: voiceButton
@@ -20,11 +21,45 @@ Rectangle {
     // Functions
     function resetState() {
         isProcessing = false;
+        transcribedText = "";
     }
 
     color: ThemeManager.backgroundColor
-    height: 60 // Reduced height for smaller buttons
+    height: transcribedText.trim().length > 0 ? 90 : 60 // Increase height when text is visible
     z: 10 // Ensure this is always on top
+
+    Behavior on height {
+        NumberAnimation { duration: 100 }
+    }
+
+    // Transcribed text display
+    Rectangle {
+        id: transcribedTextDisplay
+        
+        visible: transcribedText.trim().length > 0
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: 8
+        height: transcribedTextLabel.contentHeight + 12
+        color: ThemeManager.backgroundColor
+        border.width: 1
+        border.color: ThemeManager.borderColor
+        radius: 4
+        
+        Text {
+            id: transcribedTextLabel
+            anchors.fill: parent
+            anchors.margins: 6
+            text: transcribedText
+            font.pixelSize: FontManager.fontSizeNormal
+            font.family: FontManager.primaryFontFamily
+            color: ThemeManager.textColor
+            wrapMode: Text.WordWrap
+            elide: Text.ElideRight
+            maximumLineCount: 1
+        }
+    }
 
     // Listening hint that appears during microphone input
     Text {
@@ -56,8 +91,11 @@ Rectangle {
     Item {
         id: buttonRow
 
-        anchors.fill: parent
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
         anchors.margins: 8
+        height: 44
 
         // Consistent button size - smaller for better layout
         property int buttonSize: 44
@@ -137,8 +175,44 @@ Rectangle {
                 property bool navigable: true
                 property bool isActiveItem: false
                 checked: voiceInputArea.isListening
+                
+                // Activate when Enter is pressed via FocusManager
+                function activate() {
+                    // Toggle the checked state
+                    var newState = !checked;
+                    
+                    // Log what's happening
+                    console.log("VoiceButton.activate() called, current state: " + checked + ", new state: " + newState);
+                    
+                    // This will force the checked state directly
+                    // instead of relying on the binding which may get confused
+                    checked = newState;
+                    
+                    // Trigger the voice toggle with the new state
+                    voiceInputArea.voiceToggled(newState);
+                }
+                
                 onClicked: {
-                    voiceInputArea.voiceToggled(checked);
+                    // This is called for mouse clicks, not keyboard
+                    // Keep consistent with the activate method
+                    console.log("VoiceButton.onClicked(), current state: " + checked);
+                    
+                    // Toggle state - invert current state 
+                    var newState = !checked;
+                    
+                    // This allows the binding to checked: voiceInputArea.isListening to work
+                    // We don't force the checked state here to let the binding handle it
+                    
+                    // Trigger the voice toggle with the new state
+                    voiceInputArea.voiceToggled(newState);
+                }
+                
+                // Add direct key handling for Enter/Return
+                Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                        event.accepted = true;
+                        activate();
+                    }
                 }
 
                 background: Rectangle {
