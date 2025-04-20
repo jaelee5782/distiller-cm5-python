@@ -60,6 +60,12 @@ PageBase {
             if (settingsButton && settingsButton.navigable) {
                 focusableItems.push(settingsButton)
             }
+            
+            // Add reset button to focusable items
+            let resetButton = findChild(voiceInputArea, "resetButton")
+            if (resetButton && resetButton.navigable) {
+                focusableItems.push(resetButton)
+            }
         }
         
         if (header && header.serverSelectButton && header.serverSelectButton.navigable) {
@@ -375,6 +381,11 @@ PageBase {
                 mainWindow.pushSettingsPage();
             }
         }
+        
+        onResetClicked: {
+            // Show confirmation dialog
+            restartConfirmDialog.open();
+        }
     }
     
     Timer {
@@ -506,6 +517,53 @@ PageBase {
         } else {
             _statusText = "Ready";
         }
+    }
+
+    // App restart confirmation dialog
+    AppDialog {
+        id: restartConfirmDialog
+
+        dialogTitle: "Restart Application"
+        message: "Are you sure you want to restart the application?"
+        
+        standardButtonTypes: DialogButtonBox.Yes | DialogButtonBox.No
+        
+        yesButtonText: "Restart"
+        noButtonText: "Cancel"
+        
+        acceptButtonColor: ThemeManager.backgroundColor
+        
+        onAccepted: {
+            // Restart the application
+            restartApplication();
+        }
+    }
+    
+    // Function to restart the application
+    function restartApplication() {
+        console.log("Restarting application...");
+        
+        // First disconnect from server if connected
+        if (bridge && bridge.ready && bridge.isConnected) {
+            bridge.disconnectFromServer();
+        }
+        
+        // Use a timer to allow disconnection to complete
+        Qt.callLater(function() {
+            // Tell the bridge to restart the application
+            if (bridge && bridge.ready) {
+                // First try to use a dedicated restart method if available
+                if (typeof bridge.restartApplication === "function") {
+                    bridge.restartApplication();
+                } else {
+                    // Otherwise use shutdown which should trigger a restart in the wrapper
+                    bridge.shutdown(true); // true to indicate restart
+                }
+            } else {
+                // Fallback if bridge is not available - just show a message
+                messageToast.showMessage("Unable to restart - bridge not ready", 3000);
+            }
+        });
     }
 }
 

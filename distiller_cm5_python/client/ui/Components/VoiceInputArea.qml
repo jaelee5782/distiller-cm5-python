@@ -12,11 +12,14 @@ Rectangle {
     property string transcribedText: ""
     
     // Expose button as property
+    property alias settingsButton: settingsButton
     property alias voiceButton: voiceButton
+    property alias resetButton: resetButton
 
     // Signals
     signal voiceToggled(bool listening)
     signal settingsClicked()
+    signal resetClicked()  // New signal for reset button
 
     // Functions
     function resetState() {
@@ -163,11 +166,69 @@ Rectangle {
                     }
                 }
             }
+            
+            // Reset button
+            RoundButton {
+                id: resetButton
+                objectName: "resetButton"
+
+                width: buttonRow.buttonSize
+                height: buttonRow.buttonSize
+                flat: true
+                property bool navigable: true
+                property bool isActiveItem: false
+                onClicked: voiceInputArea.resetClicked()
+
+                background: Rectangle {
+                    color: "transparent"
+                    antialiasing: true
+                    
+                    // Clear border for focus state (e-ink optimized)
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: resetButton.isActiveItem ? 0 : -buttonRow.borderWidth
+                        color: "transparent"
+                        border {
+                            width: resetButton.isActiveItem ? buttonRow.borderWidth : 0
+                            color: ThemeManager.accentColor
+                        }
+                        radius: width / 2
+                        antialiasing: true
+                        opacity: resetButton.isActiveItem ? 1.0 : 0
+                    }
+                }
+
+                contentItem: Item {
+                    anchors.fill: parent
+                    
+                    // High contrast highlight for e-ink
+                    Rectangle {
+                        visible: resetButton.isActiveItem || resetButton.hovered || resetButton.pressed
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: resetButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
+                        border.width: 1
+                        border.color: ThemeManager.borderColor
+                        opacity: resetButton.isActiveItem ? 0.3 : 0.1
+                        antialiasing: true
+                    }
+
+                    Text {
+                        text: "↻"  // Reset icon as text
+                        font.pixelSize: parent.width * 0.5
+                        font.family: FontManager.primaryFontFamily
+                        color: ThemeManager.textColor
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: Text.AlignVCenter
+                        anchors.centerIn: parent
+                        opacity: 1.0 // Always full opacity for better e-ink visibility
+                    }
+                }
+            }
 
             // Center microphone button - now same size as settings button
             RoundButton {
                 id: voiceButton
-
                 width: buttonRow.buttonSize
                 height: buttonRow.buttonSize
                 flat: true

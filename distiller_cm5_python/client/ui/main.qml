@@ -148,6 +148,20 @@ ApplicationWindow {
             closeEvent.accepted = true;
         }
     }
+    
+    // Function to handle application restart
+    function restartApp() {
+        console.log("Processing restart request");
+        if (bridge && bridge.ready) {
+            // First disconnect from any server
+            if (bridge.isConnected) {
+                bridge.disconnectFromServer();
+            }
+            
+            // Then shutdown with restart flag
+            bridge.shutdown(true);
+        }
+    }
 
     // Custom font
     FontLoader {
