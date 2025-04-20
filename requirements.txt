@@ -11,3 +11,6 @@ nest_asyncio
 psutil
 PyQt6
 qasync
+pyaudio
+faster_whisper
+evdev
