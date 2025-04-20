@@ -4,6 +4,7 @@ import QtQuick.Layouts 1.15
 
 ListView {
     id: conversationView
+    objectName: "conversationView"
 
     // Properties to track user scrolling and state
     property bool userScrolling: false
@@ -13,6 +14,10 @@ ListView {
     property bool responseInProgress: false // Track if a response is being generated
     property bool navigable: true // Make focusable for keyboard navigation
     property bool isActiveItem: false // For focus management
+    property bool scrollModeActive: false // Track if scroll mode is active
+    
+    // Signal to notify when scroll mode changes
+    signal scrollModeChanged(bool active)
     
     // Expose scroll animation for FocusManager but with zero duration
     property alias scrollAnimation: smoothScrollAnimation
@@ -29,39 +34,77 @@ ListView {
         easing.type: Easing.Linear
     }
     
-    // Handle key navigation
-    Keys.onPressed: function(event) {
-        if (isActiveItem) {
-            if (event.key === Qt.Key_Up) {
-                event.accepted = true;
-                conversationView.contentY = Math.max(0, conversationView.contentY - 50);
-                checkIfAtBottom();
-            } else if (event.key === Qt.Key_Down) {
-                event.accepted = true;
-                var maxY = Math.max(0, conversationView.contentHeight - conversationView.height);
-                conversationView.contentY = Math.min(maxY, conversationView.contentY + 50);
-                checkIfAtBottom();
-            } else if (event.key === Qt.Key_Home) {
-                event.accepted = true;
-                conversationView.positionViewAtBeginning();
-                atBottom = false;
-            } else if (event.key === Qt.Key_End) {
-                event.accepted = true;
-                conversationView.positionViewAtEnd();
-                atBottom = true;
-            }
-        }
+    // Observe changes to scroll mode from FocusManager
+    onScrollModeActiveChanged: {
+        console.log("ConversationView scroll mode: " + (scrollModeActive ? "active" : "inactive"));
+        // Force UI update
+        activeScrollModeInstructions.visible = scrollModeActive;
     }
     
-    // Visual indicator for keyboard focus
+    // Visual indicator for keyboard focus and scroll mode
     Rectangle {
         id: focusIndicator
         anchors.fill: parent
         color: "transparent"
-        border.width: isActiveItem ? 2 : 0
-        border.color: ThemeManager.accentColor
+        border.width: isActiveItem ? (scrollModeActive ? 3 : 2) : 0
+        border.color: scrollModeActive ? ThemeManager.highlightColor : ThemeManager.accentColor
         visible: isActiveItem
         z: -1
+    }
+    
+    // Visual instruction when in focus but not in scroll mode
+    Rectangle {
+        id: scrollModeInstructions
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: ThemeManager.spacingNormal
+        height: scrollModeText.height + ThemeManager.spacingSmall * 2
+        width: scrollModeText.width + ThemeManager.spacingNormal * 2
+        color: ThemeManager.backgroundColor
+        border.width: 1
+        border.color: ThemeManager.borderColor
+        radius: 4
+        visible: isActiveItem && !scrollModeActive && conversationView.contentHeight > conversationView.height
+        z: 2
+        
+        Text {
+            id: scrollModeText
+            anchors.centerIn: parent
+            text: "Press Enter to enable scroll mode"
+            color: ThemeManager.textColor
+            font.pixelSize: ThemeManager.fontSizeSmall
+        }
+    }
+    
+    // Visual instruction when in scroll mode
+    Rectangle {
+        id: activeScrollModeInstructions
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: ThemeManager.spacingNormal
+        height: activeScrollModeText.height + ThemeManager.spacingSmall * 2
+        width: activeScrollModeText.width + ThemeManager.spacingNormal * 2
+        color: ThemeManager.backgroundColor
+        border.width: 1
+        border.color: ThemeManager.highlightColor
+        radius: 4
+        visible: false // Start invisible and let the binding update it
+        z: 2
+        
+        // Make sure the visibility is bound to the scrollModeActive property
+        Component.onCompleted: {
+            activeScrollModeInstructions.visible = Qt.binding(function() { 
+                return scrollModeActive; 
+            });
+        }
+        
+        Text {
+            id: activeScrollModeText
+            anchors.centerIn: parent
+            text: "Use ↑/↓ to scroll, Enter to exit"
+            color: ThemeManager.textColor
+            font.pixelSize: ThemeManager.fontSizeSmall
+        }
     }
 
     // Update function for external callers

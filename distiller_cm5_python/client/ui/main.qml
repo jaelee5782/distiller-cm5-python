@@ -34,21 +34,35 @@ ApplicationWindow {
             Keys.onPressed: function(event) {
                 console.log("Key pressed: " + event.key);
                 
-                // Handle navigation keys
-                if (event.key === Qt.Key_Up) {
-                    console.log("Key UP pressed");
-                    FocusManager.moveFocusUp();
+                // Handle navigation keys - only support UP, DOWN, and ENTER
+                if (event.key === Qt.Key_Down) {
                     event.accepted = true;
-                }
-                else if (event.key === Qt.Key_Down) {
-                    console.log("Key DOWN pressed");
                     FocusManager.moveFocusDown();
+                } else if (event.key === Qt.Key_Up) {
                     event.accepted = true;
-                }
-                else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                    console.log("Key ENTER/RETURN pressed");
-                    FocusManager.handleEnterKey();
+                    FocusManager.moveFocusUp();
+                } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                     event.accepted = true;
+                    // If in scroll mode, exit it with ENTER key
+                    if (FocusManager.scrollModeActive) {
+                        FocusManager.exitScrollMode();
+                        if (FocusManager.scrollTargetItem) {
+                            console.log("Exiting scroll mode and updating UI");
+                            // Force update the property first
+                            FocusManager.scrollTargetItem.scrollModeActive = false;
+                            
+                            // Then trigger the signal if available
+                            if (FocusManager.scrollTargetItem.scrollModeChanged) {
+                                FocusManager.scrollTargetItem.scrollModeChanged(false);
+                            }
+                            
+                            // Force a UI update by using a short timer
+                            exitScrollModeTimer.start();
+                        }
+                    } else {
+                        // Normal enter key handling
+                        FocusManager.handleEnterKey();
+                    }
                 }
             }
             
@@ -76,6 +90,20 @@ ApplicationWindow {
                     console.log("Key handler regaining focus");
                     keyHandler.forceActiveFocus();
                 }
+            }
+        }
+    }
+    
+    // Timer to ensure the UI is updated when exiting scroll mode
+    Timer {
+        id: exitScrollModeTimer
+        interval: 10
+        repeat: false
+        onTriggered: {
+            // Force additional update for any target that might still be in scroll mode
+            if (FocusManager.scrollTargetItem) {
+                FocusManager.scrollTargetItem.scrollModeActive = false;
+                console.log("Forced update of scroll mode state");
             }
         }
     }

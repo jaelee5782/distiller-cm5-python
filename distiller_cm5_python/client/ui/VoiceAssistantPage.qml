@@ -12,11 +12,14 @@ PageBase {
     property string serverName: _serverName
     property bool isListening: false
     property bool isProcessing: false
-    property string statusText: "Ready"
+    property string statusText: conversationView && conversationView.scrollModeActive ? 
+                             "Scroll Mode (↑↓ to scroll)" : _statusText
+    property string _statusText: "Ready"
     property var focusableItems: []
     property var previousFocusedItem: null
     property string transcribedText: ""
     property bool transcriptionInProgress: false
+    property bool conversationScrollMode: false  // Track if conversation is in scroll mode
 
     signal selectNewServer()
 
@@ -126,17 +129,17 @@ PageBase {
         function onRecordingStateChanged(is_recording) {
             isListening = is_recording;
             if (is_recording) {
-                statusText = "Listening...";
+                updateStatusText("Listening...");
                 transcribedText = "";
                 voiceInputArea.transcribedText = "";
             } else if (!transcriptionInProgress) {
-                statusText = "Processing...";
+                updateStatusText("Processing...");
                 isProcessing = true;
             }
         }
 
         function onStatusChanged(newStatus) {
-            statusText = newStatus;
+            updateStatusText(newStatus);
             
             // Reset processing state when we get a "Ready" status
             if (newStatus === "Ready" && isProcessing) {
@@ -168,7 +171,7 @@ PageBase {
                 // If no text to submit, make sure we reset the state
                 isProcessing = false;
                 isListening = false;
-                statusText = "Ready";
+                updateStatusText("Ready");
             }
         }
     }
@@ -266,7 +269,7 @@ PageBase {
                 // Ensure processing state is fully reset
                 isProcessing = false;
                 isListening = false;
-                statusText = "Ready";
+                updateStatusText("Ready");
                 
                 // Turn off response mode immediately
                 conversationView.setResponseInProgress(false);
@@ -282,14 +285,14 @@ PageBase {
             
             function onListeningStarted() {
                 isListening = true;
-                statusText = "Listening...";
+                updateStatusText("Listening...");
                 transcribedText = "";
                 voiceInputArea.transcribedText = "";
             }
             
             function onListeningStopped() {
                 isListening = false;
-                statusText = "Processing...";
+                updateStatusText("Processing...");
                 isProcessing = true;
                 conversationView.setResponseInProgress(true);
             }
@@ -301,7 +304,7 @@ PageBase {
                 // Make sure to reset all states on error
                 isProcessing = false;
                 isListening = false;
-                statusText = "Ready";
+                updateStatusText("Ready");
                 
                 conversationView.setResponseInProgress(false);
                 
@@ -310,6 +313,19 @@ PageBase {
                     errorMessage.toLowerCase().includes("timeout")) {
                     reconnectionTimer.start();
                 }
+            }
+        }
+
+        function onScrollModeChanged(active) {
+            console.log("Scroll mode changed to: " + active);
+            conversationScrollMode = active;
+            
+            // When entering scroll mode, we need to make sure the focus stays
+            if (active) {
+                FocusManager.lockFocus = true;
+            } else {
+                FocusManager.lockFocus = false;
+                updateStatusText();  // Restore status when exiting scroll mode
             }
         }
     }
@@ -433,7 +449,7 @@ PageBase {
                 console.log("StateResetTimer: Force resetting isProcessing from", isProcessing, "to false");
                 isProcessing = false;
                 isListening = false;
-                statusText = "Ready";
+                updateStatusText("Ready");
                 conversationView.setResponseInProgress(false);
             }
         }
@@ -454,7 +470,7 @@ PageBase {
                 console.log("StateCheckTimer: Detected stuck processing state, resetting");
                 isProcessing = false;
                 isListening = false;
-                statusText = "Ready";
+                updateStatusText("Ready");
                 conversationView.setResponseInProgress(false);
             }
         }
@@ -463,10 +479,33 @@ PageBase {
     // Reset the action timestamp whenever user interacts or state changes
     onIsProcessingChanged: {
         stateCheckTimer.lastActionTimestamp = Date.now();
+        if (!conversationScrollMode) {
+            _statusText = isProcessing ? "Processing..." : "Ready";
+            updateStatusText();
+        }
     }
     
     onIsListeningChanged: {
         stateCheckTimer.lastActionTimestamp = Date.now();
+        if (!conversationScrollMode) {
+            _statusText = isListening ? "Listening..." : (_statusText === "Listening..." ? "Processing..." : _statusText);
+            updateStatusText();
+        }
+    }
+
+    // Update status text based on app state
+    function updateStatusText(newStatus) {
+        if (conversationView && conversationView.scrollModeActive) return; // Don't update status in scroll mode
+        
+        if (newStatus) {
+            _statusText = newStatus;
+        } else if (isListening) {
+            _statusText = "Listening...";
+        } else if (isProcessing) {
+            _statusText = "Processing...";
+        } else {
+            _statusText = "Ready";
+        }
     }
 }
 

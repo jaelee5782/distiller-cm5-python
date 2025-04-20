@@ -1,11 +1,10 @@
 pragma Singleton
-
-import QtQuick 2.15
+import QtQml 2.15
 
 // FocusManager provides application-wide focus management
 // enabling navigation with just Up, Down, and Enter keys
 QtObject {
-    id: focusManager
+    id: focusManagerSingleton
     
     // Current navigation mode
     property int currentMode: FocusManager.normalMode
@@ -13,7 +12,8 @@ QtObject {
     // Navigation modes
     readonly property int normalMode: 0     // Standard navigation between focusable items
     readonly property int sliderMode: 1     // Adjusting slider values
-    readonly property int textInputMode: 2  // Text input editing
+    readonly property int textInputMode: 2  // Text input mode
+    readonly property int scrollMode: 3     // New mode for conversation scrolling
     
     // Focus navigation arrays for different contexts
     property var currentFocusItems: []      // Current array of focusable items
@@ -27,6 +27,22 @@ QtObject {
     
     // Signal when focus changes 
     signal focusChanged(var focusedItem)
+    
+    // Track scroll mode specifically for ConversationView
+    property bool scrollModeActive: false
+    property var scrollTargetItem: null
+    
+    // New property to lock focus on current item
+    property bool lockFocus: false
+    
+    // Reset all focus items
+    function clearFocus() {
+        for (var i = 0; i < currentFocusItems.length; i++) {
+            if (currentFocusItems[i] && typeof currentFocusItems[i].isActiveItem !== 'undefined') {
+                currentFocusItems[i].isActiveItem = false;
+            }
+        }
+    }
     
     // Initialize/update the array of focusable items
     function initializeFocusItems(items, scrollView) {
@@ -147,9 +163,56 @@ QtObject {
         }
     }
     
+    // Enter scroll mode for ConversationView
+    function enterScrollMode(item) {
+        if (!item) return;
+        
+        scrollModeActive = true;
+        scrollTargetItem = item;
+        console.log("FocusManager: Entering scroll mode for item");
+    }
+    
+    // Exit scroll mode
+    function exitScrollMode() {
+        if (scrollTargetItem) {
+            // Make sure to update the item's property
+            scrollTargetItem.scrollModeActive = false;
+            
+            // Also call the signal if it exists
+            if (scrollTargetItem.scrollModeChanged) {
+                scrollTargetItem.scrollModeChanged(false);
+            }
+            
+            // Clear the reference after ensuring properties are updated
+            var oldTarget = scrollTargetItem;
+            scrollTargetItem = null;
+            
+            // Force one more update as a failsafe
+            if (oldTarget) {
+                oldTarget.scrollModeActive = false;
+            }
+        }
+        
+        scrollModeActive = false;
+        console.log("FocusManager: Exiting scroll mode");
+    }
+    
     // Move focus up
     function moveFocusUp() {
         console.log("FocusManager: Moving focus up, current index: " + currentFocusIndex);
+        
+        // If in scroll mode, scroll the target view instead of changing focus
+        if (scrollModeActive && scrollTargetItem) {
+            if (scrollTargetItem.contentY !== undefined) {
+                var newY = Math.max(0, scrollTargetItem.contentY - scrollStep);
+                scrollTargetItem.contentY = newY;
+                if (scrollTargetItem.checkIfAtBottom) {
+                    scrollTargetItem.checkIfAtBottom();
+                }
+            }
+            return;
+        }
+        
         if (currentMode === sliderMode) {
             // In slider mode, increase the value
             if (currentFocusItems[currentFocusIndex] && currentFocusItems[currentFocusIndex].increaseValue) {
@@ -204,6 +267,20 @@ QtObject {
     // Move focus down
     function moveFocusDown() {
         console.log("FocusManager: Moving focus down, current index: " + currentFocusIndex);
+        
+        // If in scroll mode, scroll the target view instead of changing focus
+        if (scrollModeActive && scrollTargetItem) {
+            if (scrollTargetItem.contentY !== undefined) {
+                var maxY = Math.max(0, scrollTargetItem.contentHeight - scrollTargetItem.height);
+                var newY = Math.min(maxY, scrollTargetItem.contentY + scrollStep);
+                scrollTargetItem.contentY = newY;
+                if (scrollTargetItem.checkIfAtBottom) {
+                    scrollTargetItem.checkIfAtBottom();
+                }
+            }
+            return;
+        }
+        
         if (currentMode === sliderMode) {
             // In slider mode, decrease the value
             if (currentFocusItems[currentFocusIndex] && currentFocusItems[currentFocusIndex].decreaseValue) {
@@ -285,6 +362,22 @@ QtObject {
         var item = currentFocusItems[currentFocusIndex];
         if (!item) {
             console.error("FocusManager: Focused item is null");
+            return;
+        }
+        
+        // Handle entering/exiting scroll mode for ConversationView
+        if (item.objectName === "conversationView" || 
+            (item.navigable && item.scrollModeActive !== undefined)) {
+            
+            // Toggle scroll mode
+            if (!scrollModeActive) {
+                enterScrollMode(item);
+                if (item.scrollModeChanged) {
+                    item.scrollModeActive = true;
+                    item.scrollModeChanged(true);
+                }
+            } 
+            // Exit scroll mode is handled in main.qml key handler
             return;
         }
         
