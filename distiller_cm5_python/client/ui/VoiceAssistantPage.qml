@@ -43,6 +43,11 @@ PageBase {
     function collectFocusItems() {
         focusableItems = []
         
+        // Add conversation view for keyboard scrolling
+        if (conversationView && conversationView.navigable) {
+            focusableItems.push(conversationView)
+        }
+        
         if (voiceInputArea) {
             if (voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
                 focusableItems.push(voiceInputArea.voiceButton)
@@ -129,6 +134,21 @@ PageBase {
                 isProcessing = true;
             }
         }
+
+        function onStatusChanged(newStatus) {
+            statusText = newStatus;
+            
+            // Reset processing state when we get a "Ready" status
+            if (newStatus === "Ready" && isProcessing) {
+                console.log("StatusChanged: Detected Ready status, resetting isProcessing to false");
+                isProcessing = false;
+                isListening = false;
+                
+                // Ensure conversation view is updated
+                conversationView.setResponseInProgress(false);
+                conversationView.scrollToBottom();
+            }
+        }
     }
 
     Timer {
@@ -141,6 +161,14 @@ PageBase {
                 bridge.submit_query(transcribedText.trim());
                 transcribedText = "";
                 voiceInputArea.transcribedText = "";
+                
+                // Start the state reset timer as a failsafe
+                stateResetTimer.start();
+            } else {
+                // If no text to submit, make sure we reset the state
+                isProcessing = false;
+                isListening = false;
+                statusText = "Ready";
             }
         }
     }
@@ -230,15 +258,26 @@ PageBase {
             
             function onConversationChanged() {
                 conversationView.updateModel(bridge.get_conversation());
+                // Ensure we scroll to the bottom after model updates
+                conversationView.scrollToBottom();
             }
             
             function onMessageReceived(message, timestamp) {
+                // Ensure processing state is fully reset
                 isProcessing = false;
                 isListening = false;
                 statusText = "Ready";
                 
                 // Turn off response mode immediately
                 conversationView.setResponseInProgress(false);
+                // Ensure we scroll to the bottom
+                conversationView.scrollToBottom();
+                
+                // Log the state reset
+                console.log("MessageReceived: Reset isProcessing to false");
+                
+                // Start failsafe timer to ensure state is reset
+                stateResetTimer.start();
             }
             
             function onListeningStarted() {
@@ -259,6 +298,7 @@ PageBase {
                 var displayDuration = Math.max(3000, Math.min(errorMessage.length * 75, 8000));
                 messageToast.showMessage("Error: " + errorMessage, displayDuration);
                 
+                // Make sure to reset all states on error
                 isProcessing = false;
                 isListening = false;
                 statusText = "Ready";
@@ -270,10 +310,6 @@ PageBase {
                     errorMessage.toLowerCase().includes("timeout")) {
                     reconnectionTimer.start();
                 }
-            }
-            
-            function onStatusChanged(newStatus) {
-                statusText = newStatus;
             }
         }
     }
@@ -384,6 +420,53 @@ PageBase {
         onTriggered: {
             ensureFocusableItemsHaveFocus();
         }
+    }
+
+    // Failsafe timer to ensure processing state is properly reset
+    Timer {
+        id: stateResetTimer
+        interval: 1000
+        repeat: false
+        running: false
+        onTriggered: {
+            if (isProcessing) {
+                console.log("StateResetTimer: Force resetting isProcessing from", isProcessing, "to false");
+                isProcessing = false;
+                isListening = false;
+                statusText = "Ready";
+                conversationView.setResponseInProgress(false);
+            }
+        }
+    }
+
+    // Periodic state check to ensure we don't get stuck in processing state
+    Timer {
+        id: stateCheckTimer
+        interval: 5000  // Check every 5 seconds
+        repeat: true
+        running: true
+        
+        property real lastActionTimestamp: Date.now()
+        
+        onTriggered: {
+            // If we've been in processing state for more than 10 seconds, reset it
+            if (isProcessing && (Date.now() - lastActionTimestamp > 10000)) {
+                console.log("StateCheckTimer: Detected stuck processing state, resetting");
+                isProcessing = false;
+                isListening = false;
+                statusText = "Ready";
+                conversationView.setResponseInProgress(false);
+            }
+        }
+    }
+    
+    // Reset the action timestamp whenever user interacts or state changes
+    onIsProcessingChanged: {
+        stateCheckTimer.lastActionTimestamp = Date.now();
+    }
+    
+    onIsListeningChanged: {
+        stateCheckTimer.lastActionTimestamp = Date.now();
     }
 }
 
