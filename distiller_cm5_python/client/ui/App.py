@@ -5,10 +5,11 @@ from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtWidgets import QApplication
 from distiller_cm5_python.client.ui.AppInfoManager import AppInfoManager
 from distiller_cm5_python.client.ui.bridge.MCPClientBridge import MCPClientBridge
+from distiller_cm5_python.client.ui.bridge.EInkRenderer import EInkRenderer, config
+from distiller_cm5_python.client.ui.bridge.EInkRendererBridge import EInkRendererBridge
 from contextlib import AsyncExitStack
 from qasync import QEventLoop
 from distiller_cm5_python.utils.logger import logger
-from distiller_cm5_python.utils.config import EINK_ENABLED, EINK_CAPTURE_INTERVAL, EINK_BUFFER_SIZE, EINK_DITHERING_ENABLED
 import asyncio
 import evdev
 import os
@@ -25,9 +26,10 @@ class App:
         atexit.register(self._emergency_exit_handler)
         
         # Set platform to offscreen before creating QApplication if E-Ink is enabled
-        if EINK_ENABLED:
+        # TODO: Make this conditional based on configuration
+        if config.get("display").get("eink_enabled"):
             os.environ["QT_QPA_PLATFORM"] = "offscreen"
-            
+
         self.app = QApplication(sys.argv)
         self.app.setApplicationName("PamirAI Assistant")
         self.app.setOrganizationName("PamirAI Inc")
@@ -49,8 +51,7 @@ class App:
         # E-Ink Initialization
         self.eink_renderer = None
         self.eink_bridge = None
-        self._eink_initialized = False
-        
+       
         # Shutdown control
         self._shutdown_in_progress = False
         self._shutdown_timeout = 5000  # milliseconds
@@ -61,6 +62,9 @@ class App:
         # Exit stack for managed resource cleanup
         self.exit_stack = AsyncExitStack()
         
+        self._eink_initialized = False
+        self._input_monitor_task = None # Task handle for input monitoring
+
         # Connect signal to handle application quit
         self.app.aboutToQuit.connect(self._on_about_to_quit)
         
@@ -123,10 +127,13 @@ class App:
             logger.error("Failed to load QML")
             raise RuntimeError("Failed to load QML")
 
-        if EINK_ENABLED:
+        if config.get("display").get("eink_enabled"):
+            # Apply fixed size constraints to the root window after loading
             self._apply_window_constraints()
             # E-Ink Initialization Call
             self._init_eink_renderer()
+            self._eink_initialized = True
+
         # Start monitoring input device
         root_objects = self.engine.rootObjects()
         if root_objects:
@@ -228,6 +235,31 @@ class App:
         # Force quit immediately - this is the most reliable approach
         os._exit(0)
 
+    def _cleanup_eink(self):
+        """Cleanup E-Ink resources."""
+
+        try:
+            # Stop the E-Ink renderer if active
+            if self.eink_renderer:
+                self.eink_renderer.stop()
+                logger.info("E-Ink renderer stopped.")
+                self.eink_renderer = None
+
+            # Clean up e-ink bridge if active
+            if self.eink_bridge:
+                self.eink_bridge.cleanup()
+                logger.info("E-Ink bridge cleaned up.")
+                self.eink_bridge = None
+
+            self._eink_initialized = False
+        except Exception as e:
+            logger.error(f"Error during E-Ink cleanup: {e}", exc_info=True)
+            # Ensure we clean up even if an error occurs
+            if self.eink_bridge:
+                self.eink_bridge.cleanup()
+                self.eink_bridge = None
+            self.eink_renderer = None
+
     async def _initiate_shutdown(self):
         """Initiate the shutdown sequence."""
         if self._shutdown_in_progress:
@@ -241,6 +273,11 @@ class App:
         try:
             if self.bridge:
                 self.bridge.shutdown()
+
+            # E-Ink Cleanup
+            if config.get("display").get("eink_enabled"):
+                self._cleanup_eink()
+
             # Cancel the input monitoring task if running
             if self._input_monitor_task and not self._input_monitor_task.done():
                 logger.info("Cancelling input monitor task...")
@@ -344,23 +381,20 @@ class App:
         # Force exit with no delay
         os._exit(0)
 
-    def _cleanup_eink(self):
-        """Clean up E-Ink resources safely."""
-        if not self._eink_initialized:
-            return
+    def handle_quit(self):
+        """Handle application quit event."""
+        logger.info("Application quit requested")
 
+        # Clean up the E-Ink renderer if it exists
+        if config.get("display").get("eink_enabled"):
+            self._cleanup_eink()
+
+        # Schedule bridge shutdown
         try:
-            # Stop the E-Ink renderer if active
-            if self.eink_renderer:
-                self.eink_renderer.stop()
-                logger.info("E-Ink renderer stopped")
-                self.eink_renderer = None
+            self.bridge.shutdown()
+        except Exception as e:
+            logger.error(f"Error during shutdown: {e}", exc_info=True)
 
-            # Clean up e-ink bridge if active
-            if self.eink_bridge:
-                self.eink_bridge.cleanup()
-                logger.info("E-Ink bridge cleaned up")
-                self.eink_bridge = None
     def _set_display_dimensions(self):
         """Set display dimensions from the config file as context properties for QML."""
         # Get width and height from config or use defaults
@@ -408,28 +442,32 @@ class App:
             logger.info(f"Applied fixed size constraints: {width}x{height}")
         except Exception as e:
             logger.error(f"Error applying window constraints: {e}", exc_info=True)
+    
 
     # E-Ink Methods
     def _init_eink_renderer(self):
         """Initialize the E-Ink renderer."""
-        if not EINK_ENABLED:
-            logger.info("E-Ink display mode disabled in configuration")
+        logger.info(f"config: {config}")
+
+        if not config.get("display").get("eink_enabled"):
+            logger.warning("E-Ink display mode disabled in configuration")
+            return 
+
+        # Check if e-ink mode is enabled in config
+        eink_enabled = config.get("display").get("eink_enabled")
+        
+        if not eink_enabled:
+            logger.warning("E-Ink display mode disabled in configuration")
             return
 
-        logger.info("E-Ink display mode enabled from configuration")
+        logger.info("E-Ink display mode enabled")
+
+        # Get configuration for e-ink renderer
+        capture_interval = config.get("display").get("eink_refresh_interval")
+        buffer_size = config.get("display").get("eink_buffer_size") 
+        dithering_enabled = config.get("display").get("eink_dithering_enabled")
 
         try:
-            # Import E-Ink related classes only when needed
-            from distiller_cm5_python.client.ui.bridge.EInkRenderer import EInkRenderer
-            from distiller_cm5_python.client.ui.bridge.EInkRendererBridge import EInkRendererBridge
-
-            # Get configuration values 
-            capture_interval = EINK_CAPTURE_INTERVAL
-            buffer_size = EINK_BUFFER_SIZE
-            dithering_enabled = EINK_DITHERING_ENABLED
-
-            logger.debug(f"E-Ink config: interval={capture_interval}ms, buffer={buffer_size}, dithering={dithering_enabled}")
-
             # First initialize the e-ink bridge that connects to the hardware
             self.eink_bridge = EInkRendererBridge(parent=self.app)
             init_success = self.eink_bridge.initialize()
@@ -449,21 +487,19 @@ class App:
                 buffer_size=buffer_size
             )
 
-            # Connect frameReady signal
-            self.eink_renderer.frameReady.connect(self._handle_eink_frame)
-
+            # Create a lambda function to handle the signal instead of direct method connection
+            # This avoids the null pointer issue
+            self.eink_renderer.frameReady.connect(
+                lambda data, w, h: self._handle_eink_frame(data, w, h)
+            )
+            
             # Start capturing frames
             self.eink_renderer.start()
             logger.info(f"E-Ink renderer initialized with {capture_interval}ms interval")
 
-            # Mark as successfully initialized
             self._eink_initialized = True
             return True
 
-        except ImportError as e:
-            logger.error(f"E-Ink modules not available: {e}")
-            logger.warning("Continuing without E-Ink support - modules not available")
-            return False
         except Exception as e:
             logger.error(f"Error initializing E-Ink renderer: {e}", exc_info=True)
             # Clean up resources on failure
@@ -473,22 +509,24 @@ class App:
             self.eink_renderer = None
             return False
 
+
     def _handle_eink_frame(self, frame_data, width, height):
         """
         Handle a new frame from the E-Ink renderer.
-        Forwards the frame to the e-ink bridge for display.
+        This method forwards the frame to the e-ink bridge for display.
+        
+        Args:
+            frame_data: The binary data for the frame
+            width: The width of the frame
+            height: The height of the frame
         """
-        # logger.debug(f"E-Ink frame ready: {width}x{height}, {len(frame_data)} bytes") # Potentially noisy
-
-        # Only process if E-Ink is enabled and initialized
-        if not EINK_ENABLED or not self._eink_initialized:
-            return
-
+        logger.debug(f"E-Ink frame ready: {width}x{height}, {len(frame_data)} bytes")
+        
         # Forward the frame to the e-ink bridge if available
         if self.eink_bridge and self.eink_bridge.initialized:
             self.eink_bridge.handle_frame(frame_data, width, height)
-        # else: # Avoid logging warning spam if bridge is intentionally disabled/not ready
-            # logger.warning("E-Ink bridge not available or not initialized")
+        else:
+            logger.warning("E-Ink bridge not available or not initialized")
 
     def _emergency_exit_handler(self):
         """Emergency exit handler registered with atexit.

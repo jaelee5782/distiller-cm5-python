@@ -29,7 +29,7 @@ class EInkRendererBridge(QObject):
         self._first_frame = True
         
         # Get refresh settings from config
-        self._full_refresh_interval = int(config.get("display", "eink_full_refresh_interval") or 30)
+        self._full_refresh_interval = config["display"]["eink_full_refresh_interval"]
         print(f"E-Ink display will do full refresh every {self._full_refresh_interval} frames")
         
     def initialize(self):
