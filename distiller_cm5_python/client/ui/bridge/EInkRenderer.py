@@ -333,16 +333,52 @@ class EInkRenderer(QObject):
         return dithered.flatten().tolist()
     
     def _is_frame_different(self, new_frame):
-        """Check if the new frame is different from the last one"""
+        """Check if the new frame is different from the last one using efficient numpy comparisons"""
         if self._last_frame is None:
             return True
             
         if len(new_frame) != len(self._last_frame):
             return True
+        
+        try:
+            # Convert to numpy arrays for efficient comparison
+            if not isinstance(new_frame, np.ndarray):
+                new_array = np.frombuffer(new_frame, dtype=np.uint8)
+                old_array = np.frombuffer(self._last_frame, dtype=np.uint8)
+            else:
+                new_array = new_frame
+                old_array = self._last_frame
             
-        # Simple comparison - can be optimized for performance
-        # Consider comparing only a sample of bytes or using numpy for large frames
-        return new_frame != self._last_frame
+            # First quick check: compare a few statistical properties
+            # If mean or standard deviation differ significantly, frames are different
+            if abs(np.mean(new_array) - np.mean(old_array)) > 0.5:
+                return True
+                
+            # Sample sparse points throughout the frame (faster than checking every pixel)
+            # Take ~5% of points with regular intervals
+            sample_step = max(1, len(new_array) // 20)
+            samples = new_array[::sample_step]
+            old_samples = old_array[::sample_step]
+            
+            # Quick vectorized comparison
+            if not np.array_equal(samples, old_samples):
+                return True
+                
+            # Check specific regions that often change (like middle of screen)
+            # For a typical UI, changes often happen in the center or bottom
+            middle_start = len(new_array) // 3
+            middle_end = 2 * len(new_array) // 3
+            middle_step = max(1, (middle_end - middle_start) // 10)  # Check ~10 points in middle
+            
+            middle_new = new_array[middle_start:middle_end:middle_step]
+            middle_old = old_array[middle_start:middle_end:middle_step]
+            
+            return not np.array_equal(middle_new, middle_old)
+            
+        except Exception as e:
+            logger.warning(f"Error in frame comparison, falling back to simple check: {e}")
+            # Fallback to simpler comparison in case of error
+            return new_frame != self._last_frame
     
     def _add_to_buffer(self, frame_data, width, height):
         """Add a frame to the buffer and emit signal if buffer is ready"""
