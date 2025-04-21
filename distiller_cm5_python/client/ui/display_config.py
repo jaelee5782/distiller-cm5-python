@@ -5,7 +5,7 @@ config = {
         "eink_dithering_method": 2,  # 1=Floyd-Steinberg, 2=Ordered
         "eink_full_refresh_interval": 30,
         "eink_refresh_interval": 1500,
-        "eink_enabled": True,
+        "eink_enabled": False,
         "eink_buffer_size": 1,  # Reduced buffer size to save memory
         "dark_mode": False,
         "width": 240,

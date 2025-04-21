@@ -4,7 +4,7 @@ from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtWidgets import QApplication
 from contextlib import AsyncExitStack
-from .display_config import config
+from display_config import config
 from distiller_cm5_python.client.ui.AppInfoManager import AppInfoManager
 from distiller_cm5_python.client.ui.bridge.MCPClientBridge import MCPClientBridge
 from distiller_cm5_python.utils.logger import logger
