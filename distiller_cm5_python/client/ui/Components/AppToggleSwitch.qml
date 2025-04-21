@@ -40,6 +40,11 @@ NavigableItem {
         toggle()
     }
     
+    // Override the clicked signal to toggle the switch
+    onClicked: {
+        toggle()
+    }
+    
     Rectangle {
         id: toggleBackground
         width: 52
@@ -66,15 +71,6 @@ NavigableItem {
                     duration: ThemeManager.animationDuration / 2
                 }
             }
-        }
-    }
-    
-    // Mouse area to handle clicks
-    MouseArea {
-        anchors.fill: parent
-        onClicked: {
-            root.toggle()
-            root.forceActiveFocus()
         }
     }
 } 

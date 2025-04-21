@@ -85,22 +85,6 @@ Rectangle {
                 elide: Text.ElideRight
                 maximumLineCount: 2
                 clip: true
-                
-                property bool hovered: false
-                property bool truncated: (elide === Text.ElideRight) && (text.length > 0) && (paintedWidth < implicitWidth)
-            
-                ToolTip {
-                    visible: statusTextItem.truncated && statusTextItem.hovered
-                    text: statusText
-                    delay: 500
-                }
-                
-                MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onEntered: statusTextItem.hovered = true
-                    onExited: statusTextItem.hovered = false
-                }
             }
         }
     }

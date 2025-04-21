@@ -10,7 +10,7 @@ NavigableItem {
     property real from: 0.0
     property real to: 1.0
     property real stepSize: 0.05
-    property bool pressed: mouseArea.pressed
+    property bool pressed: false // Set directly
     property real visualPosition: (value - from) / (to - from)
     property string label: ""
     property string valueFormat: ""
@@ -111,46 +111,9 @@ NavigableItem {
             width: 20
             height: 20
             radius: 10
-            color: customSlider.visualFocus || mouseArea.pressed ? ThemeManager.accentColor : ThemeManager.backgroundColor
+            color: customSlider.visualFocus ? ThemeManager.accentColor : ThemeManager.backgroundColor
             border.color: customSlider.visualFocus ? ThemeManager.accentColor : ThemeManager.borderColor
             border.width: customSlider.visualFocus ? 2 : ThemeManager.borderWidth
-        }
-        
-        // Touch/mouse area
-        MouseArea {
-            id: mouseArea
-            anchors.fill: parent
-            
-            function updateValue(mouseX) {
-                var pos = Math.max(0, Math.min(1, mouseX / width));
-                var newValue = customSlider.from + pos * (customSlider.to - customSlider.from);
-                
-                // Apply step size
-                if (customSlider.stepSize > 0) {
-                    var steps = Math.round((newValue - customSlider.from) / customSlider.stepSize);
-                    newValue = customSlider.from + steps * customSlider.stepSize;
-                }
-                
-                // Clamp to range
-                newValue = Math.max(customSlider.from, Math.min(customSlider.to, newValue));
-                
-                // Update if changed
-                if (customSlider.value !== newValue) {
-                    customSlider.value = newValue;
-                    customSlider.valueAdjusted(newValue);
-                }
-            }
-            
-            onPressed: function(mouse) {
-                updateValue(mouse.x);
-                customSlider.forceActiveFocus();
-            }
-            
-            onPositionChanged: function(mouse) {
-                if (pressed) {
-                    updateValue(mouse.x);
-                }
-            }
         }
     }
 } 

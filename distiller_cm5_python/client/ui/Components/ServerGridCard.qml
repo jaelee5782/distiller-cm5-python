@@ -87,13 +87,4 @@ NavigableItem {
             }
         }
     }
-    
-    // Mouse area to handle clicks
-    MouseArea {
-        anchors.fill: parent
-        onClicked: {
-            root.forceActiveFocus()
-            root.clicked()
-        }
-    }
 }

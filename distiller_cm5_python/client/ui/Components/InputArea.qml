@@ -119,11 +119,11 @@ Rectangle {
             Layout.preferredWidth: buttonRowLayout.buttonSize
             Layout.preferredHeight: buttonRowLayout.buttonSize
             flat: true
-            // checkable: true // Now handled by MouseArea
             property bool navigable: true
             property bool isActiveItem: false
+            // checkable: true // Now handled differently
             // checked: inputArea.isListening // State handled by parent page signal
-            // onClicked: { inputArea.voiceToggled(checked); } // Handled by MouseArea
+            // onClicked: { inputArea.voiceToggled(checked); } // Handled differently
 
             // Connect the button's own signals to the InputArea signals
             onPressed: inputArea.voicePressed()

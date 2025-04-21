@@ -24,23 +24,6 @@ ScrollView {
     
     contentWidth: availableWidth
     
-    // Improve scroll behavior for wheel events
-    MouseArea {
-        anchors.fill: parent
-        acceptedButtons: Qt.NoButton // Don't steal clicks from children
-        propagateComposedEvents: true // Allow events to pass through
-        
-        // Direct scrolling without animation for e-ink
-        onWheel: function(wheel) {
-            if (wheel.angleDelta.y !== 0) {
-                var delta = wheel.angleDelta.y > 0 ? -wheelScrollLines * 20 : wheelScrollLines * 20;
-                // Apply directly with no animation
-                root.contentItem.contentY = Math.max(0, Math.min(root.contentHeight - root.height, root.contentItem.contentY + delta));
-            }
-            wheel.accepted = true;
-        }
-    }
-    
     // Animation with zero duration for compatibility with code expecting the animation
     NumberAnimation {
         id: scrollAnimation
@@ -59,9 +42,9 @@ ScrollView {
         
         // Static opacity for e-ink
         opacity: 0.6
-        interactive: true
+        interactive: false // Disable interaction since we're removing mouse support
         
-        // Make scrollbar wider for better touch targets
+        // Make scrollbar wider for better visibility
         implicitWidth: 8
         
         contentItem: Rectangle {

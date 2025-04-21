@@ -101,16 +101,6 @@ NavigableItem {
                 font.bold: true
             }
         }
-
-        MouseArea {
-            anchors.fill: parent
-            enabled: collapsible
-            onClicked: {
-                if (collapsible) {
-                    collapsed = !collapsed;
-                }
-            }
-        }
     }
 
     // Content area

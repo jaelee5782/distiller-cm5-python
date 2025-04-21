@@ -11,11 +11,13 @@ NavigableItem {
     property string iconText: ""
     property string text: ""
     property real iconOpacity: 0.7
-    property real hoverOpacity: 1.0
-    property bool useHoverEffect: true
+    property bool useHoverEffect: false // Disabling hover effect since mouse is removed
     property bool showBorder: false
     property bool flat: true
     property bool checked: false
+    
+    // Define pressed property directly on root
+    property bool pressed: false
     
     width: 36
     height: 36
@@ -24,7 +26,6 @@ NavigableItem {
         id: backgroundRect
         anchors.fill: parent
         color: root.checked ? ThemeManager.subtleColor 
-             : root.pressed ? ThemeManager.pressedColor 
              : root.visualFocus ? ThemeManager.accentColor
              : "transparent"
         border.width: showBorder || root.visualFocus ? ThemeManager.borderWidth : 0
@@ -42,32 +43,11 @@ NavigableItem {
         anchors.centerIn: parent
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
-        opacity: (useHoverEffect && root.hovered) ? hoverOpacity : iconOpacity
+        opacity: iconOpacity
     }
     
-    // Mouse area to handle clicks
-    MouseArea {
-        id: mouseArea
-        anchors.fill: parent
-        hoverEnabled: true
-        
-        property bool pressed: false
-        
-        onClicked: {
-            root.clicked()
-        }
-        
-        onPressed: {
-            pressed = true
-            root.pressed()
-        }
-        
-        onReleased: {
-            pressed = false
-            root.released()
-        }
+    // Add keyboard handling
+    Keys.onReturnPressed: {
+        clicked();
     }
-    
-    property bool hovered: mouseArea.containsMouse
-    property bool pressed: mouseArea.pressed
 } 

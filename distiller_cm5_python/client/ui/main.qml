@@ -1,7 +1,6 @@
 import Components 1.0
 import QtQuick 2.15
 import QtQuick.Controls 2.15
-import QtQuick.Layouts 1.15
 import QtQuick.Window 2.15
 
 ApplicationWindow {
@@ -368,7 +367,7 @@ ApplicationWindow {
                     OptimizedImage {
                         id: logoImage
 
-                        source: ThemeManager.darkMode ? "images/pamir_logo_white.webp" : "images/pamir_logo.webp"
+                        source: ThemeManager.darkMode ? "images/pamir_logo_white.png" : "images/pamir_logo.png"
                         width: 150
                         height: 150
                         anchors.centerIn: parent
@@ -445,128 +444,6 @@ ApplicationWindow {
             running: true
             onTriggered: {
                 splashScreen.visible = false;
-            }
-        }
-    }
-
-    // Debug console overlay (press F12 to toggle)
-    Rectangle {
-        id: debugConsole
-
-        anchors.fill: parent
-        color: ThemeManager.backgroundColor
-        opacity: 0.95
-        visible: false
-        z: 2000
-
-        ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: ThemeManager.spacingNormal
-
-            RowLayout {
-                Layout.fillWidth: true
-
-                Text {
-                    text: "Debug Console"
-                    color: ThemeManager.textColor
-                    font.pixelSize: FontManager.fontSizeLarge
-                    font.bold: true
-                }
-
-                Item {
-                    Layout.fillWidth: true
-                }
-
-                Text {
-                    text: "Press F12 to hide"
-                    color: ThemeManager.tertiaryTextColor
-                    font.pixelSize: FontManager.fontSizeNormal
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                color: ThemeManager.backgroundColor
-                border.color: ThemeManager.borderColor
-                border.width: ThemeManager.borderWidth
-
-                AppScrollView {
-                    id: logScrollView
-
-                    anchors.fill: parent
-                    anchors.margins: ThemeManager.spacingNormal
-                    contentHeight: logTextArea.implicitHeight
-                    showEdgeEffects: true
-
-                    TextArea {
-                        id: logTextArea
-
-                        function append(message) {
-                            text = text + message + "\n";
-                            // Auto-scroll to bottom
-                            cursorPosition = text.length;
-                        }
-
-                        readOnly: true
-                        wrapMode: TextEdit.Wrap
-                        color: ThemeManager.textColor
-                        background: null
-                        // Sample logs
-                        text: "Application starting...\n"
-                    }
-                }
-            }
-        }
-    }
-
-    // Log messages to debug console
-    Connections {
-        target: console
-        
-        // Need a signal handler that matches console signals
-        function onMessageLogged(message) {
-            if (logTextArea)
-                logTextArea.append(message);
-        }
-    }
-
-    // Create a signal handler for console.log that the text area can connect to
-    QtObject {
-        id: consoleHelper
-
-        signal logMessage(string message)
-
-        Component.onCompleted: {
-            // Override the console.log function
-            var originalLog = console.log;
-            console.log = function(message) {
-                // Call the original log function
-                originalLog.call(console, message);
-                // Emit our custom signal
-                consoleHelper.logMessage(message);
-            };
-        }
-    }
-    
-    // Connect the debug console text area to the log helper
-    Connections {
-        target: consoleHelper
-        
-        function onLogMessage(message) {
-            if (logTextArea)
-                logTextArea.append(message);
-        }
-    }
-
-    // Handle F12 key to toggle debug console
-    Item {
-        anchors.fill: parent
-        focus: true
-        Keys.onPressed: function(event) {
-            if (event.key === Qt.Key_F12) {
-                debugConsole.visible = !debugConsole.visible;
-                event.accepted = true;
             }
         }
     }

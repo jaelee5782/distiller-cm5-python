@@ -15,21 +15,21 @@ AppSection {
         // App logo image that changes based on theme
         OptimizedImage {
             id: logoImage
-            
+
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: 100
             Layout.preferredHeight: 100
             Layout.topMargin: ThemeManager.spacingNormal
             Layout.bottomMargin: ThemeManager.spacingNormal
-            
-            source: ThemeManager.darkMode ? "../images/pamir_logo_white.webp" : "../images/pamir_logo.webp"
+
+            source: ThemeManager.darkMode ? "../images/pamir_logo_white.png" : "../images/pamir_logo.png"
             fillMode: Image.PreserveAspectFit
             sourceSize.width: 200
             sourceSize.height: 200
-            
+
             // Set fadeInDuration to match the theme animation duration
             fadeInDuration: ThemeManager.animationDuration
-            
+
             // Add a smooth transition when theme changes
             Behavior on source {
                 PropertyAnimation {
@@ -42,50 +42,36 @@ AppSection {
             }
         }
 
-        // Version info with larger text
-        Text {
-            id: versionInfo
+        Column {
+            anchors.horizontalCenter: parent.horizontalCenter
+            spacing: ThemeManager.spacingSmall
 
-            Layout.fillWidth: true
-            Layout.alignment: Qt.AlignHCenter
-            Layout.leftMargin: ThemeManager.spacingLarge
-            Layout.rightMargin: ThemeManager.spacingLarge
-            color: ThemeManager.textColor
-            text: AppInfo.versionString
-            font.pixelSize: FontManager.fontSizeLarge
-            font.family: FontManager.primaryFontFamily
-            font.bold: true
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            elide: Text.ElideNone
-        }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: AppInfo.appName.split(" ")[0]
+                color: ThemeManager.textColor
+                font.pixelSize: FontManager.fontSizeXLarge
+                font.bold: true
+                font.family: FontManager.primaryFontFamily
+            }
 
-        // Separator line
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 1
-            Layout.topMargin: ThemeManager.spacingNormal
-            Layout.bottomMargin: ThemeManager.spacingNormal
-            Layout.leftMargin: ThemeManager.spacingLarge * 2
-            Layout.rightMargin: ThemeManager.spacingLarge * 2
-            color: ThemeManager.borderColor
-        }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: AppInfo.appName.split(" ").slice(1).join(" ")
+                color: ThemeManager.secondaryTextColor
+                font.pixelSize: FontManager.fontSizeMedium
+                font.family: FontManager.primaryFontFamily
+            }
 
-        // Copyright info
-        Text {
-            id: copyrightInfo
-
-            Layout.fillWidth: true
-            Layout.leftMargin: ThemeManager.spacingLarge
-            Layout.rightMargin: ThemeManager.spacingLarge
-            Layout.bottomMargin: ThemeManager.spacingNormal
-            color: ThemeManager.secondaryTextColor
-            text: AppInfo.copyright
-            font.pixelSize: FontManager.fontSizeNormal
-            font.family: FontManager.primaryFontFamily
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            elide: Text.ElideNone
+            // Version information
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: AppInfo.shortVersionString
+                color: ThemeManager.tertiaryTextColor
+                font.pixelSize: FontManager.fontSizeSmall
+                font.family: FontManager.primaryFontFamily
+                topPadding: 4
+            }
         }
     }
 }

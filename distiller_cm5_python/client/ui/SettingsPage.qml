@@ -255,19 +255,13 @@ PageBase {
                                 // Button text
                                 Text {
                                     id: darkModeButtonText
+                                    text: ThemeManager.darkMode ? "ON" : "OFF"
                                     anchors.centerIn: parent
-                                    text: displaySettings.darkTheme ? "ON" : "OFF"
                                     font.pixelSize: FontManager.fontSizeSmall
                                     font.family: FontManager.primaryFontFamily
                                     color: parent.parent.visualFocus ? ThemeManager.focusTextColor : ThemeManager.textColor
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
-                                }
-                                
-                                // Optional: touch/mouse handling
-                                MouseArea {
-                                    anchors.fill: parent
-                                    onClicked: darkModeButton.clicked()
                                 }
                             }
                         }

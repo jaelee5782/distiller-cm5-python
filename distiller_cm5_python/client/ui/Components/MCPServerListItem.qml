@@ -2,7 +2,7 @@ import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
-Rectangle {
+NavigableItem {
     id: delegateItem
 
     property bool isCurrentItem: false
@@ -15,19 +15,28 @@ Rectangle {
 
     width: parent.width
     height: contentLayout.height + ThemeManager.spacingSmall * 2
-    radius: ThemeManager.borderRadius
-    color: ThemeManager.backgroundColor
-    border.color: ThemeManager.borderColor
-    border.width: ThemeManager.borderWidth
+    
+    // Override the base NavigableItem's clicked signal to emit itemClicked
+    onClicked: {
+        itemClicked(serverPath);
+    }
 
-    // Server selection indication - simpler for e-ink
     Rectangle {
-        id: selectionIndicator
-
+        id: background
         anchors.fill: parent
         radius: ThemeManager.borderRadius
-        color: ThemeManager.buttonColor
-        opacity: delegateItem.isCurrentItem ? 0.5 : 0
+        color: ThemeManager.backgroundColor
+        border.color: delegateItem.visualFocus ? ThemeManager.accentColor : ThemeManager.borderColor
+        border.width: delegateItem.visualFocus ? 2 : ThemeManager.borderWidth
+
+        // Server selection indication - simpler for e-ink
+        Rectangle {
+            id: selectionIndicator
+            anchors.fill: parent
+            radius: ThemeManager.borderRadius
+            color: ThemeManager.buttonColor
+            opacity: delegateItem.isCurrentItem || delegateItem.visualFocus ? 0.5 : 0
+        }
     }
 
     // Server display with proper padding
@@ -77,32 +86,8 @@ Rectangle {
         }
     }
 
-    // Click and hover behavior - simpler for e-ink
-    MouseArea {
-        id: mouseArea
-
-        anchors.fill: parent
-        hoverEnabled: true
-        onEntered: {
-            if (!delegateItem.isCurrentItem)
-                selectionIndicator.opacity = 0.3;
-        }
-        onExited: {
-            if (!delegateItem.isCurrentItem)
-                selectionIndicator.opacity = 0;
-        }
-        onClicked: {
-            itemClicked(serverPath);
-            // Prevent too rapid clicks by disabling the area briefly
-            mouseArea.enabled = false;
-            mouseReenableTimer.start();
-        }
-
-        Timer {
-            id: mouseReenableTimer
-
-            interval: ThemeManager.animationDuration
-            onTriggered: mouseArea.enabled = true
-        }
+    // Add keyboard handling for Enter key
+    Keys.onReturnPressed: {
+        itemClicked(serverPath);
     }
 }

@@ -26,12 +26,8 @@ NavigableItem {
         radius: ThemeManager.borderRadius
         
         function getBackgroundColor() {
-            if (root.pressed)
-                return ThemeManager.pressedColor;
             if (root.visualFocus)
                 return ThemeManager.accentColor;
-            if (root.hovered)
-                return ThemeManager.highlightColor;
             return isFlat ? "transparent" : ThemeManager.buttonColor;
         }
         
@@ -52,42 +48,17 @@ NavigableItem {
         verticalAlignment: Text.AlignVCenter
     }
     
-    // Mouse area to handle clicks
-    MouseArea {
-        id: mouseArea
-        anchors.fill: parent
-        hoverEnabled: true
-        
-        property bool pressed: false
-        
-        onClicked: {
-            root.clicked()
-        }
-        
-        onPressed: {
-            pressed = true
-        }
-        
-        onReleased: {
-            pressed = false
-        }
-    }
-    
     // Add keyboard handling for Enter/Return
     Keys.onReturnPressed: function() {
         clicked();
     }
     
-    property bool hovered: mouseArea.containsMouse
-    property bool pressed: mouseArea.pressed
+    // Define standalone pressed property for visual states
+    property bool pressed: false
     
     function getBackgroundColor() {
-        if (root.pressed)
-            return ThemeManager.pressedColor;
         if (root.visualFocus)
             return ThemeManager.accentColor;
-        if (root.hovered)
-            return ThemeManager.highlightColor;
         return isFlat ? "transparent" : ThemeManager.buttonColor;
     }
 } 

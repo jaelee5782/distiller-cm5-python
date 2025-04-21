@@ -20,13 +20,11 @@ DisplaySettingsSection 1.0 DisplaySettingsSection.qml
 NetworkInfoSection 1.0 NetworkInfoSection.qml
 AboutSection 1.0 AboutSection.qml
 AudioVisualizer 1.0 AudioVisualizer.qml
-ProcessingAnimation 1.0 ProcessingAnimation.qml
 singleton AppInfo 1.0 AppInfo.qml
 singleton ThemeManager 1.0 ThemeManager.qml
 singleton FontManager 1.0 FontManager.qml
-NavigableItem 1.0 NavigableItem.qml
-NavigableRoundButton 1.0 NavigableRoundButton.qml
 singleton FocusManager 1.0 FocusManager.qml
+NavigableItem 1.0 NavigableItem.qml
 
 # Reusable UI components
 AppButton 1.0 AppButton.qml

@@ -22,5 +22,4 @@ Rectangle {
         font: FontManager.heading
         color: ThemeManager.textColor
     }
-
 }
