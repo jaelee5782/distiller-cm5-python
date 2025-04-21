@@ -25,9 +25,9 @@ elif _ROCK:
     from .rock_gpio import RockGPIO
 
 
+
 class EinkDriver:
     def __init__(self) -> None:
-
         self.LUT_ALL: List[int] = [
             0x01,	0x05,	0x20,	0x19,	0x0A,	0x01,	0x01,
             0x05,	0x0A,	0x01,	0x0A,	0x01,	0x01,	0x01,
@@ -86,6 +86,10 @@ class EinkDriver:
 
         self.spi = self.EPD_GPIO_Init()
         self.epd_w21_init_4g()
+
+    def safe_writebytes(self, data, chunk_size=1024):
+        for i in range(0, len(data), chunk_size):
+            self.spi.writebytes(data[i:i+chunk_size])
 
     def cleanup(self) -> None:
         if _ROCK:
@@ -351,7 +355,7 @@ class EinkDriver:
             self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
         else:
             lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
-        self.spi.writebytes(packed_msbs.tolist())
+        self.safe_writebytes(packed_msbs.tolist())
 
         # Send new data (0x13)
         self.epd_w21_write_cmd(0x13)
@@ -359,7 +363,7 @@ class EinkDriver:
             self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
         else:
             lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
-        self.spi.writebytes(packed_lsbs.tolist())
+        self.safe_writebytes(packed_lsbs.tolist())
 
         # Refresh command
         self.epd_w21_write_cmd(0x12)
@@ -381,7 +385,7 @@ class EinkDriver:
             self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
         else:
             lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
-        self.spi.writebytes(self.oldData)
+        self.safe_writebytes(self.oldData)
 
         # Transfer new data
         self.epd_w21_write_cmd(0x13)
@@ -389,7 +393,7 @@ class EinkDriver:
             self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
         else:
             lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
-        self.spi.writebytes(new_data)
+        self.safe_writebytes(new_data)
         self.oldData = list(new_data)
 
         # Refresh display
@@ -405,7 +409,7 @@ class EinkDriver:
             self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
         else:
             lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
-        self.spi.writebytes(self.oldData)
+        self.safe_writebytes(self.oldData)
 
         # Transfer new data, setting all to 0xFF (white or clear)
         self.epd_w21_write_cmd(0x13)
@@ -413,7 +417,7 @@ class EinkDriver:
             self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
         else:
             lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
-        self.spi.writebytes([0] * 12480)
+        self.safe_writebytes([0] * 12480)
         self.oldData = [0] * 12480
 
         # Refresh the display

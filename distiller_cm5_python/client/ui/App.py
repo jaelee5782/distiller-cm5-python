@@ -18,9 +18,10 @@ from concurrent.futures import ThreadPoolExecutor
 import atexit
 
 
-if config.get("display").get("eink_enabled"):
+if config["display"]["eink_enabled"]:
     from distiller_cm5_python.client.ui.bridge.EInkRenderer import EInkRenderer
     from distiller_cm5_python.client.ui.bridge.EInkRendererBridge import EInkRendererBridge
+    from distiller_cm5_sdk.hardware.sam import SAM, ButtonType
     # Remove evdev import
     # import evdev
 
@@ -41,9 +42,7 @@ class App(QObject): # Inherit from QObject to support signals/slots
 
         # --- SAM Initialization ---
         self.sam = None
-        if config.get("display").get("eink_enabled"): # Or other config if SAM is used differently
-            # Import SAM SDK
-            from distiller_cm5_sdk.hardware.sam import SAM, ButtonType 
+        if config["display"]["eink_enabled"]:
             try:
                 self.sam = SAM()
             except RuntimeError as e:
@@ -56,7 +55,7 @@ class App(QObject): # Inherit from QObject to support signals/slots
 
         # Set platform to offscreen before creating QApplication if E-Ink is enabled
         # TODO: Make this conditional based on configuration
-        if config.get("display").get("eink_enabled"):
+        if config["display"]["eink_enabled"]:
             # Import E-Ink Renderer and Bridge
             os.environ["QT_QPA_PLATFORM"] = "offscreen"
 
