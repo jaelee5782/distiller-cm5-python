@@ -1,5 +1,6 @@
 config = {
     "display": {
+        "eink_adaptive_capture": True,  # Enable adaptive refresh rate
         "eink_dithering_enabled": False,
         "eink_full_refresh_interval": 30,
         "eink_refresh_interval": 1500,
