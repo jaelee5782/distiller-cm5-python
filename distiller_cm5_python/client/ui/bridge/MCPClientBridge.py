@@ -172,11 +172,6 @@ class MCPClientBridge(QObject):
     def clear_conversation(self):
         """Clear the conversation history"""
         self.conversation_manager.clear()
-        clear_message = {
-            "timestamp": self.conversation_manager.get_timestamp(),
-            "content": "Conversation cleared.",
-        }
-        self.conversation_manager.add_message(clear_message)
         logger.info("Conversation cleared")
 
     @pyqtSlot(bool)
@@ -1043,12 +1038,6 @@ class MCPClientBridge(QObject):
                 # Always update the connection state
                 self.is_connected = False
                 self.status_manager.update_status(StatusManager.STATUS_DISCONNECTED)
-                self.conversation_manager.add_message(
-                    {
-                        "timestamp": self.conversation_manager.get_timestamp(),
-                        "content": "Disconnected from server",
-                    }
-                )
             except Exception as e:
                 self._handle_error(e, "Server disconnection", 
                     user_friendly_msg="Error disconnecting from server. Some resources may not be properly released.")
@@ -1115,3 +1104,97 @@ class MCPClientBridge(QObject):
         self.errorOccurred.emit(error_msg)
         
         return error_msg
+
+    @pyqtSlot()
+    def restartApplication(self):
+        """
+        Restart the application without completely shutting down.
+        This will reset the conversation and reconnect to the server.
+        """
+        logger.info("Application restart requested")
+        self.status_manager.update_status(StatusManager.STATUS_RESTARTING)
+        
+        # Create an async task for the restart process
+        restart_task = asyncio.create_task(self._do_restart())
+        
+        # Add to pending tasks
+        if not hasattr(self, '_pending_tasks'):
+            self._pending_tasks = []
+        self._pending_tasks.append(restart_task)
+    
+    async def _do_restart(self):
+        """
+        Perform application restart by resetting state and reconnecting.
+        """
+        try:
+            logger.info("Starting application restart")
+            
+            # Store the current server path for reconnection
+            current_server_path = self._selected_server_path
+            
+            # Clear the conversation
+            self.clear_conversation()
+            
+            # Disconnect from the server
+            if self._is_connected:
+                self.disconnectFromServer()
+                # Wait briefly for disconnect to complete
+                await asyncio.sleep(1.0)
+            
+            # Reset any processing state
+            self.status_manager.update_status(StatusManager.STATUS_DISCONNECTED)
+            
+            # Emit signals to reset UI state
+            self.conversationChanged.emit()
+            
+            # Wait briefly
+            await asyncio.sleep(0.5)
+            
+            # Try to reconnect to the same server
+            if current_server_path and os.path.exists(current_server_path):
+                logger.info(f"Restarting with server: {current_server_path}")
+                self._selected_server_path = current_server_path
+                
+                # Extract server name for status messages
+                server_name = (
+                    os.path.basename(current_server_path)
+                    .replace("_server.py", "")
+                    .replace(".py", "")
+                )
+                
+                # Update UI to show connecting status
+                self.status_manager.update_status(StatusManager.STATUS_CONNECTING)
+                
+                # Connect to the same server
+                try:
+                    await self._connect_to_selected_server(server_name)
+                except Exception as e:
+                    logger.error(f"Failed to reconnect to server during restart: {e}")
+                    # Fall back to server selection
+                    await self.connect_to_server()
+            else:
+                # If no previous server or it doesn't exist, show server selection
+                await self.connect_to_server()
+            
+            # Update status
+            if self._is_connected:
+                self.status_manager.update_status(StatusManager.STATUS_IDLE)
+                logger.info("Application restart completed successfully")
+            else:
+                self.status_manager.update_status(StatusManager.STATUS_DISCONNECTED)
+                logger.warning("Application restarted but not connected to server")
+            
+            # Emit bridge ready signal to refresh UI components
+            logger.info("Emitting bridgeReady signal to reinitialize UI")
+            self.bridgeReady.emit()
+            
+            # Add a short delay to ensure UI has time to process signals
+            await asyncio.sleep(0.1)
+            # Emit the signal again to ensure the UI catches it
+            self.bridgeReady.emit()
+            
+        except Exception as e:
+            logger.error(f"Error during application restart: {e}", exc_info=True)
+            self.status_manager.update_status(StatusManager.STATUS_ERROR)
+            self._handle_error(e, "Application restart", 
+                user_friendly_msg="Failed to restart application. Please try again.")

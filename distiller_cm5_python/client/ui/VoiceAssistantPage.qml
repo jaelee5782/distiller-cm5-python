@@ -115,6 +115,9 @@ PageBase {
             if (conversationView) {
                 conversationView.updateModel(bridge.get_conversation());
             }
+            
+            // Reinitialize focus when the bridge signals it's ready (including after restart)
+            Qt.callLater(resetFocusState);
         }
 
         function onTranscriptionUpdate(transcription) {
@@ -532,47 +535,64 @@ PageBase {
     AppDialog {
         id: restartConfirmDialog
 
-        dialogTitle: "Restart Application"
-        message: "Are you sure you want to restart the application?"
+        dialogTitle: "Reset Application"
+        message: "Are you sure you want to reset the application?\nThis will clear your conversation and reconnect to the server."
         
         standardButtonTypes: DialogButtonBox.Yes | DialogButtonBox.No
         
-        yesButtonText: "Restart"
+        yesButtonText: "Reset"
         noButtonText: "Cancel"
         
         acceptButtonColor: ThemeManager.backgroundColor
         
         onAccepted: {
-            // Restart the application
+            // Reset the application
             restartApplication();
         }
     }
     
+    // Function to reset focus state
+    function resetFocusState() {
+        console.log("Resetting focus state after restart");
+        // First clear any existing focus
+        FocusManager.clearFocus();
+        FocusManager.currentFocusItems = [];
+        FocusManager.currentFocusIndex = -1;
+        FocusManager.lockFocus = false;
+        
+        // Re-collect focus items
+        collectFocusItems();
+        
+        // Set focus to voice button if available
+        if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
+            FocusManager.setFocusToItem(voiceInputArea.voiceButton);
+        } else if (focusableItems.length > 0) {
+            FocusManager.setFocusToItem(focusableItems[0]);
+        }
+    }
+
     // Function to restart the application
     function restartApplication() {
         console.log("Restarting application...");
         
-        // First disconnect from server if connected
-        if (bridge && bridge.ready && bridge.isConnected) {
-            bridge.disconnectFromServer();
-        }
-        
-        // Use a timer to allow disconnection to complete
-        Qt.callLater(function() {
-            // Tell the bridge to restart the application
-            if (bridge && bridge.ready) {
-                // First try to use a dedicated restart method if available
-                if (typeof bridge.restartApplication === "function") {
-                    bridge.restartApplication();
-                } else {
-                    // Otherwise use shutdown which should trigger a restart in the wrapper
-                    bridge.shutdown(true); // true to indicate restart
-                }
+        // Use the dedicated restart method
+        if (bridge && bridge.ready) {
+            // Use the dedicated restart method
+            if (typeof bridge.restartApplication === "function") {
+                // Reset focus state immediately to clear any stuck state
+                FocusManager.clearFocus();
+                FocusManager.lockFocus = false;
+                
+                bridge.restartApplication();
+                messageToast.showMessage("Restarting application...", 2000);
             } else {
-                // Fallback if bridge is not available - just show a message
-                messageToast.showMessage("Unable to restart - bridge not ready", 3000);
+                // Fallback if the method isn't available
+                messageToast.showMessage("Unable to restart - bridge method not available", 3000);
             }
-        });
+        } else {
+            // Fallback if bridge is not available
+            messageToast.showMessage("Unable to restart - bridge not ready", 3000);
+        }
     }
 }
 

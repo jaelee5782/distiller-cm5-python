@@ -311,7 +311,7 @@ Rectangle {
                     Text {
                         id: resetHintText
                         anchors.centerIn: parent
-                        text: "Restart App"
+                        text: "Reset App"
                         font.pixelSize: FontManager.fontSizeSmall
                         font.family: FontManager.primaryFontFamily
                         color: ThemeManager.textColor

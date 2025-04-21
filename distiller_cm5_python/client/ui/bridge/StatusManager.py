@@ -19,6 +19,7 @@ class StatusManager:
     STATUS_ERROR = "Error: {error}"
     STATUS_CONFIG_APPLIED = "Configuration applied successfully"
     STATUS_SHUTTING_DOWN = "Shutting down..."
+    STATUS_RESTARTING = "Restarting application..."
 
     def __init__(self, bridge):
         """Initialize the status manager.
