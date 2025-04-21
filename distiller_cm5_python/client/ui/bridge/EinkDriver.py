@@ -4,6 +4,7 @@ import platform
 import uuid
 import os
 from typing import List
+import numpy as np
 from ..display_config import config
 
 # Check if we're on a Rockchip platform
@@ -223,10 +224,12 @@ class EinkDriver:
         self.epd_w21_write_data(0xD7)
 
     def power_off(self) -> None:
+        # Power off the display
         self.epd_w21_write_cmd(0x02)
         self.lcd_chkstatus()
 
     def write_full_lut(self) -> None:
+        # Write the full LUT to the display
         self.epd_w21_write_cmd(0x20)  # Write VCOM register
         for i in range(42):
             self.epd_w21_write_data(self.LUT_ALL[i])
@@ -248,6 +251,7 @@ class EinkDriver:
             self.epd_w21_write_data(self.LUT_ALL[i])
 
     def epd_w21_init_4g(self) -> None:
+        # Initialize the 4-gray e-paper display
         self.epd_w21_init()  # Reset the e-paper display
 
         # Panel Setting
@@ -307,72 +311,55 @@ class EinkDriver:
         self.lcd_chkstatus()  # Check if the display is ready
 
     def pic_display_4g(self, datas: List[int]) -> None:
-        # Command to start transmitting old data
-        buffer = []
+        # Display 4-gray image on the e-ink display
+        # Ensure datas is a flat list of 24960 bytes
+        if len(datas) != 24960:
+            raise ValueError("datas must be a flat list of 24960 integers")
+
+        # Convert to NumPy array and reshape to (12480, 2)
+        datas_np = np.array(datas, dtype=np.uint8).reshape(12480, 2)
+        byte0 = datas_np[:, 0]
+        byte1 = datas_np[:, 1]
+
+        # Compute packed MSBs for 0x10 (old data)
+        packed_msbs = (
+            ((byte0 & 0x80) >> 7) << 7
+            | ((byte0 & 0x20) >> 5) << 6
+            | ((byte0 & 0x08) >> 3) << 5
+            | ((byte0 & 0x02) >> 1) << 4
+            | ((byte1 & 0x80) >> 7) << 3
+            | ((byte1 & 0x20) >> 5) << 2
+            | ((byte1 & 0x08) >> 3) << 1
+            | ((byte1 & 0x02) >> 1) << 0
+        ).astype(np.uint8)
+
+        # Compute packed LSBs for 0x13 (new data)
+        packed_lsbs = (
+            ((byte0 & 0x40) >> 6) << 7
+            | ((byte0 & 0x10) >> 4) << 6
+            | ((byte0 & 0x04) >> 2) << 5
+            | ((byte0 & 0x01) >> 0) << 4
+            | ((byte1 & 0x40) >> 6) << 3
+            | ((byte1 & 0x10) >> 4) << 2
+            | ((byte1 & 0x04) >> 2) << 1
+            | ((byte1 & 0x01) >> 0) << 0
+        ).astype(np.uint8)
+
+        # Send old data (0x10)
         self.epd_w21_write_cmd(0x10)
         if _ROCK:
             self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
         else:
             lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
+        self.spi.writebytes(packed_msbs.tolist())
 
-        # Iterate over each byte of the image data
-        for i in range(12480):  # Assuming 416x240 resolution, adjust accordingly
-            temp3 = 0
-            for j in range(2):  # For each half-byte in the data
-                temp1 = datas[i * 2 + j]
-                for k in range(4):  # For each bit in the half-byte
-                    temp2 = temp1 & 0xC0
-                    if temp2 == 0xC0:
-                        temp3 |= 0x01  # White
-                    elif temp2 == 0x00:
-                        temp3 |= 0x00  # Black
-                    elif temp2 == 0x80:
-                        temp3 |= 0x01  # Gray1
-                    elif temp2 == 0x40:
-                        temp3 |= 0x00  # Gray2
-
-                    if j == 0:
-                        temp1 <<= 2
-                        temp3 <<= 1
-                    if j == 1 and k != 3:
-                        temp1 <<= 2
-                        temp3 <<= 1
-            buffer.append(temp3)
-        self.spi.xfer3(buffer, self.spi.max_speed_hz, 1, 8)
-
-        buffer = []
-        # Command to start transmitting new data
+        # Send new data (0x13)
         self.epd_w21_write_cmd(0x13)
         if _ROCK:
             self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
         else:
             lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
-
-        for i in range(12480):  # Repeat the process for new data
-            temp3 = 0
-            for j in range(2):
-                temp1 = datas[i * 2 + j]
-                for k in range(4):
-                    temp2 = temp1 & 0xC0
-                    # The logic for determining color values remains the same
-                    if temp2 == 0xC0:
-                        temp3 |= 0x01  # White
-                    elif temp2 == 0x00:
-                        temp3 |= 0x00  # Black
-                    elif temp2 == 0x80:
-                        temp3 |= 0x00  # Gray1
-                    elif temp2 == 0x40:
-                        temp3 |= 0x01  # Gray2
-
-                    if j == 0:
-                        temp1 <<= 2
-                        temp3 <<= 1
-                    if j == 1 and k != 3:
-                        temp1 <<= 2
-                        temp3 <<= 1
-            buffer.append(temp3)
-
-        self.spi.xfer3(buffer, self.spi.max_speed_hz, 1, 8)
+        self.spi.writebytes(packed_lsbs.tolist())
 
         # Refresh command
         self.epd_w21_write_cmd(0x12)
@@ -383,55 +370,42 @@ class EinkDriver:
         """Display new data on the e-ink display
         
         Args:
-            new_data: List of integers representing pixel data
+            new_data: Flat list of 12480 integers representing pixel data
         """
-        try:
-            # Transfer old data
-            self.epd_w21_write_cmd(0x10)
-            if _ROCK:
-                self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
-            else:
-                lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
-            self.spi.xfer3(self.oldData, self.spi.max_speed_hz, 1, 8)
+        if len(new_data) != 12480:
+            raise ValueError("new_data must be a flat list of 12480 integers")
 
-            # Transfer new data
-            self.epd_w21_write_cmd(0x13)
-            if _ROCK:
-                self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
-            else:
-                lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
-            self.spi.xfer3(new_data, self.spi.max_speed_hz, 1, 8)
-            self.oldData = new_data.copy() if hasattr(new_data, 'copy') else list(new_data)
-
-            # Refresh display
-            self.epd_w21_write_cmd(0x12)
-            self.delay_xms(1)  # Necessary delay for the display refresh
-            self.lcd_chkstatus()  # Check if the display is ready
-            
-        except TypeError as e:
-            print(f"Type error in pic_display: {e}")
-            print(f"new_data type: {type(new_data)}, length: {len(new_data) if hasattr(new_data, '__len__') else 'unknown'}")
-            # Try to handle common type issues
-            if isinstance(new_data, (tuple, list)):
-                # Ensure we have a flat list of integers
-                flat_data = []
-                for item in new_data:
-                    if isinstance(item, (list, tuple)):
-                        flat_data.extend(item)
-                    else:
-                        flat_data.append(item)
-                print(f"Converted to flat list with length: {len(flat_data)}")
-                # Try again with the flat list
-                self.pic_display(flat_data)
-
-    def pic_display_clear(self, poweroff: bool = False) -> None:
         # Transfer old data
         self.epd_w21_write_cmd(0x10)
         if _ROCK:
             self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
         else:
             lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
-        self.spi.xfer3(self.oldData, self.spi.max_speed_hz, 1, 8)
+        self.spi.writebytes(self.oldData)
+
+        # Transfer new data
+        self.epd_w21_write_cmd(0x13)
+        if _ROCK:
+            self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
+        else:
+            lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
+        self.spi.writebytes(new_data)
+        self.oldData = list(new_data)
+
+        # Refresh display
+        self.epd_w21_write_cmd(0x12)
+        self.delay_xms(1)  # Necessary delay for the display refresh
+        self.lcd_chkstatus()  # Check if the display is ready
+
+    def pic_display_clear(self, poweroff: bool = False) -> None:
+        # Clear the display by setting all pixels to white (0xFF)
+        # Transfer old data
+        self.epd_w21_write_cmd(0x10)
+        if _ROCK:
+            self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
+        else:
+            lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
+        self.spi.writebytes(self.oldData)
 
         # Transfer new data, setting all to 0xFF (white or clear)
         self.epd_w21_write_cmd(0x13)
@@ -439,7 +413,7 @@ class EinkDriver:
             self.RockGPIO.output(self.RK_DC_PIN, Value.ACTIVE)
         else:
             lgpio.gpio_write(self.lgpio_handle, self.DC_PIN, 1)  # Data mode
-        self.spi.xfer3([0] * 12480, self.spi.max_speed_hz, 1, 8)
+        self.spi.writebytes([0] * 12480)
         self.oldData = [0] * 12480
 
         # Refresh the display
