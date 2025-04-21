@@ -11,10 +11,44 @@ Rectangle {
     id: inputArea
 
     // Simplified height since there's no text input
-    height: 60 // Fixed height for buttons
+    height: 90 // Increased height to accommodate hint text
     property bool isListening: false
     property bool isProcessing: false // Keep this for visual feedback on voice button?
     property bool compact: true // Keep or remove based on visual needs
+
+    // State management - define possible states
+    property string appState: "idle" // Possible values: "idle", "listening", "processing", "thinking", "executing_tool", "error"
+    property string stateHint: getStateHint() // Dynamic hint text based on state
+    
+    // Signal for state changes - can be connected to from parent to update status bar
+    signal stateChanged(string newState)
+    
+    // Get appropriate hint text for current state
+    function getStateHint() {
+        switch(appState) {
+            case "idle": return "Tap to speak";
+            case "listening": return "Listening...";
+            case "processing": return "Processing audio...";
+            case "thinking": return "Thinking...";
+            case "executing_tool": return "Executing tool...";
+            case "error": return "Error - try again";
+            default: return "Ready";
+        }
+    }
+    
+    // Set the app state and emit signal
+    function setAppState(newState) {
+        if (appState !== newState) {
+            console.log("InputArea: State changing from " + appState + " to " + newState);
+            appState = newState;
+            stateHint = getStateHint();
+            stateChanged(newState);
+            
+            // Update legacy state properties for backward compatibility
+            isListening = (newState === "listening");
+            isProcessing = (newState === "processing" || newState === "thinking" || newState === "executing_tool");
+        }
+    }
 
     // Expose only remaining buttons
     property alias settingsButton: settingsButton
@@ -27,26 +61,65 @@ Rectangle {
     signal voicePressed()
     signal voiceReleased()
 
-    // function clearInput() { } // Removed
-    // function getText() { return ""; } // Removed
-
     // Reset state might still be useful for voice button
     function resetState() {
-        isProcessing = false;
+        setAppState("idle");
+    }
+    
+    // Move to thinking state (for external calls)
+    function setThinkingState() {
+        setAppState("thinking");
+    }
+    
+    // Move to tool execution state (for external calls)
+    function setToolExecutionState() {
+        setAppState("executing_tool");
     }
 
     color: ThemeManager.backgroundColor
     z: 10 // Ensure this is always on top
 
-    // hintText Removed
-    // listeningHint Removed (can be handled by statusText in parent page)
+    // Watch for changes to legacy properties and update state accordingly (for backward compatibility)
+    onIsListeningChanged: {
+        if (isListening && appState !== "listening") {
+            setAppState("listening");
+        } else if (!isListening && appState === "listening") {
+            setAppState("idle");
+        }
+    }
+    
+    onIsProcessingChanged: {
+        if (isProcessing && appState === "idle") {
+            setAppState("processing");
+        } else if (!isProcessing && (appState === "processing" || appState === "thinking" || appState === "executing_tool")) {
+            setAppState("idle");
+        }
+    }
+    
+    // Hint text that's always visible
+    Text {
+        id: staticHintText
+        anchors.top: parent.top
+        anchors.topMargin: 10
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: inputArea.stateHint
+        font.pixelSize: FontManager.fontSizeSmall
+        font.family: FontManager.primaryFontFamily
+        color: ThemeManager.secondaryTextColor
+        horizontalAlignment: Text.AlignHCenter
+        opacity: 0.9
+        z: 20 // Make sure it appears above everything
+    }
 
     // Simple Row layout for the remaining buttons
     RowLayout {
         id: buttonRowLayout
 
         anchors.fill: parent
-        anchors.margins: 8
+        anchors.topMargin: staticHintText.height + 15 // Position below the hint text
+        anchors.bottomMargin: 8
+        anchors.leftMargin: 8
+        anchors.rightMargin: 8
         spacing: 12
 
         // Consistent button size
@@ -113,7 +186,7 @@ Rectangle {
            Layout.fillWidth: true
         }
 
-        // Voice button (kept)
+        // Voice button
         RoundButton {
             id: voiceButton
             Layout.preferredWidth: buttonRowLayout.buttonSize
@@ -126,12 +199,29 @@ Rectangle {
             // onClicked: { inputArea.voiceToggled(checked); } // Handled differently
 
             // Connect the button's own signals to the InputArea signals
-            onPressed: inputArea.voicePressed()
-            onReleased: inputArea.voiceReleased()
+            onPressed: {
+                inputArea.voicePressed();
+                // Start listening when button is pressed
+                setAppState("listening");
+            }
+            onReleased: {
+                inputArea.voiceReleased();
+                // Go to processing state when button is released
+                setAppState("processing");
+            }
 
             background: Rectangle {
-                // color: voiceButton.checked ? ThemeManager.subtleColor : "transparent" // State handled by parent
-                color: inputArea.isListening ? ThemeManager.subtleColor : "transparent"
+                color: {
+                    // Use the new state system for determining color
+                    switch(inputArea.appState) {
+                        case "listening": return ThemeManager.subtleColor;
+                        case "processing": 
+                        case "thinking": 
+                        case "executing_tool": 
+                            return ThemeManager.buttonColor;
+                        default: return "transparent";
+                    }
+                }
                 antialiasing: true
                 
                 // Crisp focus border
@@ -165,14 +255,19 @@ Rectangle {
                 OptimizedImage {
                     id: micIcon
                     source: {
-                        // Simplified icon logic based on parent page state
-                         if (inputArea.isListening) {
-                             if (inputArea.isProcessing)
-                                 // Maybe a different icon for processing after listening?
-                                 return ThemeManager.darkMode ? "../images/icons/dark/microphone-filled.svg" : "../images/icons/microphone-filled.svg";
-                             return ThemeManager.darkMode ? "../images/icons/dark/microphone-half.svg" : "../images/icons/microphone-half.svg"; // Listening icon
-                         }
-                         return ThemeManager.darkMode ? "../images/icons/dark/microphone-empty.svg" : "../images/icons/microphone-empty.svg"; // Idle icon
+                        // Use the new state system for determining icon
+                        switch(inputArea.appState) {
+                            case "listening": 
+                                return ThemeManager.darkMode ? "../images/icons/dark/microphone-half.svg" : "../images/icons/microphone-half.svg";
+                            case "processing":
+                            case "thinking":
+                            case "executing_tool":
+                                return ThemeManager.darkMode ? "../images/icons/dark/microphone-filled.svg" : "../images/icons/microphone-filled.svg";
+                            case "error":
+                                return ThemeManager.darkMode ? "../images/icons/dark/microphone-error.svg" : "../images/icons/microphone-error.svg";
+                            default: // idle
+                                return ThemeManager.darkMode ? "../images/icons/dark/microphone-empty.svg" : "../images/icons/microphone-empty.svg";
+                        }
                     }
                     sourceSize.width: 22
                     sourceSize.height: 22
@@ -180,21 +275,24 @@ Rectangle {
                     height: 22
                     anchors.centerIn: parent
                     fillMode: Image.PreserveAspectFit
-                    opacity: voiceButton.hovered ? 1 : 0.7 // Simplified opacity
+                    opacity: voiceButton.hovered ? 1 : 0.8 // Improved opacity
                     fadeInDuration: 0
                     showPlaceholder: false
                 }
 
-                // Simple indicator for listening state
+                // Simple indicator for active states
                 Rectangle {
-                    visible: inputArea.isListening && !inputArea.isProcessing // Use parent state
+                    visible: inputArea.appState !== "idle" && inputArea.appState !== "error"
                     anchors.centerIn: parent
                     width: parent.width - 4
                     height: parent.height - 4
                     radius: width / 2
                     color: "transparent"
                     border.width: 1
-                    border.color: ThemeManager.accentColor
+                    border.color: inputArea.appState === "listening" ? ThemeManager.accentColor : 
+                                 (inputArea.appState === "processing" || 
+                                  inputArea.appState === "thinking" || 
+                                  inputArea.appState === "executing_tool") ? ThemeManager.buttonColor : "transparent"
                     opacity: 0.5
                     antialiasing: true
                 }
@@ -207,7 +305,16 @@ Rectangle {
         }
         
         // Send Button Removed
-
     }
-
+    
+    // State animation for hint text
+    Behavior on stateHint {
+        PropertyAnimation {
+            target: staticHintText
+            property: "opacity"
+            from: 0.5
+            to: 0.9
+            duration: 200
+        }
+    }
 }

@@ -14,7 +14,7 @@ PageBase {
     property bool isProcessing: false
     property string statusText: conversationView && conversationView.scrollModeActive ? 
                              "Scroll Mode (↑↓ to scroll)" : _statusText
-    property string _statusText: "Ready"
+    property string _statusText: "Tap to Talk"
     property var focusableItems: []
     property var previousFocusedItem: null
     property string transcribedText: ""
@@ -133,6 +133,11 @@ PageBase {
                 
                 // Submit the transcribed text to the server after a short delay
                 transcriptionTimer.start();
+                
+                // Update to thinking state
+                if (voiceInputArea.setThinkingState) {
+                    voiceInputArea.setThinkingState();
+                }
             }
             transcriptionInProgress = false;
         }
@@ -152,11 +157,30 @@ PageBase {
         function onStatusChanged(newStatus) {
             updateStatusText(newStatus);
             
-            // Reset processing state when we get a "Ready" status
-            if (newStatus === "Ready" && isProcessing) {
+            // Handle different states based on status text
+            if (newStatus.toLowerCase().includes("thinking")) {
+                if (voiceInputArea.setThinkingState) {
+                    voiceInputArea.setThinkingState();
+                }
+                stateResetTimer.toolExecutionActive = false;
+                stateResetTimer.restart(); // Restart timer on thinking state
+            } else if (newStatus.toLowerCase().includes("tool") || 
+                      newStatus.toLowerCase().includes("executing")) {
+                if (voiceInputArea.setToolExecutionState) {
+                    voiceInputArea.setToolExecutionState();
+                }
+                stateResetTimer.toolExecutionActive = true; // Flag tool execution as active
+                stateResetTimer.restart(); // Restart timer on tool execution state
+            } else if (newStatus === "Ready") {
                 console.log("StatusChanged: Detected Ready status, resetting isProcessing to false");
                 isProcessing = false;
                 isListening = false;
+                stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
+                
+                // Reset input area state
+                if (voiceInputArea.resetState) {
+                    voiceInputArea.resetState();
+                }
                 
                 // Ensure conversation view is updated
                 conversationView.setResponseInProgress(false);
@@ -189,7 +213,7 @@ PageBase {
                 // If no text to submit, make sure we reset the state
                 isProcessing = false;
                 isListening = false;
-                updateStatusText("Ready");
+                updateStatusText("Tap to Talk");
             }
         }
     }
@@ -287,7 +311,8 @@ PageBase {
                 // Ensure processing state is fully reset
                 isProcessing = false;
                 isListening = false;
-                updateStatusText("Ready");
+                stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
+                updateStatusText("Tap to Talk");
                 
                 // Turn off response mode immediately
                 conversationView.setResponseInProgress(false);
@@ -298,7 +323,7 @@ PageBase {
                 console.log("MessageReceived: Reset isProcessing to false");
                 
                 // Start failsafe timer to ensure state is reset
-                stateResetTimer.start();
+                stateResetTimer.stop(); // Stop the timer since we're already resetting
             }
             
             function onListeningStarted() {
@@ -322,7 +347,8 @@ PageBase {
                 // Make sure to reset all states on error
                 isProcessing = false;
                 isListening = false;
-                updateStatusText("Ready");
+                stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
+                updateStatusText("Tap to Talk");
                 
                 conversationView.setResponseInProgress(false);
                 
@@ -378,6 +404,36 @@ PageBase {
         isProcessing: voiceAssistantPage.isProcessing
         property string transcribedText: ""
         
+        // Connect to our new state changed signal
+        onStateChanged: function(newState) {
+            console.log("VoiceInputArea state changed to: " + newState);
+            
+            // Update parent state variables for compatibility
+            if (newState === "listening") {
+                voiceAssistantPage.isListening = true;
+                voiceAssistantPage.isProcessing = false;
+            } else if (newState === "processing") {
+                voiceAssistantPage.isListening = false;
+                voiceAssistantPage.isProcessing = true;
+            } else if (newState === "thinking") {
+                voiceAssistantPage.isListening = false;
+                voiceAssistantPage.isProcessing = true;
+                updateStatusText("Thinking...");
+            } else if (newState === "executing_tool") {
+                voiceAssistantPage.isListening = false;
+                voiceAssistantPage.isProcessing = true;
+                updateStatusText("Executing tool...");
+            } else if (newState === "error") {
+                voiceAssistantPage.isListening = false;
+                voiceAssistantPage.isProcessing = false;
+                updateStatusText("Error occurred");
+            } else if (newState === "idle") {
+                voiceAssistantPage.isListening = false;
+                voiceAssistantPage.isProcessing = false;
+                updateStatusText("Tap to Talk");
+            }
+        }
+        
         onVoiceToggled: function(listening) {
             if (bridge && bridge.ready && bridge.isConnected && !isProcessing) {
                 if (listening) {
@@ -385,6 +441,18 @@ PageBase {
                 } else {
                     bridge.stopAndTranscribe();
                 }
+            }
+        }
+        
+        onVoicePressed: function() {
+            if (bridge && bridge.ready && bridge.isConnected && !isProcessing) {
+                bridge.startRecording();
+            }
+        }
+        
+        onVoiceReleased: function() {
+            if (bridge && bridge.ready && bridge.isConnected && isListening) {
+                bridge.stopAndTranscribe();
             }
         }
         
@@ -464,16 +532,29 @@ PageBase {
     // Failsafe timer to ensure processing state is properly reset
     Timer {
         id: stateResetTimer
-        interval: 1000
+        interval: 15000  // Increase timeout to 15 seconds to accommodate longer tool operations
         repeat: false
         running: false
+        
+        property bool toolExecutionActive: false
+        
         onTriggered: {
-            if (isProcessing) {
+            if (isProcessing && !toolExecutionActive) {
                 console.log("StateResetTimer: Force resetting isProcessing from", isProcessing, "to false");
                 isProcessing = false;
                 isListening = false;
-                updateStatusText("Ready");
+                updateStatusText("Tap to Talk");
                 conversationView.setResponseInProgress(false);
+                
+                // Reset input area state
+                if (voiceInputArea.resetState) {
+                    voiceInputArea.resetState();
+                }
+            } else if (toolExecutionActive) {
+                console.log("StateResetTimer: Not resetting state because tool execution is active");
+                // Restart the timer to check again later, but with a shorter interval to avoid long waits
+                interval = 5000; // Reduce the interval for subsequent checks to 5 seconds
+                stateResetTimer.restart();
             }
         }
     }
@@ -493,8 +574,13 @@ PageBase {
                 console.log("StateCheckTimer: Detected stuck processing state, resetting");
                 isProcessing = false;
                 isListening = false;
-                updateStatusText("Ready");
+                updateStatusText("Tap to Talk");
                 conversationView.setResponseInProgress(false);
+                
+                // Reset input area state
+                if (voiceInputArea.resetState) {
+                    voiceInputArea.resetState();
+                }
             }
         }
     }
@@ -503,7 +589,7 @@ PageBase {
     onIsProcessingChanged: {
         stateCheckTimer.lastActionTimestamp = Date.now();
         if (!conversationScrollMode) {
-            _statusText = isProcessing ? "Processing..." : "Ready";
+            _statusText = isProcessing ? "Processing..." : "Tap to Talk";
             updateStatusText();
         }
     }
@@ -521,13 +607,27 @@ PageBase {
         if (conversationView && conversationView.scrollModeActive) return; // Don't update status in scroll mode
         
         if (newStatus) {
-            _statusText = newStatus;
+            if (newStatus === "Ready") {
+                _statusText = "Tap to Talk";
+            } else if (newStatus.toLowerCase().includes("executing")) {
+                _statusText = "Working on it...";
+            } else if (newStatus.toLowerCase().includes("thinking")) {
+                _statusText = "Thinking...";
+            } else if (newStatus.toLowerCase().includes("processing")) {
+                _statusText = "Processing...";
+            } else if (newStatus.toLowerCase().includes("listening")) {
+                _statusText = "Listening...";
+            } else if (newStatus.toLowerCase().includes("error")) {
+                _statusText = "Error Occurred";
+            } else {
+                _statusText = newStatus;
+            }
         } else if (isListening) {
             _statusText = "Listening...";
         } else if (isProcessing) {
             _statusText = "Processing...";
         } else {
-            _statusText = "Ready";
+            _statusText = "Tap to Talk";
         }
     }
 

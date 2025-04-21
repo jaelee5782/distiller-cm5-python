@@ -558,8 +558,15 @@ class MCPClientBridge(QObject):
                 logger.debug(f"Bridge received callback data: {data[:100]}...") # Log received data
 
                 # Handle Status/Info Messages from MCPClient first
-                if data.startswith("\\n\\n thinking") or data.startswith("\\n\\n executing"):
-                    status_text = data.strip().replace("\\n", "") # Clean up status message
+                if data.startswith("\\n\\n thinking") or data.startswith("\n\n thinking"):
+                    status_text = "Thinking..."
+                    self.status_manager.update_status(status_text)
+                    logger.info(f"Status update from MCPClient: {status_text}")
+                    # Don't add these to conversation
+                    return
+                    
+                elif data.startswith("\\n\\n executing") or data.startswith("\n\n executing"):
+                    status_text = "Executing tool..."
                     self.status_manager.update_status(status_text)
                     logger.info(f"Status update from MCPClient: {status_text}")
                     # Don't add these to conversation
@@ -632,7 +639,14 @@ class MCPClientBridge(QObject):
                 self.conversationChanged.emit()
                 # Reset status after completion (unless an error occurred)
                 if not self.status_manager.status.startswith("Error"):
-                     self.status_manager.update_status(StatusManager.STATUS_IDLE)
+                    # Send a message received signal to notify completion of the entire sequence
+                    messages = self.conversation_manager.get_messages()
+                    if messages and len(messages) > 0:
+                        latest_message = messages[-1]
+                        timestamp = latest_message.get("timestamp", self.conversation_manager.get_timestamp())
+                        self.messageReceived.emit(latest_message.get("content", ""), timestamp)
+                    
+                    self.status_manager.update_status(StatusManager.STATUS_IDLE)
 
             except Exception as e:
                 # Handle potential errors from the process_query call itself

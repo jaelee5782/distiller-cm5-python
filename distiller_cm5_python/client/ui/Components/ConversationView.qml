@@ -159,6 +159,13 @@ ListView {
     interactive: true
     // Track when view is at the bottom
     onContentYChanged: {
+        // Clamp contentY to valid bounds
+        if (contentY < 0) {
+            contentY = 0;
+        } else if (contentHeight > height && contentY > contentHeight - height) {
+            contentY = Math.max(0, contentHeight - height);
+        }
+        
         // Only check when not user scrolling to avoid unnecessary calculations
         if (!userScrolling)
             checkIfAtBottom();
@@ -180,6 +187,14 @@ ListView {
     }
     // For auto-scrolling when content changes
     onContentHeightChanged: {
+        // If contentY is beyond bounds, clamp it
+        if (contentY < 0) {
+            contentY = 0;
+        } else if (contentHeight > height && contentY > contentHeight - height) {
+            // Only apply if there's enough content to scroll
+            contentY = Math.max(0, contentHeight - height);
+        }
+        
         // Always scroll to bottom when response is in progress
         // or if we were already at the bottom, or this is the first content
         if (responseInProgress || atBottom || lastContentHeight === 0) {
@@ -222,4 +237,52 @@ ListView {
         isLastMessage: index === conversationView.count - 1
         isResponding: conversationView.responseInProgress && index === conversationView.count - 1
     }
+
+    // Add keyboard handling for scroll mode
+    Keys.onPressed: function(event) {
+        if (scrollModeActive) {
+            var scrollAmount = 50; // Pixels to scroll per key press
+            
+            if (event.key === Qt.Key_Down || event.key === Qt.Key_J) {
+                // Calculate the maximum valid contentY value (content height minus view height)
+                var maxY = Math.max(0, contentHeight - height);
+                
+                // Prevent scrolling beyond the end of content
+                contentY = Math.min(contentY + scrollAmount, maxY);
+                event.accepted = true;
+            } else if (event.key === Qt.Key_Up || event.key === Qt.Key_K) {
+                // Prevent scrolling beyond the start of content
+                contentY = Math.max(contentY - scrollAmount, 0);
+                event.accepted = true;
+            } else if (event.key === Qt.Key_PageDown) {
+                var maxY = Math.max(0, contentHeight - height);
+                contentY = Math.min(contentY + height * 0.9, maxY);
+                event.accepted = true;
+            } else if (event.key === Qt.Key_PageUp) {
+                contentY = Math.max(contentY - height * 0.9, 0);
+                event.accepted = true;
+            } else if (event.key === Qt.Key_Home) {
+                contentY = 0;
+                event.accepted = true;
+            } else if (event.key === Qt.Key_End) {
+                contentY = Math.max(0, contentHeight - height);
+                event.accepted = true;
+            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Escape) {
+                // Exit scroll mode
+                FocusManager.exitScrollMode();
+                scrollModeChanged(false);
+                event.accepted = true;
+            }
+        } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            // Enter scroll mode
+            if (contentHeight > height) {
+                FocusManager.enterScrollMode();
+                scrollModeChanged(true);
+                event.accepted = true;
+            }
+        }
+    }
+
+    // Override the flick function to enforce bounds (this prevents bounce-back effects)
+    boundsBehavior: Flickable.StopAtBounds
 }

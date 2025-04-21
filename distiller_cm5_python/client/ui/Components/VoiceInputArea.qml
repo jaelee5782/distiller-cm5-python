@@ -11,6 +11,37 @@ Rectangle {
     property bool isProcessing: false
     property string transcribedText: ""
     
+    // State management - define possible states
+    property string appState: "idle" // Possible values: "idle", "listening", "processing", "thinking", "executing_tool", "error"
+    property string stateHint: getStateHint() // Dynamic hint text based on state
+    
+    // Get appropriate hint text for current state
+    function getStateHint() {
+        switch(appState) {
+            case "idle": return "Tap to speak";
+            case "listening": return "Listening...";
+            case "processing": return "Processing audio...";
+            case "thinking": return "Thinking...";
+            case "executing_tool": return "Executing tool...";
+            case "error": return "Error - try again";
+            default: return "Ready";
+        }
+    }
+    
+    // Set the app state and emit signal
+    function setAppState(newState) {
+        if (appState !== newState) {
+            console.log("VoiceInputArea: State changing from " + appState + " to " + newState);
+            appState = newState;
+            stateHint = getStateHint();
+            stateChanged(newState);
+            
+            // Update legacy state properties for backward compatibility
+            isListening = (newState === "listening");
+            isProcessing = (newState === "processing" || newState === "thinking" || newState === "executing_tool");
+        }
+    }
+    
     // Expose button as property
     property alias settingsButton: settingsButton
     property alias voiceButton: voiceButton
@@ -18,21 +49,80 @@ Rectangle {
 
     // Signals
     signal voiceToggled(bool listening)
+    signal voicePressed()
+    signal voiceReleased()
     signal settingsClicked()
     signal resetClicked()  // New signal for reset button
+    signal stateChanged(string newState)
 
-    // Functions
+    // Functions to manage state
     function resetState() {
-        isProcessing = false;
+        setAppState("idle");
         transcribedText = "";
+    }
+    
+    // Move to thinking state (for external calls)
+    function setThinkingState() {
+        setAppState("thinking");
+    }
+    
+    // Move to tool execution state (for external calls)
+    function setToolExecutionState() {
+        setAppState("executing_tool");
     }
 
     color: ThemeManager.backgroundColor
-    height: transcribedText.trim().length > 0 ? 90 : 60 // Increase height when text is visible
+    height: transcribedText.trim().length > 0 ? 120 : 90 // Increase height for hint text
     z: 10 // Ensure this is always on top
 
     Behavior on height {
         NumberAnimation { duration: 100 }
+    }
+    
+    // Watch for changes to legacy properties and update state accordingly (for backward compatibility)
+    onIsListeningChanged: {
+        if (isListening && appState !== "listening") {
+            setAppState("listening");
+        } else if (!isListening && appState === "listening") {
+            setAppState("idle");
+        }
+    }
+    
+    onIsProcessingChanged: {
+        if (isProcessing && appState === "idle") {
+            setAppState("processing");
+        } else if (!isProcessing && (appState === "processing" || appState === "thinking" || appState === "executing_tool")) {
+            setAppState("idle");
+        }
+    }
+    
+    // Hint text that's always visible
+    Text {
+        id: staticHintText
+        anchors.top: parent.top
+        anchors.topMargin: 10
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: voiceInputArea.stateHint
+        font.pixelSize: FontManager.fontSizeSmall
+        font.family: FontManager.primaryFontFamily
+        color: ThemeManager.secondaryTextColor
+        horizontalAlignment: Text.AlignHCenter
+        opacity: 0.9
+        z: 20 // Make sure it appears above everything
+        // Hide static hint when any button has focus - prevents conflict with button hints
+        visible: !(resetButton.isActiveItem || settingsButton.isActiveItem)
+        
+        // Add a background for e-ink contrast
+        Rectangle {
+            z: -1
+            anchors.fill: parent
+            anchors.margins: -6
+            color: ThemeManager.backgroundColor
+            border.width: 1
+            border.color: ThemeManager.borderColor
+            radius: 3
+            visible: voiceInputArea.appState !== "idle"
+        }
     }
 
     // Transcribed text display
@@ -42,7 +132,8 @@ Rectangle {
         visible: transcribedText.trim().length > 0
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.top: parent.top
+        anchors.top: staticHintText.bottom
+        anchors.topMargin: 10
         anchors.margins: 8
         height: transcribedTextLabel.contentHeight + 12
         color: ThemeManager.backgroundColor
@@ -61,32 +152,6 @@ Rectangle {
             wrapMode: Text.WordWrap
             elide: Text.ElideRight
             maximumLineCount: 1
-        }
-    }
-
-    // Listening hint that appears during microphone input
-    Text {
-        id: listeningHint
-
-        visible: isListening
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: buttonRow.top
-        anchors.bottomMargin: 8
-        text: "Listening..."
-        font.pixelSize: FontManager.fontSizeNormal
-        font.family: FontManager.primaryFontFamily
-        color: ThemeManager.textColor
-        opacity: 0.9
-
-        // Add a background for e-ink contrast
-        Rectangle {
-            z: -1
-            anchors.fill: parent
-            anchors.margins: -6
-            color: ThemeManager.backgroundColor
-            border.width: 1
-            border.color: ThemeManager.borderColor
-            radius: 3
         }
     }
 
@@ -150,6 +215,18 @@ Rectangle {
                     voiceInputArea.voiceToggled(newState);
                 }
                 
+                onPressed: {
+                    voiceInputArea.voicePressed();
+                    // Start listening when button is pressed
+                    setAppState("listening");
+                }
+                
+                onReleased: {
+                    voiceInputArea.voiceReleased();
+                    // Go to processing state when button is released
+                    setAppState("processing");
+                }
+                
                 // Add direct key handling for Enter/Return
                 Keys.onPressed: function(event) {
                     if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
@@ -159,7 +236,17 @@ Rectangle {
                 }
 
                 background: Rectangle {
-                    color: voiceButton.checked ? ThemeManager.subtleColor : "transparent" // Light background when active for e-ink
+                    color: {
+                        // Use the new state system for determining color
+                        switch(voiceInputArea.appState) {
+                            case "listening": return ThemeManager.subtleColor;
+                            case "processing": 
+                            case "thinking": 
+                            case "executing_tool": 
+                                return ThemeManager.buttonColor;
+                            default: return "transparent";
+                        }
+                    }
                     antialiasing: true
                     border.width: 1
                     border.color: voiceButton.checked ? ThemeManager.borderColor : "transparent"
@@ -197,16 +284,19 @@ Rectangle {
                     Text {
                         id: micIcon
                         text: {
-                            if (!voiceButton.enabled)
-                                return "󰍭"; // Idle
-                                
-                            if (voiceInputArea.isProcessing)
-                                return "󰍯"; // Processing
-                            
-                            if (voiceButton.checked)
-                                return "󰍬"; // Listening
-                                
-                            return "󰍭"; // Idle
+                            // Use the new state system for determining icon
+                            switch(voiceInputArea.appState) {
+                                case "listening": 
+                                    return "󰍬"; // Listening
+                                case "processing":
+                                case "thinking": 
+                                case "executing_tool":
+                                    return "󰍯"; // Processing
+                                case "error":
+                                    return "󰍭"; // Error (using idle for now)
+                                default: // idle
+                                    return "󰍭"; // Idle
+                            }
                         }
                         font.pixelSize: parent.width * 0.45 // Slightly smaller for cleaner look
                         font.family: "Symbols Nerd Font"
@@ -217,20 +307,21 @@ Rectangle {
                         opacity: 1.0 // Always full opacity for better e-ink visibility
                     }
 
-                    // Simple indicator for listening state (e-ink optimized)
+                    // Simple indicator for active states
                     Rectangle {
-                        visible: voiceButton.checked && !voiceInputArea.isProcessing
+                        visible: voiceInputArea.appState !== "idle" && voiceInputArea.appState !== "error"
                         anchors.centerIn: parent
                         width: parent.width - 4
                         height: parent.height - 4
                         radius: width / 2
                         color: "transparent"
                         border.width: 1
-                        border.color: ThemeManager.accentColor
+                        border.color: voiceInputArea.appState === "listening" ? ThemeManager.accentColor : 
+                                  (voiceInputArea.appState === "processing" || 
+                                   voiceInputArea.appState === "thinking" || 
+                                   voiceInputArea.appState === "executing_tool") ? ThemeManager.buttonColor : "transparent"
                         opacity: 0.7
                         antialiasing: true
-                        
-                        // Remove animations for e-ink display
                     }
                 }
             }
@@ -376,7 +467,43 @@ Rectangle {
                         opacity: 1.0 // Always full opacity for better e-ink visibility
                     }
                 }
+                
+                // Add hint for settings button
+                Rectangle {
+                    id: settingsButtonHint
+                    visible: settingsButton.isActiveItem
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    anchors.bottom: parent.top
+                    anchors.bottomMargin: 8
+                    height: settingsHintText.contentHeight + 10
+                    width: settingsHintText.contentWidth + 16
+                    color: ThemeManager.backgroundColor
+                    border.width: 1
+                    border.color: ThemeManager.borderColor
+                    radius: 4
+                    z: 100
+                    
+                    Text {
+                        id: settingsHintText
+                        anchors.centerIn: parent
+                        text: "Settings"
+                        font.pixelSize: FontManager.fontSizeSmall
+                        font.family: FontManager.primaryFontFamily
+                        color: ThemeManager.textColor
+                    }
+                }
             }
+        }
+    }
+    
+    // State animation for hint text
+    Behavior on stateHint {
+        PropertyAnimation {
+            target: staticHintText
+            property: "opacity"
+            from: 0.5
+            to: 0.9
+            duration: 200
         }
     }
 } 
