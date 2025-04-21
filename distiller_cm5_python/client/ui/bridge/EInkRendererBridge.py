@@ -1,11 +1,17 @@
 import numpy as np
 import time
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from threading import Lock
+from enum import Enum
 from PyQt6.QtCore import QObject, pyqtSlot, QTimer
 from PyQt6.QtGui import QImage
 from .EinkDriver import EinkDriver
 from ..display_config import config
+
+class DitheringMethod(Enum):
+    NONE = 0
+    FLOYD_STEINBERG = 1
+    ORDERED = 2
 
 class EInkRendererBridge(QObject):
     """
@@ -21,6 +27,7 @@ class EInkRendererBridge(QObject):
         self.driver_lock = Lock()
         self.initialized = False
         self._dithering_enabled = True
+        self._dithering_method = DitheringMethod.FLOYD_STEINBERG
         self._init_timer = QTimer()
         self._init_timer.setSingleShot(True)
         self._init_timer.timeout.connect(self._delayed_init)
@@ -77,9 +84,22 @@ class EInkRendererBridge(QObject):
         except Exception as e:
             print(f"Error in delayed e-ink initialization: {e}")
     
-    def set_dithering(self, enabled: bool):
-        """Enable or disable dithering"""
+    def set_dithering(self, enabled: bool, method: int = DitheringMethod.FLOYD_STEINBERG.value):
+        """
+        Enable or disable dithering
+        
+        Args:
+            enabled: Whether dithering is enabled
+            method: Dithering method (0=None, 1=Floyd-Steinberg, 2=Ordered)
+        """
         self._dithering_enabled = enabled
+        try:
+            self._dithering_method = DitheringMethod(method)
+        except ValueError:
+            print(f"Invalid dithering method {method}, defaulting to Floyd-Steinberg")
+            self._dithering_method = DitheringMethod.FLOYD_STEINBERG
+        
+        print(f"Dithering {'enabled' if enabled else 'disabled'}, method: {self._dithering_method.name}")
     
     @pyqtSlot(bytearray, int, int)
     def handle_frame(self, frame_data: bytearray, width: int, height: int):
@@ -252,18 +272,30 @@ class EInkRendererBridge(QObject):
         # Flatten the array for processing
         # Ensure pixels are in valid range after dithering
         pixels = np.clip(pixels, 0, 255)
-        pixels_quantized = np.digitize(pixels, bins=[64, 128, 192], right=True)
-
+        
+        # Use faster thresholding - only 2 levels (0 or 1)
+        pixels_binary = (pixels > 128).astype(np.uint8)
+        
         # Calculate the needed size for the result
-        result_size = (pixels.size + 7) // 8
+        height, width = pixels.shape
+        bytes_per_row = (width + 7) // 8
+        result_size = bytes_per_row * height
         int_pixels = np.zeros(result_size, dtype=np.uint8)
-
-        index = 0
-        for i in range(pixels_quantized.size):
-            bit = 1 if pixels_quantized.flat[i] in [2, 3] else 0
-            if i % 8 == 0 and i > 0:
-                index += 1
-            int_pixels[index] |= bit << (7 - (i % 8))
+        
+        # Pack bits into bytes efficiently
+        row_idx = 0
+        for y in range(height):
+            for x_byte in range(bytes_per_row):
+                byte_val = 0
+                for bit in range(8):
+                    x = x_byte * 8 + bit
+                    if x < width:
+                        # If pixel is BLACK (value = 1)
+                        if pixels_binary[y, x]:
+                            byte_val |= (1 << (7 - bit))  # MSB first
+                int_pixels[row_idx] = byte_val
+                row_idx += 1
+                
         return [int(x) for x in int_pixels]
     
     def _instance_dump_1bit_with_dithering(self, pixels: np.ndarray) -> List[int]:
@@ -278,8 +310,13 @@ class EInkRendererBridge(QObject):
         """
         # Make a copy of the pixels to avoid modifying the original
         pixels_copy = pixels.copy()
-        # Apply dithering to the copy
-        pixels_dithered = self._instance_floyd_steinberg_dithering(pixels_copy)
+        
+        # Apply selected dithering method to the copy
+        if self._dithering_method == DitheringMethod.ORDERED:
+            pixels_dithered = self._instance_ordered_dithering(pixels_copy)
+        else:  # Default to Floyd-Steinberg
+            pixels_dithered = self._instance_floyd_steinberg_dithering(pixels_copy)
+            
         # Convert to 1-bit
         return self._instance_dump_1bit(pixels_dithered)
     
@@ -293,16 +330,71 @@ class EInkRendererBridge(QObject):
         Returns:
             The dithered pixel array
         """
-        for y in range(pixels.shape[0] - 1):
-            for x in range(1, pixels.shape[1] - 1):
-                old_pixel = pixels[y, x]
-                new_pixel = np.round(old_pixel / 85) * 85
-                pixels[y, x] = new_pixel
-                quant_error = old_pixel - new_pixel
-                pixels[y, x + 1] += quant_error * 7 / 16
-                pixels[y + 1, x - 1] += quant_error * 3 / 16
-                pixels[y + 1, x] += quant_error * 5 / 16
-                pixels[y + 1, x + 1] += quant_error * 1 / 16
+        # Optimized Floyd-Steinberg with vectorized operations where possible
+        height, width = pixels.shape
+        
+        # Process in chunks to reduce memory usage
+        chunk_size = min(32, height)  # Process 32 rows at a time or less
+        
+        for chunk_start in range(0, height - 1, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, height - 1)
+            
+            for y in range(chunk_start, chunk_end):
+                for x in range(1, width - 1):
+                    old_pixel = pixels[y, x]
+                    new_pixel = 0 if old_pixel < 128 else 255
+                    pixels[y, x] = new_pixel
+                    quant_error = old_pixel - new_pixel
+                    
+                    # Distribute error to neighboring pixels
+                    pixels[y, x + 1] += quant_error * 7 / 16
+                    pixels[y + 1, x - 1] += quant_error * 3 / 16
+                    pixels[y + 1, x] += quant_error * 5 / 16
+                    pixels[y + 1, x + 1] += quant_error * 1 / 16
+        
+        # Handle the last row separately (no pixels below)
+        y = height - 1
+        for x in range(1, width - 1):
+            old_pixel = pixels[y, x]
+            new_pixel = 0 if old_pixel < 128 else 255
+            pixels[y, x] = new_pixel
+            quant_error = old_pixel - new_pixel
+            
+            # Only distribute horizontally on the last row
+            pixels[y, x + 1] += quant_error * 7 / 16
+            
+        return pixels
+
+    def _instance_ordered_dithering(self, pixels: np.ndarray) -> np.ndarray:
+        """
+        Apply ordered dithering using Bayer matrix to an image.
+        
+        Args:
+            pixels: The input pixel array
+            
+        Returns:
+            The dithered pixel array
+        """
+        # 8x8 Bayer matrix for ordered dithering
+        bayer_matrix_8x8 = np.array([
+            [ 0, 48, 12, 60,  3, 51, 15, 63],
+            [32, 16, 44, 28, 35, 19, 47, 31],
+            [ 8, 56,  4, 52, 11, 59,  7, 55],
+            [40, 24, 36, 20, 43, 27, 39, 23],
+            [ 2, 50, 14, 62,  1, 49, 13, 61],
+            [34, 18, 46, 30, 33, 17, 45, 29],
+            [10, 58,  6, 54,  9, 57,  5, 53],
+            [42, 26, 38, 22, 41, 25, 37, 21]
+        ]) / 64.0 * 255
+        
+        height, width = pixels.shape
+        
+        # Calculate threshold map
+        for y in range(height):
+            for x in range(width):
+                threshold = bayer_matrix_8x8[y % 8, x % 8]
+                pixels[y, x] = 0 if pixels[y, x] < threshold else 255
+                
         return pixels
     
     def cleanup(self):
@@ -335,21 +427,28 @@ try:
         Returns:
             A list of integers representing the 1-bit image
         """
-        # Flatten the array for processing
-        # Ensure pixels are in valid range after dithering
+        # Optimized version using simpler thresholding
         pixels = np.clip(pixels, 0, 255)
-        pixels_quantized = np.digitize(pixels, bins=[64, 128, 192], right=True)
-
+        pixels_binary = (pixels > 128).astype(np.uint8)
+        
         # Calculate the needed size for the result
-        result_size = (pixels.size + 7) // 8
+        height, width = pixels.shape
+        bytes_per_row = (width + 7) // 8
+        result_size = bytes_per_row * height
         int_pixels = np.zeros(result_size, dtype=np.uint8)
-
-        index = 0
-        for i in range(pixels_quantized.size):
-            bit = 1 if pixels_quantized.flat[i] in [2, 3] else 0
-            if i % 8 == 0 and i > 0:
-                index += 1
-            int_pixels[index] |= bit << (7 - (i % 8))
+        
+        # Pack bits into bytes efficiently
+        idx = 0
+        for y in range(height):
+            for x_byte in range(bytes_per_row):
+                byte_val = 0
+                for bit in range(8):
+                    x = x_byte * 8 + bit
+                    if x < width and pixels_binary[y, x]:
+                        byte_val |= (1 << (7 - bit))  # MSB first
+                int_pixels[idx] = byte_val
+                idx += 1
+                
         return [int(x) for x in int_pixels]
 
     @jit(nopython=True, cache=True)
@@ -363,33 +462,94 @@ try:
         Returns:
             The dithered pixel array
         """
-        for y in range(pixels.shape[0] - 1):
-            for x in range(1, pixels.shape[1] - 1):
-                old_pixel = pixels[y, x]
-                new_pixel = np.round(old_pixel / 85) * 85
-                pixels[y, x] = new_pixel
-                quant_error = old_pixel - new_pixel
-                pixels[y, x + 1] += quant_error * 7 / 16
-                pixels[y + 1, x - 1] += quant_error * 3 / 16
-                pixels[y + 1, x] += quant_error * 5 / 16
-                pixels[y + 1, x + 1] += quant_error * 1 / 16
+        # Optimized Floyd-Steinberg dithering
+        height, width = pixels.shape
+        
+        # Process in chunks to improve cache efficiency
+        chunk_size = min(32, height)  # Process 32 rows at a time or less
+        
+        for chunk_start in range(0, height - 1, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, height - 1)
+            
+            for y in range(chunk_start, chunk_end):
+                for x in range(1, width - 1):
+                    old_pixel = pixels[y, x]
+                    new_pixel = 0 if old_pixel < 128 else 255
+                    pixels[y, x] = new_pixel
+                    quant_error = old_pixel - new_pixel
+                    
+                    # Distribute error to neighboring pixels
+                    pixels[y, x + 1] += quant_error * 7 / 16
+                    pixels[y + 1, x - 1] += quant_error * 3 / 16
+                    pixels[y + 1, x] += quant_error * 5 / 16
+                    pixels[y + 1, x + 1] += quant_error * 1 / 16
+        
+        # Handle the last row separately (no pixels below)
+        y = height - 1
+        for x in range(1, width - 1):
+            old_pixel = pixels[y, x]
+            new_pixel = 0 if old_pixel < 128 else 255
+            pixels[y, x] = new_pixel
+            quant_error = old_pixel - new_pixel
+            pixels[y, x + 1] += quant_error * 7 / 16
+            
         return pixels
+    
+    @jit(nopython=True, cache=True)
+    def orderedDithering_numba(pixels: np.ndarray) -> np.ndarray:
+        """
+        Apply ordered dithering to an image.
+
+        Args:
+            pixels: The input pixel array
+            
+        Returns:
+            The dithered pixel array
+        """
+        # Define 8x8 Bayer matrix for ordered dithering
+        bayer_matrix = np.array([
+            [ 0, 48, 12, 60,  3, 51, 15, 63],
+            [32, 16, 44, 28, 35, 19, 47, 31],
+            [ 8, 56,  4, 52, 11, 59,  7, 55],
+            [40, 24, 36, 20, 43, 27, 39, 23],
+            [ 2, 50, 14, 62,  1, 49, 13, 61],
+            [34, 18, 46, 30, 33, 17, 45, 29],
+            [10, 58,  6, 54,  9, 57,  5, 53],
+            [42, 26, 38, 22, 41, 25, 37, 21]
+        ], dtype=np.float32) / 64.0 * 255
+        
+        height, width = pixels.shape
+        result = np.zeros((height, width), dtype=np.uint8)
+        
+        # Apply threshold based on the Bayer matrix
+        for y in range(height):
+            for x in range(width):
+                threshold = bayer_matrix[y % 8, x % 8]
+                result[y, x] = 0 if pixels[y, x] < threshold else 255
+                
+        return result
 
     @jit(nopython=True, cache=True)
-    def dump_1bit_with_dithering(pixels: np.ndarray) -> list:
+    def dump_1bit_with_dithering(pixels: np.ndarray, method: int = 1) -> list:
         """
         Convert an image to 1-bit representation with dithering.
 
         Args:
             pixels: The input pixel array
+            method: Dithering method (1=Floyd-Steinberg, 2=Ordered)
             
         Returns:
             A list of integers representing the 1-bit image with dithering
         """
         # Make a copy of the pixels to avoid modifying the original
         pixels_copy = pixels.copy()
-        # Apply dithering to the copy
-        pixels_dithered = floydSteinbergDithering_numba(pixels_copy)
+        
+        # Apply dithering method
+        if method == 2:  # Ordered dithering
+            pixels_dithered = orderedDithering_numba(pixels_copy)
+        else:  # Default to Floyd-Steinberg
+            pixels_dithered = floydSteinbergDithering_numba(pixels_copy)
+            
         # Convert to 1-bit
         return dump_1bit(pixels_dithered)
     
@@ -400,16 +560,22 @@ try:
         
     def _instance_dump_1bit_with_dithering(self, pixels):
         """Instance method wrapper for dump_1bit_with_dithering"""
-        return dump_1bit_with_dithering(pixels)
+        method = self._dithering_method.value
+        return dump_1bit_with_dithering(pixels, method)
         
     def _instance_floyd_steinberg_dithering(self, pixels):
         """Instance method wrapper for floydSteinbergDithering_numba"""
         return floydSteinbergDithering_numba(pixels)
+        
+    def _instance_ordered_dithering(self, pixels):
+        """Instance method wrapper for orderedDithering_numba"""
+        return orderedDithering_numba(pixels)
     
     # Replace the methods with optimized versions using proper wrappers
-    EInkRendererBridge._dump_1bit = _instance_dump_1bit
-    EInkRendererBridge._dump_1bit_with_dithering = _instance_dump_1bit_with_dithering
-    EInkRendererBridge._floyd_steinberg_dithering = _instance_floyd_steinberg_dithering
+    EInkRendererBridge._instance_dump_1bit = _instance_dump_1bit
+    EInkRendererBridge._instance_dump_1bit_with_dithering = _instance_dump_1bit_with_dithering
+    EInkRendererBridge._instance_floyd_steinberg_dithering = _instance_floyd_steinberg_dithering
+    EInkRendererBridge._instance_ordered_dithering = _instance_ordered_dithering
     
     print("Using Numba-optimized e-ink conversion functions")
 except ImportError:

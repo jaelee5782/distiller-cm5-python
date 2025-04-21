@@ -4,13 +4,11 @@ from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtWidgets import QApplication
 from contextlib import AsyncExitStack
-from display_config import config
+from .display_config import config
 from distiller_cm5_python.client.ui.AppInfoManager import AppInfoManager
 from distiller_cm5_python.client.ui.bridge.MCPClientBridge import MCPClientBridge
 from distiller_cm5_python.utils.logger import logger
 from distiller_cm5_sdk.whisper import Whisper # Assuming whisper.py is in this path
-# Import SAM SDK
-from distiller_cm5_sdk.hardware.sam import SAM, ButtonType 
 from qasync import QEventLoop
 import asyncio
 import os
@@ -44,6 +42,8 @@ class App(QObject): # Inherit from QObject to support signals/slots
         # --- SAM Initialization ---
         self.sam = None
         if config.get("display").get("eink_enabled"): # Or other config if SAM is used differently
+            # Import SAM SDK
+            from distiller_cm5_sdk.hardware.sam import SAM, ButtonType 
             try:
                 self.sam = SAM()
             except RuntimeError as e:
@@ -562,10 +562,12 @@ class App(QObject): # Inherit from QObject to support signals/slots
 
         logger.info("E-Ink display mode enabled")
 
-        # Get configuration for e-ink renderer
-        capture_interval = config.get("display").get("eink_refresh_interval")
-        buffer_size = config.get("display").get("eink_buffer_size") 
-        dithering_enabled = config.get("display").get("eink_dithering_enabled")
+        # Get configuration for e-ink renderer with optimized defaults
+        capture_interval = config.get("display").get("eink_refresh_interval", 1000)  # Default to 1000ms
+        buffer_size = config.get("display").get("eink_buffer_size", 1)  # Default to 1 for memory optimization
+        dithering_enabled = config.get("display").get("eink_dithering_enabled", True)
+        dithering_method = config.get("display").get("eink_dithering_method", 1)  # 1=Floyd-Steinberg, 2=Ordered
+        adaptive_capture = config.get("display").get("eink_adaptive_capture", True)  # Enable adaptive refresh
 
         try:
             # First initialize the e-ink bridge that connects to the hardware
@@ -577,15 +579,18 @@ class App(QObject): # Inherit from QObject to support signals/slots
                 self.eink_bridge = None
                 return False
 
-            # Configure dithering
-            self.eink_bridge.set_dithering(dithering_enabled)
+            # Configure dithering with method
+            self.eink_bridge.set_dithering(dithering_enabled, dithering_method)
 
-            # Create the renderer instance
+            # Create the renderer instance with optimized settings
             self.eink_renderer = EInkRenderer(
                 parent=self.app,
                 capture_interval=capture_interval,
                 buffer_size=buffer_size
             )
+            
+            # Set adaptive capture mode
+            self.eink_renderer.set_adaptive_capture(adaptive_capture)
 
             # Connect the signal to an async lambda that schedules the handler
             # Use asyncio.create_task to run the async handler without blocking the signal emission
@@ -595,7 +600,9 @@ class App(QObject): # Inherit from QObject to support signals/slots
             
             # Start capturing frames
             self.eink_renderer.start()
-            logger.info(f"E-Ink renderer initialized with {capture_interval}ms interval")
+            logger.info(f"E-Ink renderer initialized with {capture_interval}ms interval, "
+                       f"buffer_size={buffer_size}, dithering={'enabled' if dithering_enabled else 'disabled'} "
+                       f"(method={dithering_method}), adaptive_capture={'enabled' if adaptive_capture else 'disabled'}")
 
             self._eink_initialized = True
             return True

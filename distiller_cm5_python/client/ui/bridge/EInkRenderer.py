@@ -5,6 +5,7 @@ from PyQt6.QtQuick import QQuickWindow
 from threading import Lock
 import logging
 import numpy as np
+import time
 from ..display_config import config
 
 logger = logging.getLogger(__name__)
@@ -16,14 +17,14 @@ class EInkRenderer(QObject):
     """
     frameReady = pyqtSignal(bytearray, int, int)  # Signal emitted when a new frame is ready: (data, width, height)
     
-    def __init__(self, parent=None, capture_interval=500, buffer_size=2):
+    def __init__(self, parent=None, capture_interval=1000, buffer_size=1):
         """
         Initialize the E-Ink renderer.
         
         Args:
             parent: Parent QObject
-            capture_interval: Milliseconds between frame captures
-            buffer_size: Number of frames to buffer
+            capture_interval: Milliseconds between frame captures (default: 1000ms)
+            buffer_size: Number of frames to buffer (default: 1 to reduce memory usage)
         """
         super().__init__(parent)
         self._capture_interval = capture_interval
@@ -37,11 +38,25 @@ class EInkRenderer(QObject):
         self._force_update = False
         self._error_count = 0
         
+        # For frame comparison optimization
+        self._sample_ratio = 0.1  # Sample 10% of pixels for quick comparison
+        self._min_samples = 50    # Minimum number of samples to check
+        self._max_samples = 500   # Maximum number of samples to check
+        self._sample_indices = None
+        
+        # Activity tracking to dynamically adjust capture rate
+        self._last_update_time = 0
+        self._consecutive_unchanged_frames = 0
+        self._max_interval = 3000  # Max interval: 3 seconds
+        self._min_interval = 500   # Min interval: 0.5 seconds
+        self._adaptive_capture = True
+        
     def start(self):
         """Start the screen capture process"""
         if not self._rendering_active:
             logger.info(f"Starting e-ink renderer with interval {self._capture_interval}ms")
             self._rendering_active = True
+            self._last_update_time = time.time()
             self._capture_timer.start(self._capture_interval)
             
     def stop(self):
@@ -59,6 +74,10 @@ class EInkRenderer(QObject):
         if self._rendering_active:
             self._capture_timer.setInterval(self._capture_interval)
             logger.info(f"E-ink renderer interval changed to {self._capture_interval}ms")
+    
+    def set_adaptive_capture(self, enabled):
+        """Enable or disable adaptive capture rate"""
+        self._adaptive_capture = enabled
     
     def force_update(self):
         """Force an update on the next capture, even if the screen hasn't changed"""
@@ -147,23 +166,38 @@ class EInkRenderer(QObject):
                 
                 logger.debug("Created fallback image with border")
             
-            # Save the image to a file for debugging
-            # image.save("captured_screen.png")
-            # logger.debug(f"Saved screen capture to captured_screen.png")
-            
             # Convert to e-ink compatible format (assuming 1-bit black and white)
             eink_data = self._convert_to_eink_format(image)
             
-            # # For debugging, save the binary data
-            # with open("eink_data.bin", "wb") as f:
-            #     f.write(eink_data)
-            
-            # Check if frame is different from previous
-            if self._force_update or self._is_frame_different(eink_data):
-                logger.debug(f"New frame captured: {len(eink_data)} bytes")
-                self._add_to_buffer(eink_data, image.width(), image.height())
+            # Check if frame is different from previous - use sparse sampling for efficiency
+            if self._force_update or self._is_frame_different(eink_data, width, height):
+                current_time = time.time()
+                logger.debug(f"New frame captured: {len(eink_data)} bytes, {current_time - self._last_update_time:.2f}s since last update")
+                self._add_to_buffer(eink_data, width, height)
                 self._last_frame = eink_data
+                self._last_update_time = current_time
                 self._force_update = False
+                self._consecutive_unchanged_frames = 0
+                
+                # Reset the capture interval to minimum after a change is detected
+                if self._adaptive_capture and self._capture_timer.interval() > self._min_interval:
+                    self._capture_timer.setInterval(self._min_interval)
+                    logger.debug(f"Content changed, setting capture interval to {self._min_interval}ms")
+            else:
+                # Frame didn't change - possibly slow down capture rate if configured
+                self._consecutive_unchanged_frames += 1
+                
+                # Adapt capture rate based on inactivity
+                if self._adaptive_capture and self._consecutive_unchanged_frames > 5:
+                    current_interval = self._capture_timer.interval()
+                    # Increase interval gradually up to max_interval
+                    new_interval = min(self._max_interval, 
+                                      current_interval + min(500, current_interval // 2))
+                    
+                    if new_interval > current_interval:
+                        logger.debug(f"No changes detected for {self._consecutive_unchanged_frames} frames, " +
+                                    f"increasing capture interval: {current_interval}ms -> {new_interval}ms")
+                        self._capture_timer.setInterval(new_interval)
                 
             # Reset error count on success
             self._error_count = 0
@@ -210,13 +244,6 @@ class EInkRenderer(QObject):
         bytes_per_row = (width + 7) // 8
         total_bytes = bytes_per_row * height
         
-        # DEBUG ONLY - save the original grayscale image for reference
-        try:
-            if self._force_update:
-                image.save("debug_original.png")
-        except Exception:
-            pass
-        
         # ONLY mirror the image horizontally (left-to-right) without flipping vertically
         # The vertical flip is already happening somewhere else in the pipeline
         mirrored_data = [0] * (width * height)
@@ -251,9 +278,8 @@ class EInkRenderer(QObject):
         
         # Convert the processed data (either dithered or not) to 1-bit representation
         output = bytearray(total_bytes)
-        white_count = 0
-        black_count = 0
         
+        # Memory-efficient conversion from grayscale to 1-bit
         for y in range(height):
             for x_byte in range(bytes_per_row):
                 byte_val = 0
@@ -268,16 +294,9 @@ class EInkRenderer(QObject):
                         # Set bit 1 for WHITE pixels (>= 128) 
                         if pixel_gray >= 128:  # If pixel is WHITE
                             byte_val |= (1 << (7 - bit))  # MSB first
-                            white_count += 1
-                        else:
-                            black_count += 1
                 
                 # Store the byte in the output buffer
                 output[y * bytes_per_row + x_byte] = byte_val
-        
-        process_type = "Dithered" if dithering_enabled else "Mirrored"
-        print(f"{process_type} image statistics: WHITE pixels: {white_count}, BLACK pixels: {black_count}")
-        print(f"Output buffer size: {len(output)} bytes")
         
         return output
         
@@ -299,22 +318,28 @@ class EInkRenderer(QObject):
         # Make a copy to avoid modifying the original
         dithered = pixels.copy()
         
-        # Apply Floyd-Steinberg dithering
-        for y in range(height - 1):
-            for x in range(1, width - 1):
-                old_pixel = dithered[y, x]
-                # Find nearest color (0 or 255)
-                new_pixel = 0 if old_pixel < 128 else 255
-                dithered[y, x] = new_pixel
-                
-                # Compute quantization error
-                quant_error = old_pixel - new_pixel
-                
-                # Distribute error to neighboring pixels
-                dithered[y, x + 1] += quant_error * 7 / 16
-                dithered[y + 1, x - 1] += quant_error * 3 / 16
-                dithered[y + 1, x] += quant_error * 5 / 16
-                dithered[y + 1, x + 1] += quant_error * 1 / 16
+        # Process in chunks to reduce memory usage
+        chunk_size = min(32, height)  # Process 32 rows at a time
+        
+        for chunk_start in range(0, height - 1, chunk_size):
+            chunk_end = min(chunk_start + chunk_size, height - 1)
+            
+            # Apply Floyd-Steinberg dithering to this chunk
+            for y in range(chunk_start, chunk_end):
+                for x in range(1, width - 1):
+                    old_pixel = dithered[y, x]
+                    # Find nearest color (0 or 255)
+                    new_pixel = 0 if old_pixel < 128 else 255
+                    dithered[y, x] = new_pixel
+                    
+                    # Compute quantization error
+                    quant_error = old_pixel - new_pixel
+                    
+                    # Distribute error to neighboring pixels
+                    dithered[y, x + 1] += quant_error * 7 / 16
+                    dithered[y + 1, x - 1] += quant_error * 3 / 16
+                    dithered[y + 1, x] += quant_error * 5 / 16
+                    dithered[y + 1, x + 1] += quant_error * 1 / 16
         
         # Handle last row special case (no pixels below to distribute error to)
         for x in range(1, width - 1):
@@ -332,57 +357,91 @@ class EInkRenderer(QObject):
         # Convert back to 1D array
         return dithered.flatten().tolist()
     
-    def _is_frame_different(self, new_frame):
-        """Check if the new frame is different from the last one using efficient numpy comparisons"""
+    def _is_frame_different(self, new_frame, width, height):
+        """
+        Check if the new frame is different from the last one using sparse sampling.
+        
+        Args:
+            new_frame: The new frame data
+            width: Frame width
+            height: Frame height
+            
+        Returns:
+            True if frames are different, False otherwise
+        """
         if self._last_frame is None:
             return True
             
         if len(new_frame) != len(self._last_frame):
             return True
+            
+        # Sparse sampling for efficient comparison
+        bytes_per_row = (width + 7) // 8
+        total_bytes = len(new_frame)
         
-        try:
-            # Convert to numpy arrays for efficient comparison
-            if not isinstance(new_frame, np.ndarray):
-                new_array = np.frombuffer(new_frame, dtype=np.uint8)
-                old_array = np.frombuffer(self._last_frame, dtype=np.uint8)
-            else:
-                new_array = new_frame
-                old_array = self._last_frame
+        # First time: Generate sample indices if not already done
+        if self._sample_indices is None:
+            # Calculate number of samples (10% of total, with min/max limits)
+            num_samples = max(self._min_samples, min(self._max_samples, int(total_bytes * self._sample_ratio)))
             
-            # First quick check: compare a few statistical properties
-            # If mean or standard deviation differ significantly, frames are different
-            if abs(np.mean(new_array) - np.mean(old_array)) > 0.5:
+            # Create random indices covering the whole frame
+            np.random.seed(42)  # Use fixed seed for reproducibility
+            self._sample_indices = np.random.choice(total_bytes, num_samples, replace=False)
+            logger.debug(f"Created {num_samples} sample points for frame comparison")
+            
+        # Compare only the bytes at sample positions
+        for idx in self._sample_indices:
+            if idx < total_bytes and new_frame[idx] != self._last_frame[idx]:
                 return True
                 
-            # Sample sparse points throughout the frame (faster than checking every pixel)
-            # Take ~5% of points with regular intervals
-            sample_step = max(1, len(new_array) // 20)
-            samples = new_array[::sample_step]
-            old_samples = old_array[::sample_step]
+        # If we need more accuracy, we can add a second check that looks at regions
+        # where we expect changes (like the center of the screen)
+        
+        # Check center region of the screen (where content changes are most likely)
+        center_y_start = height // 4
+        center_y_end = (height * 3) // 4
+        center_x_start = width // 4
+        center_x_end = (width * 3) // 4
+        
+        # Convert to byte positions
+        center_x_byte_start = center_x_start // 8
+        center_x_byte_end = (center_x_end + 7) // 8
+        
+        # Check a subset of bytes in the center region
+        sample_step = max(1, (center_y_end - center_y_start) // 10)  # Check ~10 rows in center
+        
+        for y in range(center_y_start, center_y_end, sample_step):
+            row_start = y * bytes_per_row + center_x_byte_start
+            row_end = y * bytes_per_row + center_x_byte_end
             
-            # Quick vectorized comparison
-            if not np.array_equal(samples, old_samples):
-                return True
-                
-            # Check specific regions that often change (like middle of screen)
-            # For a typical UI, changes often happen in the center or bottom
-            middle_start = len(new_array) // 3
-            middle_end = 2 * len(new_array) // 3
-            middle_step = max(1, (middle_end - middle_start) // 10)  # Check ~10 points in middle
+            # Skip if out of bounds
+            if row_end >= total_bytes:
+                continue
             
-            middle_new = new_array[middle_start:middle_end:middle_step]
-            middle_old = old_array[middle_start:middle_end:middle_step]
-            
-            return not np.array_equal(middle_new, middle_old)
-            
-        except Exception as e:
-            logger.warning(f"Error in frame comparison, falling back to simple check: {e}")
-            # Fallback to simpler comparison in case of error
-            return new_frame != self._last_frame
+            # Check bytes in this center row with a step
+            for i in range(row_start, row_end, max(1, (row_end - row_start) // 5)):
+                if new_frame[i] != self._last_frame[i]:
+                    return True
+        
+        # If we reach here, frames are considered identical
+        return False
     
     def _add_to_buffer(self, frame_data, width, height):
-        """Add a frame to the buffer and emit signal if buffer is ready"""
+        """
+        Add a frame to the buffer and emit signal.
+        Uses direct buffer management to reduce memory usage.
+        
+        Args:
+            frame_data: The frame data
+            width: Frame width
+            height: Frame height
+        """
         with self._buffer_lock:
+            # Clear previous frames to save memory if not needed
+            if len(self._frame_buffer) >= self._buffer_size:
+                self._frame_buffer.clear()
+                
+            # Add new frame
             self._frame_buffer.append((frame_data, width, height))
             
             # Keep buffer at desired size
