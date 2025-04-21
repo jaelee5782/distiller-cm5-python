@@ -8,8 +8,6 @@ author = [
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "pyqt6>=6.9.0",
-    "qasync>=0.27.1",
 ]
 
 [build-system]

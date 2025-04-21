@@ -21,7 +21,7 @@
             "server_url": "https://openrouter.ai/api/v1",
             "model_name": "google/gemini-2.0-flash-exp:free",
             "provider_type": "openrouter",
-            "api_key": "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",
+            "api_key": "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",
             "timeout": 60,
             "temperature": 0.7,
             "streaming": true,

@@ -4,11 +4,13 @@ from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtWidgets import QApplication
 from contextlib import AsyncExitStack
-from .display_config import config
+from display_config import config
 from distiller_cm5_python.client.ui.AppInfoManager import AppInfoManager
 from distiller_cm5_python.client.ui.bridge.MCPClientBridge import MCPClientBridge
 from distiller_cm5_python.utils.logger import logger
 from distiller_cm5_sdk.whisper import Whisper # Assuming whisper.py is in this path
+# Import SAM SDK
+from distiller_cm5_sdk.hardware.sam import SAM, ButtonType 
 from qasync import QEventLoop
 import asyncio
 import os
@@ -21,7 +23,8 @@ import atexit
 if config.get("display").get("eink_enabled"):
     from distiller_cm5_python.client.ui.bridge.EInkRenderer import EInkRenderer
     from distiller_cm5_python.client.ui.bridge.EInkRendererBridge import EInkRendererBridge
-    import evdev
+    # Remove evdev import
+    # import evdev
 
 
 class App(QObject): # Inherit from QObject to support signals/slots
@@ -29,6 +32,7 @@ class App(QObject): # Inherit from QObject to support signals/slots
     transcriptionUpdate = pyqtSignal(str, arguments=['transcription'])
     transcriptionComplete = pyqtSignal(str, arguments=['full_text'])
     recordingStateChanged = pyqtSignal(bool, arguments=['is_recording'])
+    recordingError = pyqtSignal(str, arguments=['error_message']) # New signal for errors
     # --- End Signals ---
 
     def __init__(self):
@@ -36,7 +40,20 @@ class App(QObject): # Inherit from QObject to support signals/slots
         """Initialize the Qt application and QML engine."""
         # Register a global exit handler at process exit
         atexit.register(self._emergency_exit_handler)
-        
+
+        # --- SAM Initialization ---
+        self.sam = None
+        if config.get("display").get("eink_enabled"): # Or other config if SAM is used differently
+            try:
+                self.sam = SAM()
+            except RuntimeError as e:
+                logger.error(f"Failed to initialize SAM SDK: {e}. Button input may not work.")
+                self.sam = None # Ensure sam is None if init fails
+            except Exception as e:
+                 logger.error(f"Unexpected error initializing SAM SDK: {e}", exc_info=True)
+                 self.sam = None # Ensure sam is None if init fails
+        # --- End SAM Initialization ---
+
         # Set platform to offscreen before creating QApplication if E-Ink is enabled
         # TODO: Make this conditional based on configuration
         if config.get("display").get("eink_enabled"):
@@ -76,7 +93,8 @@ class App(QObject): # Inherit from QObject to support signals/slots
         self.exit_stack = AsyncExitStack()
         
         self._eink_initialized = False
-        self._input_monitor_task = None # Task handle for input monitoring
+        # Remove evdev task handle
+        # self._input_monitor_task = None # Task handle for input monitoring
 
         # Connect signal to handle application quit
         self.app.aboutToQuit.connect(self._on_about_to_quit)
@@ -90,6 +108,9 @@ class App(QObject): # Inherit from QObject to support signals/slots
         self._is_actively_recording = False # Separate state for UI feedback
         self._transcription_task = None
         # --- End Whisper Initialization ---
+
+        # Add main_window attribute initialization
+        self.main_window = None
 
     async def initialize(self):
         """Initialize the application."""
@@ -107,6 +128,16 @@ class App(QObject): # Inherit from QObject to support signals/slots
         self.bridge.set_app_instance(self)
         
         logger.info("Bridge initialized successfully")
+        
+        # --- Connect SAM (Moved callback registration lower) ---
+        if self.sam:
+            logger.info("Connecting to SAM module...")
+            if not self.sam.connect():
+                 logger.error("Failed to connect to SAM module.")
+                 self.sam = None # Set to None if connection fails
+            else:
+                 logger.info("SAM connected.") # Log connection, register callbacks later
+        # --- End SAM Connection ---
 
         # Now register the initialized bridge with QML
         root_context.setContextProperty("bridge", self.bridge)
@@ -136,7 +167,7 @@ class App(QObject): # Inherit from QObject to support signals/slots
         if not os.path.exists(qt_conf_path):
             # Create a minimal qt.conf if it doesn't exist
             with open(qt_conf_path, "w") as f:
-                f.write("[Paths]\nPrefix=.\n")
+                f.write("[Paths]\\nPrefix=.\\n")
 
         # Signal to QML that the bridge is ready
         self.bridge.setReady(True)
@@ -148,10 +179,26 @@ class App(QObject): # Inherit from QObject to support signals/slots
         # Wait for the QML to load
         await asyncio.sleep(0.1)
 
-        # Check if the QML was loaded successfully
-        if not self.engine.rootObjects():
-            logger.error("Failed to load QML")
+        # Check if the QML was loaded successfully and get the main window
+        root_objects = self.engine.rootObjects()
+        if not root_objects:
+            logger.error("Failed to load QML or find root objects")
             raise RuntimeError("Failed to load QML")
+        else:
+             self.main_window = root_objects[0] # Assign main_window HERE
+             logger.info(f"QML loaded successfully. Main window: {self.main_window}")
+
+        # --- Register SAM Callbacks (Now that main_window should exist) ---
+        if self.sam:
+            logger.info("Registering SAM button callbacks...")
+            # Register button press handlers
+            self.sam.register_button_callback(ButtonType.UP, self._handle_sam_button_up)
+            self.sam.register_button_callback(ButtonType.DOWN, self._handle_sam_button_down)
+            self.sam.register_button_callback(ButtonType.SELECT, self._handle_sam_button_select)
+            # You can register release callbacks if needed:
+            # self.sam.register_button_release_callback(...)
+        # --- End SAM Callback Registration ---
+
 
         if config.get("display").get("eink_enabled"):
             # Apply fixed size constraints to the root window after loading
@@ -160,65 +207,51 @@ class App(QObject): # Inherit from QObject to support signals/slots
             self._init_eink_renderer()
             self._eink_initialized = True
 
+            # Remove evdev input monitoring start
             # Start monitoring input device
-            root_objects = self.engine.rootObjects()
-            if root_objects:
-                main_window = root_objects[0]
-                input_device_path = '/dev/input/event5' # TODO: Make this configurable?
-                logger.info(f"Starting input device monitor for {input_device_path}...")
-                self._input_monitor_task = self.loop.create_task(self.monitor_input_device(input_device_path, main_window))
-            else:
-                logger.error("Cannot start input monitor: No root QML object found.")
+            # root_objects = self.engine.rootObjects()
+            # if root_objects:
+            #     main_window = root_objects[0]
+            #     input_device_path = '/dev/input/event5' # TODO: Make this configurable?
+            #     logger.info(f"Starting input device monitor for {input_device_path}...")
+            #     self._input_monitor_task = self.loop.create_task(self.monitor_input_device(input_device_path, main_window))\
+            # else:
+            #     logger.error("Cannot start input monitor: No root QML object found.")
 
         logger.info("Application initialized successfully")
 
-
-    async def monitor_input_device(self, device_path, target_widget):
-        """Monitor the specified input device for key presses and post Qt events."""
-        try:
-            dev = evdev.InputDevice(device_path)
-            logger.info(f"Monitoring input device: {dev.path} ({dev.name})")
-        except FileNotFoundError:
-            logger.error(f"Input device not found: {device_path}. Is the button script running?")
+    # --- SAM Button Handlers ---
+    def _post_key_event(self, qt_key: Qt.Key):
+        """Helper method to post key press and release events."""
+        if not self.main_window:
+            logger.warning(f"Cannot post key event {qt_key}: Main window not available.")
             return
-        except PermissionError:
-            logger.error(f"Permission denied for input device: {device_path}. Check user permissions.")
-            return
-        except Exception as e:
-            logger.error(f"Failed to open input device {device_path}: {e}", exc_info=True)
-            return
+            
+        press_event = QKeyEvent(QKeyEvent.Type.KeyPress, qt_key, Qt.KeyboardModifier.NoModifier)
+        # release_event = QKeyEvent(QKeyEvent.Type.KeyRelease, qt_key, Qt.KeyboardModifier.NoModifier) # Commented out
+        QApplication.postEvent(self.main_window, press_event)
+        # QApplication.postEvent(self.main_window, release_event) # Commented out
+        logger.debug(f"Posted {qt_key} Press event via SAM to {self.main_window}") # Updated log message
 
-        try:
-            async for event in dev.async_read_loop():
-                if event.type == evdev.ecodes.EV_KEY and event.value == 1: # Key press events
-                    key_to_post = None
-                    if event.code == evdev.ecodes.KEY_ENTER:
-                        key_to_post = Qt.Key.Key_Enter
-                        logger.debug("Detected ENTER key press")
-                    elif event.code == evdev.ecodes.KEY_UP:
-                        key_to_post = Qt.Key.Key_Up
-                        logger.debug("Detected UP key press")
-                    elif event.code == evdev.ecodes.KEY_DOWN:
-                        key_to_post = Qt.Key.Key_Down
-                        logger.debug("Detected DOWN key press")
-                    
-                    if key_to_post and target_widget:
-                        press_event = QKeyEvent(QKeyEvent.Type.KeyPress, key_to_post, Qt.KeyboardModifier.NoModifier)
-                        release_event = QKeyEvent(QKeyEvent.Type.KeyRelease, key_to_post, Qt.KeyboardModifier.NoModifier)
-                        QApplication.postEvent(target_widget, press_event)
-                        # Optionally post release event immediately or based on event.value == 0 if needed
-                        QApplication.postEvent(target_widget, release_event) 
-                        logger.debug(f"Posted {key_to_post} event to {target_widget}")
+    def _handle_sam_button_up(self):
+        """Handle SAM UP button press."""
+        logger.debug("SAM Button UP detected")
+        self._post_key_event(Qt.Key.Key_Up)
 
-        except OSError as e:
-             logger.error(f"Error reading from input device {device_path}: {e}. Device might have been disconnected.", exc_info=True)
-        except Exception as e:
-             logger.error(f"Unexpected error in input monitoring loop for {device_path}: {e}", exc_info=True)
-        finally:
-            logger.info(f"Stopped monitoring input device: {device_path}")
-            dev.close() # Ensure device is closed
+    def _handle_sam_button_down(self):
+        """Handle SAM DOWN button press."""
+        logger.debug("SAM Button DOWN detected")
+        self._post_key_event(Qt.Key.Key_Down)
 
-        self._input_monitor_task = None
+    def _handle_sam_button_select(self):
+        """Handle SAM SELECT button press."""
+        logger.debug("SAM Button SELECT detected")
+        self._post_key_event(Qt.Key.Key_Enter)
+    # --- End SAM Button Handlers ---
+
+    # Remove the evdev monitor_input_device method
+    # async def monitor_input_device(self, device_path, target_widget):
+    # ... (rest of the method removed) ...
 
         # --- Whisper Cleanup ---
         if hasattr(self, "whisper") and self.whisper:
@@ -310,6 +343,13 @@ class App(QObject): # Inherit from QObject to support signals/slots
         
         # Let the bridge know about the shutdown first
         try:
+             # Disconnect SAM first (before other cleanup)
+            if self.sam:
+                logger.info("Disconnecting SAM module during shutdown...")
+                self.sam.disconnect()
+                logger.info("SAM module disconnected.")
+                self.sam = None
+                
             if self.bridge:
                 self.bridge.shutdown()
 
@@ -317,20 +357,11 @@ class App(QObject): # Inherit from QObject to support signals/slots
             if config.get("display").get("eink_enabled"):
                 self._cleanup_eink()
 
+            # Remove evdev task cancellation
             # Cancel the input monitoring task if running
-            if self._input_monitor_task and not self._input_monitor_task.done():
-                logger.info("Cancelling input monitor task...")
-                self._input_monitor_task.cancel()
-                try:
-                    # Give the task a moment to cancel
-                    await asyncio.wait_for(self._input_monitor_task, timeout=1.0) 
-                except asyncio.CancelledError:
-                    logger.info("Input monitor task successfully cancelled.")
-                except asyncio.TimeoutError:
-                     logger.warning("Input monitor task did not cancel within timeout.")
-                except Exception as e:
-                    logger.error(f"Error during input monitor task cancellation: {e}", exc_info=True)
-            self._input_monitor_task = None
+            # if self._input_monitor_task and not self._input_monitor_task.done():
+            # ... (removed evdev cancellation code) ...
+            # self._input_monitor_task = None
 
             # --- Whisper Cleanup ---
             if hasattr(self, "whisper") and self.whisper:
@@ -356,6 +387,13 @@ class App(QObject): # Inherit from QObject to support signals/slots
         logger.info("Performing application cleanup")
         
         try:
+            # Disconnect SAM (if not already done in _initiate_shutdown)
+            if self.sam:
+                logger.info("Disconnecting SAM module in cleanup...")
+                self.sam.disconnect()
+                logger.info("SAM module disconnected.")
+                self.sam = None
+
             # Clean up the bridge
             if self.bridge:
                 try:
@@ -419,6 +457,10 @@ class App(QObject): # Inherit from QObject to support signals/slots
         logger.warning("Shutdown timeout reached, forcing application to exit")
         # Try to do minimal cleanup
         try:
+             # Disconnect SAM one last time
+            if self.sam:
+                self.sam.disconnect()
+                self.sam = None
             self.executor.shutdown(wait=False)
         except Exception:
             pass
@@ -436,6 +478,11 @@ class App(QObject): # Inherit from QObject to support signals/slots
         # Clean up the E-Ink renderer if it exists
         if config.get("display").get("eink_enabled"):
             self._cleanup_eink()
+            
+        # Disconnect SAM
+        if self.sam:
+            self.sam.disconnect()
+            self.sam = None
 
         # Schedule bridge shutdown
         try:
@@ -462,14 +509,19 @@ class App(QObject): # Inherit from QObject to support signals/slots
         width = int(config.get("display").get("width") or 240)
         height = int(config.get("display").get("height") or 416)
         
-        # Find the root window object
-        root_objects = self.engine.rootObjects()
-        if not root_objects:
-            logger.error("No root objects found to apply size constraints")
-            return
+        # Find the root window object - use self.main_window if already assigned
+        main_window = self.main_window
+        if not main_window:
+            root_objects = self.engine.rootObjects()
+            if not root_objects:
+                logger.error("No root objects found to apply size constraints")
+                return
+            main_window = root_objects[0] # Assign here if not already done
 
-        main_window = root_objects[0]
-        
+        if not main_window:
+            logger.error("Main window object is still None, cannot apply constraints")
+            return
+            
         try:
             # Set fixed size - use QML properties for ApplicationWindow
             main_window.setProperty("width", width)
@@ -535,10 +587,10 @@ class App(QObject): # Inherit from QObject to support signals/slots
                 buffer_size=buffer_size
             )
 
-            # Create a lambda function to handle the signal instead of direct method connection
-            # This avoids the null pointer issue
+            # Connect the signal to an async lambda that schedules the handler
+            # Use asyncio.create_task to run the async handler without blocking the signal emission
             self.eink_renderer.frameReady.connect(
-                lambda data, w, h: self._handle_eink_frame(data, w, h)
+                lambda data, w, h: asyncio.create_task(self._handle_eink_frame(data, w, h))
             )
             
             # Start capturing frames
@@ -558,28 +610,41 @@ class App(QObject): # Inherit from QObject to support signals/slots
             return False
 
 
-    def _handle_eink_frame(self, frame_data, width, height):
+    async def _handle_eink_frame(self, frame_data, width, height):
         """
-        Handle a new frame from the E-Ink renderer.
-        This method forwards the frame to the e-ink bridge for display.
+        Handle a new frame from the E-Ink renderer asynchronously.
+        This method forwards the frame to the e-ink bridge for display in a separate thread.
         
         Args:
             frame_data: The binary data for the frame
             width: The width of the frame
             height: The height of the frame
         """
-        logger.debug(f"E-Ink frame ready: {width}x{height}, {len(frame_data)} bytes")
+        logger.debug(f"E-Ink frame received: {width}x{height}, {len(frame_data)} bytes. Offloading to bridge.")
         
-        # Forward the frame to the e-ink bridge if available
+        # Forward the frame to the e-ink bridge if available, using a separate thread
         if self.eink_bridge and self.eink_bridge.initialized:
-            self.eink_bridge.handle_frame(frame_data, width, height)
+            try:
+                # Run the potentially blocking bridge call in a separate thread
+                await asyncio.to_thread(
+                    self.eink_bridge.handle_frame, frame_data, width, height
+                )
+                logger.debug("E-Ink frame successfully handled by bridge.")
+            except Exception as e:
+                 logger.error(f"Error calling eink_bridge.handle_frame in thread: {e}", exc_info=True)
         else:
-            logger.warning("E-Ink bridge not available or not initialized")
+            logger.warning("E-Ink bridge not available or not initialized, skipping frame handling.")
 
     def _emergency_exit_handler(self):
         """Emergency exit handler registered with atexit.
         This ensures we exit even if all other mechanisms fail."""
         logger.warning("Emergency exit handler called - forcing process exit")
+        try:
+            # Disconnect SAM if possible
+            if self.sam:
+                self.sam.disconnect()
+        except Exception:
+            pass # Ignore errors during emergency exit
         try:
             # Make one final attempt to flush logs
             import logging
@@ -606,12 +671,14 @@ class App(QObject): # Inherit from QObject to support signals/slots
         else:
             logger.error("Failed to start Whisper recording")
 
+    MIN_AUDIO_BYTES_THRESHOLD = 16000 # Approx 0.5 seconds at 16kHz/16bit/mono
+
     @pyqtSlot()
     def stopAndTranscribe(self):
         if not self._is_actively_recording:
             logger.warning("Not recording.")
             return
-        
+
         audio_data = self.whisper.stop_recording()
         self._is_actively_recording = False
         self.recordingStateChanged.emit(False)
@@ -620,17 +687,24 @@ class App(QObject): # Inherit from QObject to support signals/slots
             self.bridge.recordingStateChanged.emit(False)
         logger.info("UI Recording Stopped")
 
-        if audio_data:
-            logger.info("Scheduling transcription...")
-            # Run transcription in a separate thread to avoid blocking UI
-            if self._transcription_task and not self._transcription_task.done():
-                 logger.warning("Previous transcription task still running. Skipping new one.")
-                 return
+        # Check if audio data is long enough
+        if not audio_data or len(audio_data) < self.MIN_AUDIO_BYTES_THRESHOLD:
+            logger.warning(f"Audio data too short ({len(audio_data) if audio_data else 0} bytes). Minimum required: {self.MIN_AUDIO_BYTES_THRESHOLD}. Skipping transcription.")
+            self.recordingError.emit("Audio too short") # Emit error signal
+            # Also forward to the bridge if it exists
+            if hasattr(self, "bridge") and self.bridge:
+                self.bridge.recordingError.emit("Audio too short")
+            return # Stop processing here
 
-            self._transcription_task = asyncio.create_task(self._transcribe_audio_async(audio_data))
-        else:
-            logger.warning("No audio data captured to transcribe.")
-            self.transcriptionComplete.emit("") # Emit empty string if no audio
+        # If audio is long enough, proceed with transcription
+        logger.info("Scheduling transcription...")
+        # Run transcription in a separate thread to avoid blocking UI
+        if self._transcription_task and not self._transcription_task.done():
+                logger.warning("Previous transcription task still running. Skipping new one.")
+                return
+
+        self._transcription_task = asyncio.create_task(self._transcribe_audio_async(audio_data))
+
 
     async def _transcribe_audio_async(self, audio_data):
         """Run transcription in a separate thread and emit signals."""
@@ -640,7 +714,7 @@ class App(QObject): # Inherit from QObject to support signals/slots
             transcription_generator = await asyncio.to_thread(
                 self.whisper.transcribe_buffer, audio_data
             )
-            
+
             full_transcription = []
             for segment in transcription_generator:
                 self.transcriptionUpdate.emit(segment)
@@ -659,10 +733,10 @@ class App(QObject): # Inherit from QObject to support signals/slots
 
         except Exception as e:
             logger.error(f"Error during transcription: {e}", exc_info=True)
-            self.transcriptionComplete.emit("[Transcription Error]") # Notify UI of error
+            self.recordingError.emit("[Transcription Error]") # Use the new error signal
             # Also forward to the bridge if it exists
             if hasattr(self, "bridge") and self.bridge:
-                self.bridge.transcriptionComplete.emit("[Transcription Error]")
+                self.bridge.recordingError.emit("[Transcription Error]") # Forward error signal
         finally:
             self._transcription_task = None # Clear task handle
 

@@ -46,6 +46,7 @@ class MCPClientBridge(QObject):
     transcriptionUpdate = pyqtSignal(str)  # Signal for transcription updates
     transcriptionComplete = pyqtSignal(str)  # Signal for completed transcription
     recordingStateChanged = pyqtSignal(bool)  # Signal for recording state changes
+    recordingError = pyqtSignal(str) # Signal specifically for recording/transcription errors like "Audio too short"
 
     def __init__(self, parent=None):
         """MCPClientBridge initializes the MCPClient and manages the conversation state."""

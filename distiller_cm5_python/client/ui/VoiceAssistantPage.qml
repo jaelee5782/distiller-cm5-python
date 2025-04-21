@@ -160,6 +160,13 @@ PageBase {
                 conversationView.scrollToBottom();
             }
         }
+
+        function onRecordingError(errorMessage) {
+            console.log("Recording Error: " + errorMessage);
+            messageToast.showMessage("Error: " + errorMessage, 3000);
+            isProcessing = false;
+            isListening = false;
+        }
     }
 
     Timer {

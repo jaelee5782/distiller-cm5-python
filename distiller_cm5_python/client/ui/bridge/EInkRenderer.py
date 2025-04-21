@@ -239,7 +239,7 @@ class EInkRenderer(QObject):
                 mirrored_data[dest_index] = original_value
                 
         # Check if dithering is enabled in config
-        dithering_enabled = bool(config.get("display", "eink_dithering_enabled") or False)
+        dithering_enabled = config["display"]["eink_dithering_enabled"]
         
         if dithering_enabled:
             # Apply Floyd-Steinberg dithering to the mirrored data
