@@ -7,6 +7,9 @@ from PyQt6.QtCore import QObject, pyqtSlot, QTimer
 from PyQt6.QtGui import QImage
 from .EinkDriver import EinkDriver
 from ..display_config import config
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DitheringMethod(Enum):
     NONE = 0
@@ -143,6 +146,20 @@ class EInkRendererBridge(QObject):
                 
         except Exception as e:
             print(f"Error processing frame for e-ink: {e}")
+            self._recover_driver()
+
+    def _recover_driver(self):
+        """Attempt to recover the e-ink driver after an error"""
+        with self.driver_lock:
+            try:
+                if self.eink_driver:
+                    self.eink_driver.cleanup()
+                self.eink_driver = None
+                self.initialized = False
+                self.initialize()
+                logger.info("E-ink driver recovered successfully")
+            except Exception as e:
+                logger.error(f"Failed to recover driver: {e}")
     
     def frame_to_eink_data(self, frame_data: bytearray, width: int, height: int) -> List[int]:
         """
