@@ -6,6 +6,10 @@ import os
 from typing import List
 import numpy as np
 from ..display_config import config
+from threading import Thread
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Check if we're on a Rockchip platform
 _ROCK = 'rockchip' in platform.release()
@@ -86,10 +90,22 @@ class EinkDriver:
 
         self.spi = self.EPD_GPIO_Init()
         self.epd_w21_init_4g()
+        self._write_thread = None
 
-    def safe_writebytes(self, data, chunk_size=1024):
+    def safe_writebytes(self, data, chunk_size=4096):
+        if self._write_thread and self._write_thread.is_alive():
+            return
+        self._write_thread = Thread(target=self._write_chunks, args=(data, chunk_size))
+        self._write_thread.start()
+
+    def _write_chunks(self, data, chunk_size):
+        data_np = np.array(data, dtype=np.uint8)
         for i in range(0, len(data), chunk_size):
-            self.spi.writebytes(data[i:i+chunk_size])
+            try:
+                self.spi.writebytes(data_np[i:i+chunk_size].tolist())
+            except Exception as e:
+                logger.error(f"SPI write error at offset {i}: {e}")
+                raise
 
     def cleanup(self) -> None:
         if _ROCK:
