@@ -139,6 +139,31 @@ PageBase {
                 if (voiceInputArea.setThinkingState) {
                     voiceInputArea.setThinkingState();
                 }
+            } else {
+                // Handle empty transcription the same way as short audio error
+                console.log("Empty transcription detected, treating as error");
+                
+                // Reset all states on empty transcription
+                isProcessing = false;
+                isListening = false;
+                stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
+                
+                // Show error state and message
+                messageToast.showMessage("Error: Empty voice message", 3000);
+                
+                // Show error state briefly before returning to idle
+                if (voiceInputArea && voiceInputArea.setErrorState) {
+                    voiceInputArea.setErrorState();
+                } else {
+                    // Fallback if setErrorState is not available
+                    updateStatusText("Tap to Talk");
+                    if (voiceInputArea && voiceInputArea.resetState) {
+                        voiceInputArea.resetState();
+                    }
+                }
+                
+                // Reset conversation view state
+                conversationView.setResponseInProgress(false);
             }
             transcriptionInProgress = false;
         }
@@ -162,22 +187,34 @@ PageBase {
         }
 
         function onStatusChanged(newStatus) {
-            updateStatusText(newStatus);
-            
-            // Handle different states based on status text
-            if (newStatus.toLowerCase().includes("thinking")) {
-                if (voiceInputArea.setThinkingState) {
-                    voiceInputArea.setThinkingState();
+            // Always show consistent status in the UI, regardless of internal state
+            if (newStatus.toLowerCase().includes("thinking") || 
+                newStatus.toLowerCase().includes("tool") || 
+                newStatus.toLowerCase().includes("executing")) {
+                // Use a unified "Processing..." status for all processing-related states
+                updateStatusText("Processing...");
+                
+                // Set appropriate internal state
+                if (newStatus.toLowerCase().includes("thinking")) {
+                    if (voiceInputArea.setThinkingState) {
+                        voiceInputArea.setThinkingState();
+                    }
+                    stateResetTimer.toolExecutionActive = false;
+                } else {
+                    // Tool execution or other processing
+                    if (voiceInputArea.setToolExecutionState) {
+                        voiceInputArea.setToolExecutionState();
+                    }
+                    stateResetTimer.toolExecutionActive = true; // Flag tool execution as active
                 }
-                stateResetTimer.toolExecutionActive = false;
-                stateResetTimer.restart(); // Restart timer on thinking state
-            } else if (newStatus.toLowerCase().includes("tool") || 
-                      newStatus.toLowerCase().includes("executing")) {
-                if (voiceInputArea.setToolExecutionState) {
-                    voiceInputArea.setToolExecutionState();
+                
+                // Always restart the timer when status changes to ensure we don't get stuck
+                stateResetTimer.restart();
+                
+                // Ensure conversation view is updated to show any potential errors
+                if (bridge && bridge.ready) {
+                    conversationView.updateModel(bridge.get_conversation());
                 }
-                stateResetTimer.toolExecutionActive = true; // Flag tool execution as active
-                stateResetTimer.restart(); // Restart timer on tool execution state
             } else if (newStatus === "Ready") {
                 console.log("StatusChanged: Detected Ready status, resetting isProcessing to false");
                 isProcessing = false;
@@ -189,17 +226,67 @@ PageBase {
                     voiceInputArea.resetState();
                 }
                 
+                // Update status text
+                updateStatusText("Tap to Talk");
+                
                 // Ensure conversation view is updated
                 conversationView.setResponseInProgress(false);
                 conversationView.scrollToBottom();
+            } else {
+                // For any other status, just update the text
+                updateStatusText(newStatus);
             }
         }
 
         function onRecordingError(errorMessage) {
             console.log("Recording Error: " + errorMessage);
             messageToast.showMessage("Error: " + errorMessage, 3000);
+            
+            // Reset all states on recording error
             isProcessing = false;
             isListening = false;
+            stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
+            
+            // Show error state briefly before returning to idle
+            if (voiceInputArea && voiceInputArea.setErrorState) {
+                voiceInputArea.setErrorState();
+            } else {
+                // Fallback if setErrorState is not available
+                updateStatusText("Tap to Talk");
+                if (voiceInputArea && voiceInputArea.resetState) {
+                    voiceInputArea.resetState();
+                }
+            }
+            
+            // Reset conversation view state
+            conversationView.setResponseInProgress(false);
+            
+            console.log("RecordingError: Reset all UI states due to error: " + errorMessage);
+        }
+
+        function onErrorOccurred(errorMessage) {
+            var displayDuration = Math.max(3000, Math.min(errorMessage.length * 75, 8000));
+            messageToast.showMessage("Error: " + errorMessage, displayDuration);
+            
+            // Make sure to reset all states on error
+            isProcessing = false;
+            isListening = false;
+            stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
+            updateStatusText("Tap to Talk");
+            
+            conversationView.setResponseInProgress(false);
+            
+            // Force conversation view to update - ensure the error is displayed
+            if (bridge && bridge.ready) {
+                conversationView.updateModel(bridge.get_conversation());
+                conversationView.scrollToBottom();
+            }
+            
+            if (errorMessage.toLowerCase().includes("connect") || 
+                errorMessage.toLowerCase().includes("server") ||
+                errorMessage.toLowerCase().includes("timeout")) {
+                reconnectionTimer.start();
+            }
         }
     }
 
@@ -217,10 +304,26 @@ PageBase {
                 // Start the state reset timer as a failsafe
                 stateResetTimer.start();
             } else {
-                // If no text to submit, make sure we reset the state
+                // Show error for empty message
+                console.log("Empty transcription in timer, showing error state");
+                
+                // Show error state and message
+                messageToast.showMessage("Error: Empty voice message", 3000);
+                
+                // Reset all states
                 isProcessing = false;
                 isListening = false;
-                updateStatusText("Tap to Talk");
+                
+                // Show error state briefly before returning to idle
+                if (voiceInputArea && voiceInputArea.setErrorState) {
+                    voiceInputArea.setErrorState();
+                } else {
+                    // Fallback if setErrorState is not available
+                    updateStatusText("Tap to Talk");
+                    if (voiceInputArea && voiceInputArea.resetState) {
+                        voiceInputArea.resetState();
+                    }
+                }
             }
         }
     }
@@ -359,6 +462,12 @@ PageBase {
                 updateStatusText("Tap to Talk");
                 
                 conversationView.setResponseInProgress(false);
+                
+                // Force conversation view to update - ensure the error is displayed
+                if (bridge && bridge.ready) {
+                    conversationView.updateModel(bridge.get_conversation());
+                    conversationView.scrollToBottom();
+                }
                 
                 if (errorMessage.toLowerCase().includes("connect") || 
                     errorMessage.toLowerCase().includes("server") ||
@@ -563,6 +672,11 @@ PageBase {
                 }
             } else if (toolExecutionActive) {
                 console.log("StateResetTimer: Not resetting state because tool execution is active");
+                // Show processing state for any active operation
+                updateStatusText("Processing...");
+                if (voiceInputArea.setAppState) {
+                    voiceInputArea.setAppState("processing");
+                }
                 // Restart the timer to check again later, but with a shorter interval to avoid long waits
                 interval = 5000; // Reduce the interval for subsequent checks to 5 seconds
                 stateResetTimer.restart();
@@ -592,6 +706,12 @@ PageBase {
                 if (voiceInputArea.resetState) {
                     voiceInputArea.resetState();
                 }
+                
+                // Force conversation view to update - ensure any errors are displayed
+                if (bridge && bridge.ready) {
+                    conversationView.updateModel(bridge.get_conversation());
+                    conversationView.scrollToBottom();
+                }
             }
         }
     }
@@ -620,11 +740,11 @@ PageBase {
         if (newStatus) {
             if (newStatus === "Ready") {
                 _statusText = "Tap to Talk";
-            } else if (newStatus.toLowerCase().includes("executing")) {
-                _statusText = "Working on it...";
-            } else if (newStatus.toLowerCase().includes("thinking")) {
-                _statusText = "Thinking...";
-            } else if (newStatus.toLowerCase().includes("processing")) {
+            } else if (newStatus.toLowerCase().includes("executing") || 
+                      newStatus.toLowerCase().includes("thinking") || 
+                      newStatus.toLowerCase().includes("processing") || 
+                      newStatus.toLowerCase().includes("tool")) {
+                // Use a consistent "Processing..." status for all processing-related states
                 _statusText = "Processing...";
             } else if (newStatus.toLowerCase().includes("listening")) {
                 _statusText = "Listening...";

@@ -71,6 +71,25 @@ Rectangle {
     function setToolExecutionState() {
         setAppState("executing_tool");
     }
+    
+    // Set error state (for external calls)
+    function setErrorState() {
+        setAppState("error");
+        
+        // Automatically reset to idle after showing error briefly
+        errorResetTimer.start();
+    }
+    
+    // Timer to automatically reset from error state to idle
+    Timer {
+        id: errorResetTimer
+        interval: 2000  // Show error state for 2 seconds
+        repeat: false
+        running: false
+        onTriggered: {
+            resetState();
+        }
+    }
 
     color: ThemeManager.backgroundColor
     height: transcribedText.trim().length > 0 ? 120 : 90 // Ensure enough height for hint text and buttons
@@ -246,12 +265,15 @@ Rectangle {
                             case "thinking": 
                             case "executing_tool": 
                                 return ThemeManager.buttonColor;
+                            case "error":
+                                return ThemeManager.backgroundColor; // Use background color for error (black/white only)
                             default: return "transparent";
                         }
                     }
                     antialiasing: true
                     border.width: 1
-                    border.color: voiceButton.checked ? ThemeManager.borderColor : "transparent"
+                    border.color: voiceInputArea.appState === "error" ? ThemeManager.borderColor : 
+                                 (voiceButton.checked ? ThemeManager.borderColor : "transparent")
                     
                     // Clear border for focus state (e-ink optimized)
                     Rectangle {
@@ -295,14 +317,14 @@ Rectangle {
                                 case "executing_tool":
                                     return "󰍯"; // Processing
                                 case "error":
-                                    return "󰍭"; // Error (using idle for now)
+                                    return "󱦉"; // Error symbol (warning icon)
                                 default: // idle
                                     return "󰍭"; // Idle
                             }
                         }
                         font.pixelSize: parent.width * 0.45 // Slightly smaller for cleaner look
                         font.family: "Symbols Nerd Font"
-                        color: ThemeManager.textColor
+                        color: ThemeManager.textColor // Use only theme colors for black/white
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         anchors.centerIn: parent
