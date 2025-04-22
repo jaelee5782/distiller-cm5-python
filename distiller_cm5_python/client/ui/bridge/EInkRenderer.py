@@ -235,70 +235,41 @@ class EInkRenderer(QObject):
         # First, ensure we have a grayscale image
         if image.format() != QImage.Format.Format_Grayscale8:
             image = image.convertToFormat(QImage.Format.Format_Grayscale8)
-        
-        # Get image dimensions
-        width = image.width()
-        height = image.height()
-        
-        # Calculate output buffer size (1 bit per pixel, 8 pixels per byte)
+
+        width, height = image.width(), image.height()
         bytes_per_row = (width + 7) // 8
         total_bytes = bytes_per_row * height
-        
-        # ONLY mirror the image horizontally (left-to-right) without flipping vertically
-        # The vertical flip is already happening somewhere else in the pipeline
-        mirrored_data = [0] * (width * height)
-        
-        # ONLY do horizontal mirroring: x -> (width-1-x)
-        # Keep y the same (no vertical flipping)
-        for y in range(height):
-            for x in range(width):
-                # Get original pixel value
-                original_value = image.pixelColor(x, y).red()
-                
-                # Calculate destination position after mirroring:
-                # - For horizontal mirroring ONLY: x -> (width-1-x)
-                # - Keep y the same (no vertical flipping)
-                dest_x = width - 1 - x
-                dest_y = y  # Keep the same y coordinate
-                
-                # Store in 1D array - calculate linear index
-                dest_index = dest_y * width + dest_x
-                mirrored_data[dest_index] = original_value
-                
-        # Check if dithering is enabled in config
-        dithering_enabled = config["display"]["eink_dithering_enabled"]
-        
-        if dithering_enabled:
-            # Apply Floyd-Steinberg dithering to the mirrored data
-            print(f"Applying dithering to image")
-            dithered_data = self._apply_dithering(mirrored_data, width, height)
+
+        # Extract grayscale data
+        ptr = image.bits()
+        ptr.setsize(height * image.bytesPerLine())
+        pixels = np.frombuffer(ptr, dtype=np.uint8).reshape(height, image.bytesPerLine())[:, :width]
+
+        # Horizontal mirroring
+        pixels_mirrored = pixels[:, ::-1].copy()
+
+        # Apply dithering if enabled
+        if config["display"]["eink_dithering_enabled"]:
+            logger.debug("Applying Floyd-Steinberg dithering")
+            pixels_dithered = self._apply_dithering(pixels_mirrored.flatten(), width, height)
+            pixels_dithered = np.array(pixels_dithered, dtype=np.uint8).reshape(height, width)
         else:
-            # No dithering, use the mirrored data directly
-            dithered_data = mirrored_data
-        
-        # Convert the processed data (either dithered or not) to 1-bit representation
-        output = bytearray(total_bytes)
-        
-        # Memory-efficient conversion from grayscale to 1-bit
+            pixels_dithered = pixels_mirrored
+
+        # Convert to 1-bit (bit 1 = WHITE, bit 0 = BLACK)
+        binary = (pixels_dithered >= 128).astype(np.uint8)
+        output = np.zeros(total_bytes, dtype=np.uint8)
+
         for y in range(height):
             for x_byte in range(bytes_per_row):
                 byte_val = 0
                 for bit in range(8):
                     x = x_byte * 8 + bit
-                    if x < width:
-                        # Get pixel from our processed data
-                        index = y * width + x
-                        pixel_gray = dithered_data[index]
-                        
-                        # INVERTED bit logic: bit 1 = WHITE, bit 0 = BLACK
-                        # Set bit 1 for WHITE pixels (>= 128) 
-                        if pixel_gray >= 128:  # If pixel is WHITE
-                            byte_val |= (1 << (7 - bit))  # MSB first
-                
-                # Store the byte in the output buffer
+                    if x < width and binary[y, x]:
+                        byte_val |= (1 << (7 - bit))
                 output[y * bytes_per_row + x_byte] = byte_val
-        
-        return output
+
+        return bytearray(output)
         
     def _apply_dithering(self, image_data, width, height):
         """
