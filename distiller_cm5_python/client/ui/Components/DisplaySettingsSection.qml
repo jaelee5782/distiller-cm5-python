@@ -12,7 +12,6 @@ AppSection {
     signal configChanged()
 
     title: "DISPLAY SETTINGS"
-    compact: true
     navigable: true
     
     // Function to get all navigable controls in this section
@@ -40,9 +39,17 @@ AppSection {
     
     function updateFromBridge() {
         if (bridge && bridge.ready) {
-            var savedTheme = bridge.getConfigValue("display", "dark_mode");
-            if (savedTheme !== "") {
-                darkTheme = (savedTheme === "true" || savedTheme === "True");
+            // Try to use cached theme from ThemeManager first
+            if (ThemeManager.themeCached) {
+                darkTheme = ThemeManager.darkMode;
+            } else {
+                // Fall back to direct bridge call if needed
+                var savedTheme = bridge.getConfigValue("display", "dark_mode");
+                if (savedTheme !== "") {
+                    darkTheme = (savedTheme === "true" || savedTheme === "True");
+                }
+                // Update ThemeManager's cache
+                ThemeManager.themeCached = true;
             }
             isDirty = false;
         }

@@ -45,7 +45,7 @@ NavigableItem {
                 height: width
                 radius: width / 2
                 color: ThemeManager.transparentColor
-                border.width: 1
+                border.width: ThemeManager.borderWidth
                 border.color: root.visualFocus ? ThemeManager.textOnAccentColor : ThemeManager.borderColor
                 anchors.horizontalCenter: parent.horizontalCenter
                 

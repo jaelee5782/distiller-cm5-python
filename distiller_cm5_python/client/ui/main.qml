@@ -31,9 +31,7 @@ ApplicationWindow {
             focus: true
             
             Keys.onPressed: function(event) {
-                console.log("Key pressed: " + event.key);
-                
-                // Handle navigation keys - only support UP, DOWN, and ENTER
+                // Only handle navigation keys - UP, DOWN, and ENTER
                 if (event.key === Qt.Key_Down) {
                     event.accepted = true;
                     FocusManager.moveFocusDown();
@@ -46,7 +44,6 @@ ApplicationWindow {
                     if (FocusManager.scrollModeActive) {
                         FocusManager.exitScrollMode();
                         if (FocusManager.scrollTargetItem) {
-                            console.log("Exiting scroll mode and updating UI");
                             // Force update the property first
                             FocusManager.scrollTargetItem.scrollModeActive = false;
                             
@@ -68,7 +65,6 @@ ApplicationWindow {
             // Explicitly grab focus whenever anything else tries to take it
             onActiveFocusChanged: {
                 if (!activeFocus) {
-                    console.log("Key handler lost focus - reclaiming");
                     forceActiveFocus();
                 }
             }
@@ -79,14 +75,13 @@ ApplicationWindow {
             forceActiveFocus();
         }
         
-        // Timer to periodically ensure key handler has focus
+        // More efficient timer for focus management
         Timer {
-            interval: 200
+            interval: 500  // Increased from 200ms to 500ms to reduce CPU usage
             running: true
             repeat: true
             onTriggered: {
                 if (!keyHandler.activeFocus) {
-                    console.log("Key handler regaining focus");
                     keyHandler.forceActiveFocus();
                 }
             }
@@ -107,21 +102,17 @@ ApplicationWindow {
         }
     }
     
+    // Cache for theme setting to avoid repeated bridge calls
+    property bool themeCached: false
+    property bool cachedDarkMode: false
+    
     // Connect to the bridge ready signal
     Connections {
         target: bridge
         
         function onBridgeReady() {
-            console.log("Bridge is now ready!")
-            
-            // Initialize theme from saved settings once bridge is ready
-            var savedTheme = bridge.getConfigValue("display", "dark_mode");
-            if (savedTheme !== "") {
-                ThemeManager.setDarkMode(savedTheme === "true" || savedTheme === "True");
-                console.log("Theme initialized from settings: " + (ThemeManager.darkMode ? "Dark" : "Light"));
-            } else {
-                console.log("Using default theme (Light)");
-            }
+            // Use the ThemeManager's centralized theme caching
+            ThemeManager.initializeTheme();
         }
     }
     
@@ -131,10 +122,9 @@ ApplicationWindow {
             // Use the loaded font in the components
             FontManager.primaryFontFamily = jetBrainsMono.name;
         }
-        console.log("Application window initialized")
         
         // Set initial focus to key handler
-        keyHandler.forceActiveFocus()
+        keyHandler.forceActiveFocus();
     }
     
     // Handle application shutdown
@@ -150,7 +140,6 @@ ApplicationWindow {
     
     // Function to handle application restart
     function restartApp() {
-        console.log("Processing restart request");
         if (bridge && bridge.ready) {
             // First disconnect from any server
             if (bridge.isConnected) {
@@ -180,40 +169,10 @@ ApplicationWindow {
         anchors.fill: parent
         initialItem: serverSelectionComponent
         
-        // Set focus to the new current item when it changes
+        // Set focus directly when the current item changes
         onCurrentItemChanged: {
             if (currentItem) {
-                console.log("StackView current item changed");
-                Qt.callLater(function() {
-                    // Reset focus to the key handler when changing pages
-                    console.log("Resetting focus to key handler");
-                    keyHandler.forceActiveFocus();
-                    
-                    // Initialize focusable items on the current page
-                    if (currentItem.collectFocusItems) {
-                        console.log("Collecting focusable items on current page");
-                        try {
-                            currentItem.collectFocusItems();
-                            
-                            // Ensure the key handler gets focus after a small delay
-                            focusTimer.restart();
-                        } catch (e) {
-                            console.error("Error collecting focus items: " + e);
-                        }
-                    } else {
-                        console.log("Current page does not have collectFocusItems method");
-                    }
-                });
-            }
-        }
-        
-        // Timer to ensure focus returns to key handler
-        Timer {
-            id: focusTimer
-            interval: 100
-            repeat: false
-            onTriggered: {
-                console.log("Focus timer triggered - forcing focus to key handler");
+                // Set focus directly to the key handler
                 keyHandler.forceActiveFocus();
             }
         }
@@ -223,8 +182,16 @@ ApplicationWindow {
             id: serverSelectionComponent
 
             ServerSelectionPage {
+                // Initialize focus items when component is loaded
+                Component.onCompleted: {
+                    if (typeof collectFocusItems === "function") {
+                        collectFocusItems();
+                    }
+                    // Ensure key handler has focus
+                    keyHandler.forceActiveFocus();
+                }
+                
                 onServerSelected: function(serverPath) {
-                    console.log("onServerSelected called with path: " + serverPath);
                     if (!bridge.ready) {
                         console.error("Bridge not ready, cannot connect to server");
                         // Display an error message to the user
@@ -299,6 +266,15 @@ ApplicationWindow {
             id: voiceAssistantComponent
 
             VoiceAssistantPage {
+                // Initialize focus items when component is loaded
+                Component.onCompleted: {
+                    if (typeof collectFocusItems === "function") {
+                        collectFocusItems();
+                    }
+                    // Ensure key handler has focus
+                    keyHandler.forceActiveFocus();
+                }
+                
                 onSelectNewServer: {
                     // Replace the current view with the server selection page
                     stackView.replace(serverSelectionComponent);
@@ -315,6 +291,15 @@ ApplicationWindow {
             id: settingsPageComponent
 
             SettingsPage {
+                // Initialize focus items when component is loaded
+                Component.onCompleted: {
+                    if (typeof collectFocusItems === "function") {
+                        collectFocusItems();
+                    }
+                    // Ensure key handler has focus
+                    keyHandler.forceActiveFocus();
+                }
+                
                 onBackClicked: {
                     stackView.pop();
                 }
@@ -413,34 +398,9 @@ ApplicationWindow {
             }
         }
 
-        // Static loading indicator for e-ink
-        Row {
-            id: loadingIndicator
-
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: ThemeManager.spacingLarge
-            spacing: ThemeManager.spacingSmall
-
-            // Static loading dots
-            Repeater {
-                id: loadingRepeater
-
-                model: 5
-
-                Rectangle {
-                    width: 6
-                    height: 6
-                    radius: 3
-                    color: ThemeManager.textColor
-                    opacity: index === 0 ? 1.0 : 0.3 // Only first dot is highlighted
-                }
-            }
-        }
-
         // Show splash for fixed time without animation
         Timer {
-            interval: 2000
+            interval: 1000
             running: true
             onTriggered: {
                 splashScreen.visible = false;
@@ -468,9 +428,6 @@ ApplicationWindow {
         target: bridge
         
         function onErrorOccurred(errorMessage) {
-            // Log all errors to console for debugging
-            console.error("Bridge error: " + errorMessage);
-            
             // Show global error messages only for severe errors
             if (errorMessage.toLowerCase().includes("critical") || 
                 errorMessage.toLowerCase().includes("fatal") ||

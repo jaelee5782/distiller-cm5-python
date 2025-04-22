@@ -7,7 +7,6 @@ Item {
 
     property string title: "Title"
     property string subtitle: "Subtitle"
-    property bool compact: false
 
     implicitHeight: headerColumn.height
 
@@ -16,7 +15,7 @@ Item {
         id: headerColumn
 
         width: parent.width
-        spacing: compact ? 0 : ThemeManager.spacingSmall
+        spacing: 0
 
         Text {
             width: parent.width
@@ -26,19 +25,19 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
             elide: Text.ElideRight
-            padding: compact ? ThemeManager.spacingSmall / 2 : ThemeManager.spacingSmall
+            padding: ThemeManager.spacingSmall / 2
         }
 
         Text {
             width: parent.width
             text: subtitle
-            font: compact ? FontManager.small : FontManager.medium
+            font: FontManager.small
             color: ThemeManager.secondaryTextColor
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
             elide: Text.ElideRight
-            padding: compact ? ThemeManager.spacingSmall / 2 : ThemeManager.spacingSmall
-            bottomPadding: compact ? ThemeManager.spacingSmall / 2 : ThemeManager.spacingNormal
+            padding: ThemeManager.spacingSmall / 2
+            bottomPadding: ThemeManager.spacingSmall / 2
             visible: text.length > 0
         }
 

@@ -40,7 +40,7 @@ Image {
         visible: optimizedImage.showPlaceholder && (optimizedImage.isLoading || (optimizedImage.hasError && optimizedImage.fallbackSource === ""))
         color: "transparent"
         border.color: ThemeManager.borderColor
-        border.width: 1
+        border.width: ThemeManager.borderWidth
         radius: 4
 
         // Loading indicator or error symbol

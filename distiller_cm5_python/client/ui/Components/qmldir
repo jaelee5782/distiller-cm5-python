@@ -5,15 +5,11 @@ SettingsPage 1.0 ../SettingsPage.qml
 ServerStatusIndicator 1.0 ServerStatusIndicator.qml
 VoiceAssistantPageHeader 1.0 VoiceAssistantPageHeader.qml
 MessageItem 1.0 MessageItem.qml
-InputArea 1.0 InputArea.qml
 VoiceInputArea 1.0 VoiceInputArea.qml
 MessageToast 1.0 MessageToast.qml
 ConversationView 1.0 ConversationView.qml
 LoadingIndicator 1.0 LoadingIndicator.qml
 MCPPageHeader 1.0 MCPPageHeader.qml
-MCPPageEmptyState 1.0 MCPPageEmptyState.qml
-MCPServerListItem 1.0 MCPServerListItem.qml
-MCPServerListView 1.0 MCPServerListView.qml
 StatusText 1.0 StatusText.qml 
 SettingsHeader 1.0 SettingsHeader.qml
 DisplaySettingsSection 1.0 DisplaySettingsSection.qml
@@ -29,7 +25,6 @@ NavigableItem 1.0 NavigableItem.qml
 # Reusable UI components
 AppButton 1.0 AppButton.qml
 AppDialog 1.0 AppDialog.qml
-AppHeader 1.0 AppHeader.qml
 AppRoundButton 1.0 AppRoundButton.qml
 AppScrollView 1.0 AppScrollView.qml
 AppSection 1.0 AppSection.qml

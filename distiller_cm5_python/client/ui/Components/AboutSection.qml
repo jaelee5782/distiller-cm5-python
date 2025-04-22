@@ -6,7 +6,6 @@ AppSection {
     id: aboutSection
 
     title: "About"
-    compact: true
 
     ColumnLayout {
         width: parent.width

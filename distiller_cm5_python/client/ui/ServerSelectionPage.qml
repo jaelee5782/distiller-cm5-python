@@ -147,7 +147,6 @@ PageBase {
         
         title: "SELECT MCP SERVER"
         subtitle: "Choose a server to connect to"
-        compact: true
     }
 
     // Use AppScrollView instead of standard ListView for consistent behavior with SettingsPage
@@ -196,14 +195,17 @@ PageBase {
                 height: ThemeManager.spacingSmall
             }
             
-            // Empty state message for no servers
-            MCPPageEmptyState {
+            // Simple empty state message - optimized for e-ink display
+            Text {
                 width: parent.width
                 height: serverScrollView.height - ThemeManager.spacingLarge * 2
                 visible: !serverSelectionPage.isLoading && availableServers.length === 0
-                title: "NO SERVERS FOUND"
-                message: "Please ensure MCP servers are available\nin the mcp_server directory"
-                compact: true
+                text: "No servers found."
+                font.pixelSize: FontManager.fontSizeMedium
+                font.family: FontManager.primaryFontFamily
+                color: ThemeManager.textColor
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
             }
             
             // Server grid container

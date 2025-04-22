@@ -6,7 +6,6 @@ Rectangle {
     id: messageItem
 
     property string messageText: ""
-    property bool compact: false
     property bool isLastMessage: false
     property bool isResponding: false
     // Parse message components from string format "[timestamp] sender: content"
@@ -16,7 +15,7 @@ Rectangle {
     readonly property string content: remainder.indexOf(":") > 0 ? remainder.substring(remainder.indexOf(":") + 2) : remainder
 
     width: parent.width
-    height: messageLayout.implicitHeight + (compact ? ThemeManager.spacingNormal : ThemeManager.spacingLarge)
+    height: messageLayout.implicitHeight + ThemeManager.spacingNormal
     radius: ThemeManager.borderRadius
     color: ThemeManager.backgroundColor
     border.color: ThemeManager.borderColor
@@ -42,12 +41,12 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.margins: compact ? (ThemeManager.spacingSmall || 4) : (ThemeManager.spacingNormal || 8)
-        spacing: compact ? (ThemeManager.spacingTiny || 2) : (ThemeManager.spacingSmall || 4)
+        anchors.margins: ThemeManager.spacingSmall 
+        spacing: ThemeManager.spacingTiny
 
         Text {
             text: sender
-            font: compact ? FontManager.small : FontManager.normal
+            font: FontManager.small 
             color: ThemeManager.textColor
             Layout.fillWidth: true
             visible: sender !== ""
@@ -55,10 +54,10 @@ Rectangle {
 
         Text {
             text: content
-            font: compact ? FontManager.normal : FontManager.medium
+            font: FontManager.normal 
             color: ThemeManager.textColor
             wrapMode: Text.WordWrap
-            lineHeight: compact ? 1.1 : 1.2
+            lineHeight: 1.1
             Layout.fillWidth: true
         }
 
@@ -68,7 +67,7 @@ Rectangle {
             color: ThemeManager.secondaryTextColor
             horizontalAlignment: Text.AlignRight
             Layout.fillWidth: true
-            Layout.topMargin: compact ? 1 : ThemeManager.spacingTiny
+            Layout.topMargin: ThemeManager.spacingTiny / 2
             visible: timestamp !== ""
         }
 

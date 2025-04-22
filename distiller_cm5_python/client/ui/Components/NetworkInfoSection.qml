@@ -6,7 +6,6 @@ AppSection {
     id: networkInfoSection
 
     title: "WI-FI INFORMATION"
-    compact: true
     
     // Connect to bridge ready signal
     Connections {

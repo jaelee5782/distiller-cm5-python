@@ -1,5 +1,5 @@
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal, QRect, Qt, QSize, QPoint
-from PyQt6.QtGui import QPixmap, QScreen, QImage, QPainter, QTransform
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal, Qt 
+from PyQt6.QtGui import QPixmap, QImage 
 from PyQt6.QtWidgets import QApplication
 from PyQt6.QtQuick import QQuickWindow
 from threading import Lock

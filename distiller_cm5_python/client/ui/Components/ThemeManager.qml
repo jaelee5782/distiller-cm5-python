@@ -1,5 +1,5 @@
-import QtQuick 2.15
 pragma Singleton
+import QtQuick 2.15
 
 QtObject {
     // Subtle overlay for hover effects
@@ -10,6 +10,23 @@ QtObject {
 
     // Theme mode property - controls which theme to use
     property bool darkMode: false
+
+    // Theme caching to reduce bridge calls
+    property bool themeCached: false
+
+    // Initialize theme from bridge settings
+    function initializeTheme() {
+        if (!themeCached && bridge && bridge.ready) {
+            var savedTheme = bridge.getConfigValue("display", "dark_mode");
+            if (savedTheme !== "") {
+                setDarkMode(savedTheme === "true" || savedTheme === "True");
+            }
+            themeCached = true;
+            return true;
+        }
+        return false;
+    }
+
     // Dynamic color properties based on current theme
     readonly property color backgroundColor: darkMode ? "#000000" : "#FFFFFF"
     // Background: Black/White
@@ -34,7 +51,7 @@ QtObject {
     readonly property color highlightColor: darkMode ? "#333333" : "#F0F0F0"
     // Highlight: Dark gray/Light gray
     readonly property color subtleColor: darkMode ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.05)
-    
+
     // Additional color properties for focus states and button variants
     readonly property color focusBackgroundColor: darkMode ? "#CCCCCC" : "#333333"
     // Background for focused items: Light gray/Dark gray
@@ -44,7 +61,7 @@ QtObject {
     // Text for focused items: Black/White
     readonly property color textOnAccentColor: darkMode ? "#000000" : "#FFFFFF"
     // Text on accent background: Black/White
-    
+
     // Transparent and utility colors
     readonly property color transparentColor: "transparent"
     // Transparent color for backgrounds
@@ -58,7 +75,7 @@ QtObject {
     // Darker version of accent color
     readonly property color lightAccentColor: Qt.lighter(accentColor, 1.5)
     // Lighter version of accent color
-    
+
     // Sizes and metrics
     readonly property real borderRadius: 6
     // Border radius for rectangles
@@ -94,5 +111,4 @@ QtObject {
     function setDarkMode(isDark) {
         darkMode = isDark;
     }
-
 }

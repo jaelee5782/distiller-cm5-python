@@ -46,8 +46,9 @@ ListView {
         id: focusIndicator
         anchors.fill: parent
         color: "transparent"
-        border.width: isActiveItem ? (scrollModeActive ? 3 : 2) : 0
+        border.width: isActiveItem ? (scrollModeActive ? ThemeManager.borderWidth * 3 : ThemeManager.borderWidth * 2) : 0
         border.color: scrollModeActive ? ThemeManager.highlightColor : ThemeManager.accentColor
+        radius: ThemeManager.borderRadius
         visible: isActiveItem
         z: -1
     }
@@ -61,7 +62,7 @@ ListView {
         height: scrollModeText.height + ThemeManager.spacingSmall * 2
         width: scrollModeText.width + ThemeManager.spacingNormal * 2
         color: ThemeManager.backgroundColor
-        border.width: 1
+        border.width: ThemeManager.borderWidth
         border.color: ThemeManager.borderColor
         radius: 4
         visible: isActiveItem && !scrollModeActive && conversationView.contentHeight > conversationView.height
@@ -85,7 +86,7 @@ ListView {
         height: activeScrollModeText.height + ThemeManager.spacingSmall * 2
         width: activeScrollModeText.width + ThemeManager.spacingNormal * 2
         color: ThemeManager.backgroundColor
-        border.width: 1
+        border.width: ThemeManager.borderWidth
         border.color: ThemeManager.highlightColor
         radius: 4
         visible: false // Start invisible and let the binding update it
@@ -233,7 +234,6 @@ ListView {
     delegate: MessageItem {
         width: ListView.view.width
         messageText: typeof modelData === "string" ? modelData : ""
-        compact: true
         isLastMessage: index === conversationView.count - 1
         isResponding: conversationView.responseInProgress && index === conversationView.count - 1
     }

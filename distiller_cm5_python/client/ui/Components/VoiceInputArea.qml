@@ -9,6 +9,7 @@ Rectangle {
     // Properties
     property bool isListening: false
     property bool isProcessing: false
+    property bool isConnected: true // Add new property for connection status
     property string transcribedText: ""
     property bool showStatusHint: true // New property to control visibility of status hint
     
@@ -18,6 +19,10 @@ Rectangle {
     
     // Get appropriate hint text for current state
     function getStateHint() {
+        if (!isConnected) {
+            return "Not connected";
+        }
+        
         switch(appState) {
             case "idle": return "Tap to speak";
             case "listening": return "Listening...";
@@ -139,7 +144,7 @@ Rectangle {
             anchors.fill: parent
             anchors.margins: -6
             color: ThemeManager.backgroundColor
-            border.width: 1
+            border.width: ThemeManager.borderWidth
             border.color: ThemeManager.borderColor
             radius: 3
             visible: true // Always show background for better visibility
@@ -158,7 +163,7 @@ Rectangle {
         anchors.margins: 8
         height: transcribedTextLabel.contentHeight + 12
         color: ThemeManager.backgroundColor
-        border.width: 1
+        border.width: ThemeManager.borderWidth
         border.color: ThemeManager.borderColor
         radius: 4
         
@@ -184,29 +189,34 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         anchors.margins: 8
-        height: 44
+        height: ThemeManager.buttonHeight
 
         // Consistent button size - smaller for better layout
-        property int buttonSize: 44
-        property int borderWidth: 2
+        property int borderWidth: ThemeManager.borderWidth
 
         Row {
             anchors.centerIn: parent
-            spacing: 24 // Increased spacing for better touch targets
+            spacing: ThemeManager.spacingLarge
 
             // 1st button: Voice/Mic button in the center position
             RoundButton {
                 id: voiceButton
-                width: buttonRow.buttonSize
-                height: buttonRow.buttonSize
+                width: ThemeManager.buttonHeight
+                height: ThemeManager.buttonHeight
                 flat: true
                 checkable: true
-                property bool navigable: true
+                property bool navigable: isConnected // Only navigable when connected
                 property bool isActiveItem: false
                 checked: voiceInputArea.isListening
+                enabled: isConnected // Disable button when not connected
                 
                 // Activate when Enter is pressed via FocusManager
                 function activate() {
+                    // Only allow activation when connected
+                    if (!isConnected) {
+                        return;
+                    }
+                    
                     // Toggle the checked state
                     var newState = !checked;
                     
@@ -222,6 +232,11 @@ Rectangle {
                 }
                 
                 onClicked: {
+                    // Only allow interaction when connected
+                    if (!isConnected) {
+                        return;
+                    }
+                    
                     // This is called for mouse clicks, not keyboard
                     // Keep consistent with the activate method
                     console.log("VoiceButton.onClicked(), current state: " + checked);
@@ -237,6 +252,11 @@ Rectangle {
                 }
                 
                 onPressed: {
+                    // Only allow interaction when connected
+                    if (!isConnected) {
+                        return;
+                    }
+                    
                     voiceInputArea.voicePressed();
                     // Start listening when button is pressed
                     setAppState("listening");
@@ -271,7 +291,7 @@ Rectangle {
                         }
                     }
                     antialiasing: true
-                    border.width: 1
+                    border.width: buttonRow.borderWidth
                     border.color: voiceInputArea.appState === "error" ? ThemeManager.borderColor : 
                                  (voiceButton.checked ? ThemeManager.borderColor : "transparent")
                     
@@ -299,7 +319,7 @@ Rectangle {
                         anchors.fill: parent
                         radius: width / 2
                         color: voiceButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
-                        border.width: 1
+                        border.width: ThemeManager.borderWidth
                         border.color: ThemeManager.borderColor
                         opacity: voiceButton.isActiveItem ? 0.3 : 0.1
                         antialiasing: true
@@ -308,6 +328,11 @@ Rectangle {
                     Text {
                         id: micIcon
                         text: {
+                            // If not connected, show "disabled" icon
+                            if (!isConnected) {
+                                return ""; // Disconnected/disabled icon
+                            }
+                            
                             // Use the new state system for determining icon
                             switch(voiceInputArea.appState) {
                                 case "listening": 
@@ -323,12 +348,11 @@ Rectangle {
                             }
                         }
                         font.pixelSize: parent.width * 0.45 // Slightly smaller for cleaner look
-                        font.family: "Symbols Nerd Font"
-                        color: ThemeManager.textColor // Use only theme colors for black/white
+                        color: isConnected ? ThemeManager.textColor : ThemeManager.secondaryTextColor // Dimmed when not connected
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         anchors.centerIn: parent
-                        opacity: 1.0 // Always full opacity for better e-ink visibility
+                        opacity: isConnected ? 1.0 : 0.7 // Slightly dimmed when not connected
                     }
 
                     // Simple indicator for active states
@@ -339,7 +363,7 @@ Rectangle {
                         height: parent.height - 4
                         radius: width / 2
                         color: "transparent"
-                        border.width: 1
+                        border.width: ThemeManager.borderWidth
                         border.color: voiceInputArea.appState === "listening" ? ThemeManager.accentColor : 
                                   (voiceInputArea.appState === "processing" || 
                                    voiceInputArea.appState === "thinking" || 
@@ -355,8 +379,8 @@ Rectangle {
                 id: resetButton
                 objectName: "resetButton"
 
-                width: buttonRow.buttonSize
-                height: buttonRow.buttonSize
+                width: ThemeManager.buttonHeight
+                height: ThemeManager.buttonHeight
                 flat: true
                 property bool navigable: true
                 property bool isActiveItem: false
@@ -390,7 +414,7 @@ Rectangle {
                         anchors.fill: parent
                         radius: width / 2
                         color: resetButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
-                        border.width: 1
+                        border.width: ThemeManager.borderWidth
                         border.color: ThemeManager.borderColor
                         opacity: resetButton.isActiveItem ? 0.3 : 0.1
                         antialiasing: true
@@ -418,7 +442,7 @@ Rectangle {
                     height: resetHintText.contentHeight + 10
                     width: resetHintText.contentWidth + 16
                     color: ThemeManager.backgroundColor
-                    border.width: 1
+                    border.width: ThemeManager.borderWidth
                     border.color: ThemeManager.borderColor
                     radius: 4
                     z: 100
@@ -439,8 +463,8 @@ Rectangle {
                 id: settingsButton
                 objectName: "settingsButton"
 
-                width: buttonRow.buttonSize
-                height: buttonRow.buttonSize
+                width: ThemeManager.buttonHeight
+                height: ThemeManager.buttonHeight
                 flat: true
                 property bool navigable: true
                 property bool isActiveItem: false
@@ -474,7 +498,7 @@ Rectangle {
                         anchors.fill: parent
                         radius: width / 2
                         color: settingsButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
-                        border.width: 1
+                        border.width: ThemeManager.borderWidth
                         border.color: ThemeManager.borderColor
                         opacity: settingsButton.isActiveItem ? 0.3 : 0.1
                         antialiasing: true
@@ -502,7 +526,7 @@ Rectangle {
                     height: settingsHintText.contentHeight + 10
                     width: settingsHintText.contentWidth + 16
                     color: ThemeManager.backgroundColor
-                    border.width: 1
+                    border.width: ThemeManager.borderWidth
                     border.color: ThemeManager.borderColor
                     radius: 4
                     z: 100
@@ -520,17 +544,6 @@ Rectangle {
         }
     }
     
-    // State animation for hint text
-    Behavior on stateHint {
-        PropertyAnimation {
-            target: staticHintText
-            property: "opacity"
-            from: 0.5
-            to: 0.9
-            duration: 200
-        }
-    }
-
     onVoiceReleased: function() {
         if (bridge && bridge.ready && bridge.isConnected && isListening) {
             // First set state to processing explicitly

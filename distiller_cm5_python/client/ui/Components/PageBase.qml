@@ -18,10 +18,9 @@ Item {
         target: usesThemeManager ? bridge : null
         
         function onBridgeReady() {
-            // Initialize theme when bridge is ready
-            var savedTheme = bridge.getConfigValue("display", "dark_mode");
-            if (savedTheme !== "") {
-                ThemeManager.setDarkMode(savedTheme === "true" || savedTheme === "True");
+            // Use ThemeManager's centralized theme caching
+            if (usesThemeManager) {
+                ThemeManager.initializeTheme();
             }
         }
     }
@@ -30,10 +29,7 @@ Item {
     Component.onCompleted: {
         // If bridge is already ready, initialize immediately
         if (usesThemeManager && bridge && bridge.ready) {
-            var savedTheme = bridge.getConfigValue("display", "dark_mode");
-            if (savedTheme !== "") {
-                ThemeManager.setDarkMode(savedTheme === "true" || savedTheme === "True");
-            }
+            ThemeManager.initializeTheme();
         }
     }
     

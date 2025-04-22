@@ -1,11 +1,9 @@
 import time
 import spidev
 import platform
-import uuid
 import os
 from typing import List
 import numpy as np
-from ..display_config import config
 from threading import Thread
 import logging
 

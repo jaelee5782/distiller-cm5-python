@@ -12,9 +12,10 @@ PageBase {
     property string serverName: _serverName
     property bool isListening: false
     property bool isProcessing: false
+    property bool isServerConnected: bridge && bridge.ready ? bridge.isConnected : false
     property string statusText: conversationView && conversationView.scrollModeActive ? 
                              "Scroll Mode (↑↓ to scroll)" : _statusText
-    property string _statusText: "Tap to Talk"
+    property string _statusText: isServerConnected ? "Tap to Talk" : "Not connected"
     property var focusableItems: []
     property var previousFocusedItem: null
     property string transcribedText: ""
@@ -92,20 +93,11 @@ PageBase {
     }
 
     Component.onCompleted: {
-        Qt.callLater(collectFocusItems);
-    }
-
-    Timer {
-        id: focusInitTimer
-        interval: 500
-        running: true
-        repeat: false
-        onTriggered: {
-            collectFocusItems();
-            
-            if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
-                FocusManager.setFocusToItem(voiceInputArea.voiceButton);
-            }
+        collectFocusItems();
+        
+        // Set initial focus
+        if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
+            FocusManager.setFocusToItem(voiceInputArea.voiceButton);
         }
     }
 
@@ -288,11 +280,16 @@ PageBase {
                 reconnectionTimer.start();
             }
         }
+
+        function onIsConnectedChanged(connected) {
+            isServerConnected = connected;
+            updateStatusText();
+        }
     }
 
     Timer {
         id: transcriptionTimer
-        interval: 500
+        interval: 750  // Increased from 500ms to 750ms
         repeat: false
         running: false
         onTriggered: {
@@ -519,6 +516,7 @@ PageBase {
         
         isListening: voiceAssistantPage.isListening
         isProcessing: voiceAssistantPage.isProcessing
+        isConnected: voiceAssistantPage.isServerConnected
         property string transcribedText: ""
         showStatusHint: true // Always show status hint in voice area
         
@@ -590,8 +588,7 @@ PageBase {
     
     Timer {
         id: reconnectionTimer
-        
-        interval: 500
+        interval: 750  // Increased from 500ms to 750ms
         repeat: false
         running: false
         
@@ -603,8 +600,7 @@ PageBase {
     
     Timer {
         id: responseEndTimer
-        
-        interval: 300
+        interval: 500  // Increased from 300ms to 500ms
         repeat: false
         running: false
         
@@ -615,7 +611,7 @@ PageBase {
 
     Timer {
         id: restoreFocusTimer
-        interval: 100
+        interval: 300  // Increased from 100ms to 300ms
         repeat: false
         running: false
         
@@ -635,16 +631,7 @@ PageBase {
                 }
             }
             
-            focusCheckTimer.start();
-        }
-    }
-    
-    Timer {
-        id: focusCheckTimer
-        interval: 200
-        repeat: false
-        running: false
-        onTriggered: {
+            // Directly ensure focus here instead of starting another timer
             ensureFocusableItemsHaveFocus();
         }
     }
@@ -652,7 +639,7 @@ PageBase {
     // Failsafe timer to ensure processing state is properly reset
     Timer {
         id: stateResetTimer
-        interval: 15000  // Increase timeout to 15 seconds to accommodate longer tool operations
+        interval: 20000  // Increased from 15000ms to 20000ms
         repeat: false
         running: false
         
@@ -660,7 +647,6 @@ PageBase {
         
         onTriggered: {
             if (isProcessing && !toolExecutionActive) {
-                console.log("StateResetTimer: Force resetting isProcessing from", isProcessing, "to false");
                 isProcessing = false;
                 isListening = false;
                 updateStatusText("Tap to Talk");
@@ -671,14 +657,13 @@ PageBase {
                     voiceInputArea.resetState();
                 }
             } else if (toolExecutionActive) {
-                console.log("StateResetTimer: Not resetting state because tool execution is active");
                 // Show processing state for any active operation
                 updateStatusText("Processing...");
                 if (voiceInputArea.setAppState) {
                     voiceInputArea.setAppState("processing");
                 }
-                // Restart the timer to check again later, but with a shorter interval to avoid long waits
-                interval = 5000; // Reduce the interval for subsequent checks to 5 seconds
+                // Restart the timer to check again later, with longer interval
+                interval = 10000; // Increased from 5000ms to 10000ms
                 stateResetTimer.restart();
             }
         }
@@ -687,16 +672,15 @@ PageBase {
     // Periodic state check to ensure we don't get stuck in processing state
     Timer {
         id: stateCheckTimer
-        interval: 5000  // Check every 5 seconds
+        interval: 10000  // Increased from 5000ms to 10000ms
         repeat: true
         running: true
         
         property real lastActionTimestamp: Date.now()
         
         onTriggered: {
-            // If we've been in processing state for more than 10 seconds, reset it
-            if (isProcessing && (Date.now() - lastActionTimestamp > 10000)) {
-                console.log("StateCheckTimer: Detected stuck processing state, resetting");
+            // Increased timeout check from 10s to 15s
+            if (isProcessing && (Date.now() - lastActionTimestamp > 15000)) {
                 isProcessing = false;
                 isListening = false;
                 updateStatusText("Tap to Talk");
@@ -736,6 +720,11 @@ PageBase {
     // Update status text based on app state
     function updateStatusText(newStatus) {
         if (conversationView && conversationView.scrollModeActive) return; // Don't update status in scroll mode
+        
+        if (!isServerConnected) {
+            _statusText = "Not connected";
+            return;
+        }
         
         if (newStatus) {
             if (newStatus === "Ready") {

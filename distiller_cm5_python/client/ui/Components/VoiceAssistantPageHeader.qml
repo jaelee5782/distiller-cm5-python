@@ -8,15 +8,12 @@ Rectangle {
     property string serverName: "MCP Server"
     property string statusText: "Ready"
     property bool isConnected: false
-    property bool compact: true
     property alias serverSelectButton: backButton
     property bool showStatusText: false
 
     signal serverSelectClicked()
 
     color: ThemeManager.headerColor
-    border.width: 0
-    border.color: ThemeManager.borderColor
     
     // Shadow effect for the header
     Rectangle {
@@ -53,15 +50,15 @@ Rectangle {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.alignment: Qt.AlignVCenter
-            spacing: compact ? 2 : 6
+            spacing: ThemeManager.spacingSmall / 4
 
             RowLayout {
-                spacing: compact ? 4 : ThemeManager.spacingSmall
+                spacing: ThemeManager.spacingSmall / 2
                 Layout.fillWidth: true
 
                 Text {
                     text: serverName.toUpperCase()
-                    font: compact ? FontManager.normal : FontManager.title
+                    font: FontManager.normal
                     color: ThemeManager.textColor
                     Layout.fillWidth: true
                     elide: Text.ElideRight
@@ -71,15 +68,15 @@ Rectangle {
                 ServerStatusIndicator {
                     Layout.alignment: Qt.AlignVCenter
                     isConnected: header.isConnected
-                    width: compact ? 12 : 16
-                    height: compact ? 12 : 16
+                    width: 12
+                    height: 12
                 }
             }
 
             Text {
                 id: statusTextItem
                 text: statusText
-                font: compact ? FontManager.small : FontManager.normal
+                font: FontManager.small
                 color: ThemeManager.secondaryTextColor
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap

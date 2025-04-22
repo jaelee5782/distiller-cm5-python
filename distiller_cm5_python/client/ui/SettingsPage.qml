@@ -172,7 +172,6 @@ PageBase {
                 property alias darkThemeButton: darkModeButton
                 
                 title: "DISPLAY SETTINGS"
-                compact: true
                 width: parent.width
                 
                 function updateFromBridge() {
@@ -276,7 +275,6 @@ PageBase {
                 property alias refreshButton: ipRefreshButton
 
                 title: "WI-FI INFORMATION"
-                compact: true
                 width: parent.width
                 
                 // Connect to bridge ready signal to update network info
@@ -411,7 +409,7 @@ PageBase {
             }
             
             // Save changes to config file
-            bridge.saveConfig();
+            bridge.saveConfigToFile();
             
             // Reset dirty state
             displaySettings.isDirty = false;

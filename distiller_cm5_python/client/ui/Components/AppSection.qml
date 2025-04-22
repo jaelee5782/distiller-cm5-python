@@ -9,7 +9,6 @@ NavigableItem {
     property bool collapsible: false
     property bool collapsed: false
     property bool showBorder: true
-    property bool compact: true
     property int contentMargins: ThemeManager.spacingNormal * 1.25
 
     // Add bottom margin for better visual separation
@@ -59,7 +58,7 @@ NavigableItem {
         id: headerContainer
 
         width: parent.width
-        height: headerRow.height + (compact ? ThemeManager.spacingNormal * 1.25 : ThemeManager.spacingNormal * 1.5)
+        height: headerRow.height + ThemeManager.spacingNormal * 1.25
         color: root.visualFocus ? ThemeManager.lightAccentColor : ThemeManager.headerColor
         border.color: showBorder ? ThemeManager.borderColor : ThemeManager.transparentColor
         border.width: showBorder ? ThemeManager.borderWidth : 0
@@ -82,7 +81,7 @@ NavigableItem {
                 height: contentHeight
                 text: title
                 color: ThemeManager.textColor
-                font.pixelSize: compact ? FontManager.fontSizeMedium : FontManager.fontSizeLarge
+                font.pixelSize: FontManager.fontSizeMedium
                 font.family: FontManager.primaryFontFamily
                 font.bold: true
                 elide: Text.ElideRight
