@@ -185,15 +185,13 @@ class EInkRendererBridge(QObject):
         
         # Ensure we have the expected amount of data
         if len(frame_data) != total_bytes:
-            print(f"Warning: Unexpected data size. Got {len(frame_data)}, expected {total_bytes}")
-            # Pad or truncate to expected size
-            if len(frame_data) < total_bytes:
-                frame_data = frame_data + bytearray(total_bytes - len(frame_data))
-            else:
-                frame_data = frame_data[:total_bytes]
-        
-        # Convert bytearray to list of integers for the e-ink display
-        return [int(b) for b in frame_data]
+            logger.warning(f"Unexpected data size. Got {len(frame_data)}, expected {total_bytes}")
+            frame_data = frame_data + bytearray(total_bytes - len(frame_data)) if len(frame_data) < total_bytes else frame_data[:total_bytes]
+
+        # Invert bits (renderer: 1=WHITE, driver: 1=BLACK)
+        data_np = np.array(frame_data, dtype=np.uint8)
+        data_np = ~data_np  # Bitwise NOT to invert (1->0, 0->1)
+        return data_np.tolist()
     
     def _bits_to_qimage(self, frame_data: bytearray, width: int, height: int) -> QImage:
         """
