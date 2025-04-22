@@ -20,6 +20,7 @@ PageBase {
     property string transcribedText: ""
     property bool transcriptionInProgress: false
     property bool conversationScrollMode: false  // Track if conversation is in scroll mode
+    property bool showStatusInBothPlaces: true  // Set to true to show status in voice area instead of header
 
     signal selectNewServer()
 
@@ -148,9 +149,15 @@ PageBase {
                 updateStatusText("Listening...");
                 transcribedText = "";
                 voiceInputArea.transcribedText = "";
-            } else if (!transcriptionInProgress) {
+            } else {
+                // Always show Processing when recording stops
                 updateStatusText("Processing...");
                 isProcessing = true;
+                
+                // Make sure voiceInputArea shows processing state as well
+                if (voiceInputArea.setAppState) {
+                    voiceInputArea.setAppState("processing");
+                }
             }
         }
 
@@ -228,6 +235,7 @@ PageBase {
         serverName: _serverName
         statusText: voiceAssistantPage.statusText
         isConnected: bridge && bridge.ready ? bridge.isConnected : false
+        showStatusText: false // Hide status text in header
         
         Component.onCompleted: {
             // Add high contrast border for visibility
@@ -403,6 +411,7 @@ PageBase {
         isListening: voiceAssistantPage.isListening
         isProcessing: voiceAssistantPage.isProcessing
         property string transcribedText: ""
+        showStatusHint: true // Always show status hint in voice area
         
         // Connect to our new state changed signal
         onStateChanged: function(newState) {
@@ -412,9 +421,11 @@ PageBase {
             if (newState === "listening") {
                 voiceAssistantPage.isListening = true;
                 voiceAssistantPage.isProcessing = false;
+                updateStatusText("Listening...");
             } else if (newState === "processing") {
                 voiceAssistantPage.isListening = false;
                 voiceAssistantPage.isProcessing = true;
+                updateStatusText("Processing...");
             } else if (newState === "thinking") {
                 voiceAssistantPage.isListening = false;
                 voiceAssistantPage.isProcessing = true;

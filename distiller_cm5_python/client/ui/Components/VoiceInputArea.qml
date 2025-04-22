@@ -10,6 +10,7 @@ Rectangle {
     property bool isListening: false
     property bool isProcessing: false
     property string transcribedText: ""
+    property bool showStatusHint: true // New property to control visibility of status hint
     
     // State management - define possible states
     property string appState: "idle" // Possible values: "idle", "listening", "processing", "thinking", "executing_tool", "error"
@@ -72,7 +73,7 @@ Rectangle {
     }
 
     color: ThemeManager.backgroundColor
-    height: transcribedText.trim().length > 0 ? 120 : 90 // Increase height for hint text
+    height: transcribedText.trim().length > 0 ? 120 : 90 // Ensure enough height for hint text and buttons
     z: 10 // Ensure this is always on top
 
     Behavior on height {
@@ -110,7 +111,8 @@ Rectangle {
         opacity: 0.9
         z: 20 // Make sure it appears above everything
         // Hide static hint when any button has focus - prevents conflict with button hints
-        visible: !(resetButton.isActiveItem || settingsButton.isActiveItem)
+        // Also hide if showStatusHint is false
+        visible: showStatusHint && !(resetButton.isActiveItem || settingsButton.isActiveItem)
         
         // Add a background for e-ink contrast
         Rectangle {
@@ -121,7 +123,7 @@ Rectangle {
             border.width: 1
             border.color: ThemeManager.borderColor
             radius: 3
-            visible: voiceInputArea.appState !== "idle"
+            visible: true // Always show background for better visibility
         }
     }
 
@@ -504,6 +506,15 @@ Rectangle {
             from: 0.5
             to: 0.9
             duration: 200
+        }
+    }
+
+    onVoiceReleased: function() {
+        if (bridge && bridge.ready && bridge.isConnected && isListening) {
+            // First set state to processing explicitly
+            setAppState("processing");
+            // Then call the bridge method
+            bridge.stopAndTranscribe();
         }
     }
 } 

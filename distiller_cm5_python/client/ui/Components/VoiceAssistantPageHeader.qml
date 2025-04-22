@@ -10,6 +10,7 @@ Rectangle {
     property bool isConnected: false
     property bool compact: true
     property alias serverSelectButton: backButton
+    property bool showStatusText: false
 
     signal serverSelectClicked()
 
@@ -85,6 +86,7 @@ Rectangle {
                 elide: Text.ElideRight
                 maximumLineCount: 2
                 clip: true
+                visible: showStatusText
             }
         }
     }
