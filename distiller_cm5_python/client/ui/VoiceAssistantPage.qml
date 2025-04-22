@@ -780,14 +780,35 @@ PageBase {
         FocusManager.currentFocusIndex = -1;
         FocusManager.lockFocus = false;
         
-        // Re-collect focus items
-        collectFocusItems();
+        // Set a brief delay to ensure all UI elements are ready
+        focusResetTimer.start();
+    }
+
+    // Timer to ensure proper focus reset
+    Timer {
+        id: focusResetTimer
+        interval: 200
+        repeat: false
+        running: false
         
-        // Set focus to voice button if available
-        if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
-            FocusManager.setFocusToItem(voiceInputArea.voiceButton);
-        } else if (focusableItems.length > 0) {
-            FocusManager.setFocusToItem(focusableItems[0]);
+        onTriggered: {
+            // Re-collect focus items
+            collectFocusItems();
+            
+            // Set focus to voice button if available
+            if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
+                FocusManager.setFocusToItem(voiceInputArea.voiceButton);
+                console.log("Focus reset to voice button");
+            } else if (focusableItems.length > 0) {
+                FocusManager.setFocusToItem(focusableItems[0]);
+                console.log("Focus reset to first focusable item");
+            }
+            
+            // Force focus to keyHandler in main window to ensure key navigation works
+            if (mainWindow && mainWindow.keyHandler) {
+                mainWindow.keyHandler.forceActiveFocus();
+                console.log("Focus forced to key handler");
+            }
         }
     }
 

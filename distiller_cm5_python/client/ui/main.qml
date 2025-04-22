@@ -169,11 +169,30 @@ ApplicationWindow {
         anchors.fill: parent
         initialItem: serverSelectionComponent
         
-        // Set focus directly when the current item changes
+        // Monitor current page to handle transitions and focus resets
         onCurrentItemChanged: {
-            if (currentItem) {
-                // Set focus directly to the key handler
-                keyHandler.forceActiveFocus();
+            // Ensure key handler has focus whenever the page changes
+            keyHandler.forceActiveFocus();
+            
+            // If returning to VoiceAssistantPage, reset focus state
+            if (currentItem && currentItem.resetFocusState) {
+                // Delay to ensure components are fully loaded
+                resetFocusStateTimer.start();
+            }
+        }
+        
+        // Timer to ensure components are loaded before resetting focus
+        Timer {
+            id: resetFocusStateTimer
+            interval: 100
+            repeat: false
+            running: false
+            
+            onTriggered: {
+                if (stackView.currentItem && stackView.currentItem.resetFocusState) {
+                    stackView.currentItem.resetFocusState();
+                    console.log("Focus state reset on page transition");
+                }
             }
         }
 

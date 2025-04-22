@@ -103,9 +103,17 @@ QtObject {
             ensureItemVisible(item);
         }
         
-        // Set focus to the item
+        // Set focus to the item safely, checking if forceActiveFocus exists and is a function
         console.log("FocusManager: Setting focus to item at index " + currentFocusIndex);
-        item.forceActiveFocus();
+        try {
+            if (item.forceActiveFocus && typeof item.forceActiveFocus === "function") {
+                item.forceActiveFocus();
+            } else {
+                console.log("FocusManager: Item does not have forceActiveFocus function");
+            }
+        } catch (e) {
+            console.error("FocusManager: Error setting focus: " + e);
+        }
         focusChanged(item);
     }
     

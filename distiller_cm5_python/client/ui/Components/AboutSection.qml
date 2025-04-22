@@ -42,34 +42,34 @@ AppSection {
         }
 
         Column {
-            anchors.horizontalCenter: parent.horizontalCenter
+            Layout.alignment: Qt.AlignHCenter
             spacing: ThemeManager.spacingSmall
 
             Text {
-                anchors.horizontalCenter: parent.horizontalCenter
                 text: AppInfo.appName.split(" ")[0]
                 color: ThemeManager.textColor
                 font.pixelSize: FontManager.fontSizeXLarge
                 font.bold: true
                 font.family: FontManager.primaryFontFamily
+                Layout.alignment: Qt.AlignHCenter
             }
 
             Text {
-                anchors.horizontalCenter: parent.horizontalCenter
                 text: AppInfo.appName.split(" ").slice(1).join(" ")
                 color: ThemeManager.secondaryTextColor
                 font.pixelSize: FontManager.fontSizeMedium
                 font.family: FontManager.primaryFontFamily
+                Layout.alignment: Qt.AlignHCenter
             }
 
             // Version information
             Text {
-                anchors.horizontalCenter: parent.horizontalCenter
                 text: AppInfo.shortVersionString
                 color: ThemeManager.tertiaryTextColor
                 font.pixelSize: FontManager.fontSizeSmall
                 font.family: FontManager.primaryFontFamily
                 topPadding: 4
+                Layout.alignment: Qt.AlignHCenter
             }
         }
     }
