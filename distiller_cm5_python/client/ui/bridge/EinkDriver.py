@@ -338,32 +338,19 @@ class EinkDriver:
 
         # Convert to NumPy array and reshape to (12480, 2)
         datas_np = np.array(datas, dtype=np.uint8).reshape(12480, 2)
-        byte0 = datas_np[:, 0]
-        byte1 = datas_np[:, 1]
+        byte0, byte1 = datas_np[:, 0], datas_np[:, 1]
 
-        # Compute packed MSBs for 0x10 (old data)
-        packed_msbs = (
-            ((byte0 & 0x80) >> 7) << 7
-            | ((byte0 & 0x20) >> 5) << 6
-            | ((byte0 & 0x08) >> 3) << 5
-            | ((byte0 & 0x02) >> 1) << 4
-            | ((byte1 & 0x80) >> 7) << 3
-            | ((byte1 & 0x20) >> 5) << 2
-            | ((byte1 & 0x08) >> 3) << 1
-            | ((byte1 & 0x02) >> 1) << 0
-        ).astype(np.uint8)
+        # Vectorized packing for MSBs (0x10)
+        packed_msbs = np.zeros(12480, dtype=np.uint8)
+        for bit, shift in [(7, 7), (5, 6), (3, 5), (1, 4)]:
+            packed_msbs |= ((byte0 >> bit) & 1) << shift
+            packed_msbs |= ((byte1 >> bit) & 1) << (shift - 4)
 
-        # Compute packed LSBs for 0x13 (new data)
-        packed_lsbs = (
-            ((byte0 & 0x40) >> 6) << 7
-            | ((byte0 & 0x10) >> 4) << 6
-            | ((byte0 & 0x04) >> 2) << 5
-            | ((byte0 & 0x01) >> 0) << 4
-            | ((byte1 & 0x40) >> 6) << 3
-            | ((byte1 & 0x10) >> 4) << 2
-            | ((byte1 & 0x04) >> 2) << 1
-            | ((byte1 & 0x01) >> 0) << 0
-        ).astype(np.uint8)
+        # Vectorized packing for LSBs (0x13)
+        packed_lsbs = np.zeros(12480, dtype=np.uint8)
+        for bit, shift in [(6, 7), (4, 6), (2, 5), (0, 4)]:
+            packed_lsbs |= ((byte0 >> bit) & 1) << shift
+            packed_lsbs |= ((byte1 >> bit) & 1) << (shift - 4)
 
         # Send old data (0x10)
         self.epd_w21_write_cmd(0x10)
