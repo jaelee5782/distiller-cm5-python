@@ -163,8 +163,8 @@ Dialog {
                 width: buttonRow.buttonWidth
                 height: ThemeManager.buttonHeight
                 backgroundColor: isActiveItem ? focusButtonColor : acceptButtonColor
-                textColor: isActiveItem && !ThemeManager.darkMode ? 
-                          ThemeManager.textColor : ThemeManager.backgroundColor
+                textColor: ThemeManager.darkMode ? ThemeManager.backgroundColor : 
+                          (isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor)
                 property bool navigable: true
                 
                 onClicked: {
@@ -198,7 +198,8 @@ Dialog {
                 width: buttonRow.buttonWidth
                 height: ThemeManager.buttonHeight
                 backgroundColor: isActiveItem ? focusButtonColor : defaultButtonColor
-                textColor: ThemeManager.textColor
+                textColor: ThemeManager.darkMode ? ThemeManager.backgroundColor : 
+                          (isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor)
                 property bool navigable: true
                 
                 onClicked: {
