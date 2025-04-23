@@ -509,10 +509,16 @@ class LLMClient:
 
                                         if "content" in delta and delta["content"] is not None:
                                             content_piece = delta["content"]
+
+                                            # check for in content tool call, emit message break
+                                            if "<tool_call>" in content_piece : 
+                                                callback("<new message>")
+
                                             callback(content_piece)
                                             full_response_content += content_piece
 
                                         if "tool_calls" in delta and delta["tool_calls"]:
+                                            # Structured tool call output
                                             for tool_call_chunk in delta["tool_calls"]:
                                                  index = tool_call_chunk.get("index")
                                                  if index is None: continue
@@ -543,6 +549,9 @@ class LLMClient:
             for i, tool in enumerate(accumulated_tool_calls):
                  if tool.get("id") and tool.get("function", {}).get("name"):
                      final_tool_calls.append(tool)
+                     # TODO send out formatted tool
+                     callback("<new message>")
+                     callback(str(tool))
                  else:
                       logger.warning(f"Skipping incomplete accumulated tool call at index {i}: {tool}")
 

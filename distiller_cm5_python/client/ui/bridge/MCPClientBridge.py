@@ -611,7 +611,8 @@ class MCPClientBridge(QObject):
                     f"Bridge received callback data: {data[:100]}..."
                 )  # Log received data
 
-                # Handle Status/Info Messages from MCPClient first
+                # Handle Status/Info Messages from MCPClient first, 
+                # TODO : now we are just doing status update based on what ever upstream emitting, can be optimized obviously
                 if data.startswith("\\n\\n thinking") or data.startswith(
                     "\n\n thinking"
                 ):
@@ -661,8 +662,9 @@ class MCPClientBridge(QObject):
                     return
 
                 # --- Handle Content Chunks ---
-                # If no streaming message exists, create a new one
-                if not self.conversation_manager.current_streaming_message:
+                # If no streaming message exists, create a new one 
+                # TODO : add prefix to indicate new message bubble , if <new message> in data, new bubble
+                if not self.conversation_manager.current_streaming_message or data == "<new message>":
                     logger.info("Creating new message bubble for LLM response.")
                     assistant_message = {
                         "timestamp": self.conversation_manager.get_timestamp(),
@@ -678,7 +680,7 @@ class MCPClientBridge(QObject):
                     last_update_time = current_time  # Reset timer for new bubble
 
                 # Append the content chunk
-                if data and self.conversation_manager.current_streaming_message:
+                if data != "<new message>" and self.conversation_manager.current_streaming_message:
                     self.conversation_manager.current_streaming_message[
                         "content"
                     ] += data

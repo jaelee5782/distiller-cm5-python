@@ -260,7 +260,7 @@ class MCPClient:
 
             # Decide whether to use streaming for this specific call
             # Use streaming for the first call if globally enabled, otherwise non-streaming.
-            use_stream_this_call = self.streaming and current_iteration == 1
+            use_stream_this_call = self.streaming # and current_iteration == 1
 
             # Signal new response beginning for any iteration after the first
             if current_iteration > 1:
@@ -272,6 +272,7 @@ class MCPClient:
             try:
                 if use_stream_this_call:
                     logger.info("Initiating streaming LLM call...")
+                    callback("<new message>")
                     response = await self.llm_provider.get_chat_completion_streaming_response(
                         messages, self.available_tools, callback=callback
                     )
