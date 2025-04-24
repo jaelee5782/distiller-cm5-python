@@ -13,6 +13,7 @@ from typing import List, Dict, Any, Union, Optional, Coroutine
 from distiller_cm5_python.utils.logger import logger
 from distiller_cm5_python.utils.config import MAX_MESSAGES_LENGTH, DEFAULT_SYSTEM_PROMPT
 from distiller_cm5_python.utils.distiller_exception import UserVisibleError, LogOnlyError
+from distiller_cm5_python.client.ui.events.event_types import UIEvent
 
 
 def timestamp_to_time(timestamp):
@@ -98,12 +99,8 @@ class MessageProcessor:
         logger.debug(f"MessageProcessor.set_system_message: System message set: {content[:50]}...")
     
 
-    def add_tool_call(self, tool_call: Dict[str, Any]) -> None:
-        """Add a tool call to the conversation history
-        
-        Args:
-            tool_call: The tool call to add
-        """
+    def add_tool_call(self, tool_call: Dict[str, Any]):
+        """Add a tool call to the conversation history and return a UIEvent"""
         tool_name = tool_call.get("function", {}).get("name", "") if "function" in tool_call else tool_call.get("name", "")
         tool_args = tool_call.get("function", {}).get("arguments", {}) if "function" in tool_call else tool_call.get("arguments", {})
         tool_call_id = tool_call.get("id", tool_name)
@@ -127,29 +124,23 @@ class MessageProcessor:
         logger.info(f"Tool call added: {tool_name}")
         if self.is_debug_mode:
             self._save_debug_traffic()
+        # Return UIEvent
+        return UIEvent.create_tool_call(tool_call)
 
     def add_tool_result(self, tool_call: Dict[str, Any], result: str) -> None:
-        """Add a tool result to the conversation history
-        
-        Args:
-            tool_call: The tool call that produced the result
-
-            result: The result of the tool call
-        """
-        # Extract tool info
-        tool_name = tool_call.get("function", {}).get("name", "") if "function" in tool_call else tool_call.get("name", "")
-        tool_args = tool_call.get("function", {}).get("arguments", {}) if "function" in tool_call else tool_call.get("arguments", {})
-        tool_call_id = tool_call.get("id", tool_name)
-
-        metadata = {
-            "tool_name": tool_name,
-            "tool_call_id": tool_call_id,
-            "tool_args": tool_args,
-            "is_tool_result": True,
-            "message_type": "tool_result"
-        }
-
-        self.add_message("tool", result, metadata)
+        """Add a tool result to the conversation history and return a UIEvent"""
+        tool_call_id = tool_call.get("id", "")
+        for msg in reversed(self.message_history):
+            if msg.get("tool_calls"):
+                for tc in msg["tool_calls"]:
+                    if tc["id"] == tool_call_id:
+                        tc["result"] = result
+                        logger.info(f"Tool result added: {tool_call_id}")
+                        if self.is_debug_mode:
+                            self._save_debug_traffic()
+                        return UIEvent.create_tool_result(tool_call, result)
+        logger.warning(f"Tool call id {tool_call_id} not found in history when adding result.")
+        return UIEvent.create_tool_result(tool_call, result)
         
         # If in debug mode, track detailed message traffic
         if self.is_debug_mode:

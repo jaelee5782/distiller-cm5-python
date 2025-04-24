@@ -19,6 +19,9 @@ from distiller_cm5_python.utils.distiller_exception import UserVisibleError, Log
 import signal
 import traceback
 import concurrent.futures
+import uuid
+from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
+from distiller_cm5_python.client.ui.events.event_types import EventType, UIEvent
 
 
 class MCPClient:
@@ -29,7 +32,8 @@ class MCPClient:
             provider_type: Optional[str] = None,
             model: Optional[str] = None,
             api_key: Optional[str] = None,
-            timeout: Optional[int] = None
+            timeout: Optional[int] = None,
+            dispatcher: Optional[EventDispatcher] = None
     ):
         self.session = None
         self.write = None
@@ -79,6 +83,8 @@ class MCPClient:
         self.tool_processor = None
 
         logger.debug("Client initialized with components")
+
+        self.dispatcher = dispatcher
 
     async def connect_to_server(self, server_script_path: str) -> bool:
         """Connect to an MCP server"""
@@ -239,86 +245,68 @@ class MCPClient:
                     tool_result_content
                 )
 
-    async def process_query(self, query: str , callback: Callable[[str], None] = lambda x: print(f"\033[94m{x}\033[0m")) -> None:
-        """Process a user query, handle LLM calls, tool execution, and streaming.
+    async def process_query(self, query: str) -> Dict[str, Any]:
+        """Process a query through the LLM client.
 
-        Yields:
-            Content chunks from the LLM response.
+        Args:
+            query: The query to process.
+        Returns:
+            The processed response from the LLM client.
         """
-        logger.info(f"Processing query: '{query}'")
-        self.message_processor.add_message("user", query)
-        callback("\n\n thinking ... \n\n")
+        import time, uuid
+        from distiller_cm5_python.client.ui.events.event_types import EventType, StatusType, UIEvent
 
+        # Initial INFO event: thinking
+        start_evt = UIEvent(uuid.uuid4(), EventType.INFO, "Thinking...", StatusType.IN_PROGRESS, timestamp=time.time())
+        # Dispatch initial thinking event
+        self.dispatcher.dispatch(start_evt)
 
-        max_tool_iterations = 5 # Prevent infinite loops
+        messages = self.message_processor.get_formatted_messages()
+        max_tool_iterations = 5
         current_iteration = 0
 
         while current_iteration < max_tool_iterations:
             current_iteration += 1
-            logger.info(f"--- LLM Call Iteration {current_iteration} ---")
+            use_stream = self.streaming
+
+            if use_stream:
+                # Stream and dispatch events via LLM client
+                response = await self.llm_provider.get_chat_completion_streaming_response(
+                    messages=messages,
+                    tools=self.available_tools,
+                    dispatcher=self.dispatcher
+                )
+            else:
+                # Non-streaming
+                resp = await self.llm_provider.get_chat_completion_response(messages, self.available_tools)
+                content = resp.get("message", {}).get("content", "")
+                ev = UIEvent(uuid.uuid4(), EventType.MESSAGE, content, StatusType.IN_PROGRESS, timestamp=time.time())
+                # Dispatch final non-streaming message event
+                self.dispatcher.dispatch(ev)
+                response = resp
+
+            # Extract tool calls
+            tool_calls = (response or {}).get("message", {}).get("tool_calls", [])
+            if not tool_calls:
+                break
+
+            # Dispatch INFO event: before tool calls
+            ev = UIEvent(uuid.uuid4(), EventType.INFO, f"Executing tools iter {current_iteration}", StatusType.IN_PROGRESS, data={"count": len(tool_calls)}, timestamp=time.time())
+            self.dispatcher.dispatch(ev)
+
+            # Execute tools
+            await self._execute_tool_calls(tool_calls)
+
+            # Dispatch INFO event: after tool calls
+            ev = UIEvent(uuid.uuid4(), EventType.INFO, f"Executed tools iter {current_iteration}", StatusType.SUCCESS, timestamp=time.time())
+            self.dispatcher.dispatch(ev)
+
+            # Prepare for potential next iteration
             messages = self.message_processor.get_formatted_messages()
 
-            # Decide whether to use streaming for this specific call
-            # Use streaming for the first call if globally enabled, otherwise non-streaming.
-            use_stream_this_call = self.streaming # and current_iteration == 1
-
-            # Signal new response beginning for any iteration after the first
-            if current_iteration > 1:
-                yield "__NEW_RESPONSE_AFTER_TOOL_CALLS__"
-
-            full_response_content = ""
-            accumulated_tool_calls = []
-
-            try:
-                if use_stream_this_call:
-                    logger.info("Initiating streaming LLM call...")
-                    callback("<new message>")
-                    response = await self.llm_provider.get_chat_completion_streaming_response(
-                        messages, self.available_tools, callback=callback
-                    )
-                else: # Use non-streaming call
-                    logger.info("Initiating non-streaming LLM call...")
-                    response = await self.llm_provider.get_chat_completion_response(messages, self.available_tools)
-                    # Yield the full response content to callback
-                    if callback:
-                        callback(response.get("message", {}).get("content", ""))
-
-                message_data = response.get("message", {})
-                full_response_content = message_data.get("content", "")
-                accumulated_tool_calls = message_data.get("tool_calls", [])
-                
-                                # --- Process Response (common logic for both stream fallback and non-stream) ---
-                logger.debug(f"LLM full response content: {full_response_content}")
-                logger.debug(f"LLM tool calls: {accumulated_tool_calls}")
-
-                # Add assistant message (even if empty, tool calls might be present)
-                # Ensure message_processor handles adding message with potential tool calls
-                self.message_processor.add_message("assistant", full_response_content, tool_calls=accumulated_tool_calls)
-
-                if not accumulated_tool_calls:
-                    logger.info("No tool calls received, completing interaction.")
-                    break # Exit the loop if no tools need execution
-
-                # --- Execute Tool Calls ---
-                callback("\n\n executing tool calls ... \n\n")
-                await self._execute_tool_calls(accumulated_tool_calls)
-                # History is updated within _execute_tool_calls
-
-                # Continue loop to potentially call LLM again with tool results
-                logger.info("Tool calls executed, preparing for potential next LLM call.")
-
-            except (UserVisibleError, LogOnlyError) as e:
-                logger.error(f"Error during LLM call or processing: {e}", exc_info=isinstance(e, LogOnlyError))
-                callback(f"\n[Error: {e}]\n") # Yield error message to user
-                break # Stop processing on error
-            except Exception as e:
-                logger.error(f"Unexpected error during LLM call or processing: {e}", exc_info=True)
-                callback(f"\n[Unexpected Error: {e}]\n")
-                break # Stop processing on unexpected error
-
-        if current_iteration >= max_tool_iterations:
-            logger.warning("Reached maximum tool execution iterations.")
-            callback("\n[Reached max tool iterations]\n")
+        # Dispatch final INFO event: complete
+        ev = UIEvent(uuid.uuid4(), EventType.INFO, "", StatusType.SUCCESS, timestamp=time.time())
+        self.dispatcher.dispatch(ev)
 
         logger.info("--- Query Processing Complete ---")
 

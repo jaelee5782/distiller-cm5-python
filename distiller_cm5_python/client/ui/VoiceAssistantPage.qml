@@ -415,23 +415,53 @@ PageBase {
                 conversationView.scrollToBottom();
             }
             
-            function onMessageReceived(message, timestamp) {
-                // Ensure processing state is fully reset
-                isProcessing = false;
-                isListening = false;
-                stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
-                updateStatusText("Tap to Talk");
+            function onMessageReceived(message, eventId, timestamp, status) {
+                console.log("QML onMessageReceived:", status, eventId, message.substring(0, 50));
                 
-                // Turn off response mode immediately
-                conversationView.setResponseInProgress(false);
-                // Ensure we scroll to the bottom
-                conversationView.scrollToBottom();
-                
-                // Log the state reset
-                console.log("MessageReceived: Reset isProcessing to false");
-                
-                // Start failsafe timer to ensure state is reset
-                stateResetTimer.stop(); // Stop the timer since we're already resetting
+                if (status === "in_progress") {
+                    // For streaming chunks, keep the response in progress
+                    // and update the conversation model with the new chunk
+                    
+                    // Get current conversation
+                    var conversation = bridge.get_conversation();
+                    
+                    // If this is the first chunk of a new message
+                    if (conversation.length === 0 || !conversation[conversation.length - 1].includes(message)) {
+                        // Add as a new message
+                        conversation.push("[" + timestamp + "] Assistant: " + message);
+                    } else {
+                        // Update the last message by appending the new chunk
+                        var lastMsg = conversation[conversation.length - 1];
+                        var timestampPart = lastMsg.substring(0, lastMsg.indexOf("]") + 1);
+                        var senderPart = "Assistant: ";
+                        var existingContent = lastMsg.substring(lastMsg.indexOf(senderPart) + senderPart.length);
+                        
+                        // Replace the last message with updated content
+                        conversation[conversation.length - 1] = timestampPart + " " + senderPart + existingContent + message;
+                    }
+                    
+                    // Update the model and keep response in progress
+                    conversationView.updateModel(conversation);
+                    conversationView.setResponseInProgress(true);
+                    conversationView.scrollToBottom();
+                } else if (status === "success") {
+                    // Final message or end of streaming
+                    // Reset UI state now that the response is complete
+                    isProcessing = false;
+                    isListening = false;
+                    stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
+                    updateStatusText("Tap to Talk");
+                    
+                    // Turn off response mode
+                    conversationView.setResponseInProgress(false);
+                    conversationView.scrollToBottom();
+                    
+                    // Log the state reset
+                    console.log("MessageReceived: Reset isProcessing to false (complete message)");
+                    
+                    // Stop failsafe timer
+                    stateResetTimer.stop();
+                }
             }
             
             function onListeningStarted() {

@@ -5,6 +5,7 @@ import json
 import aiohttp
 import time
 import requests # Add requests for sync check
+import uuid
 from typing import Any, Dict, List, Optional, AsyncGenerator, Callable
 
 from distiller_cm5_python.utils.logger import logger
@@ -15,6 +16,8 @@ from distiller_cm5_python.utils.distiller_exception import UserVisibleError, Log
 from distiller_cm5_python.client.llm_infra.parsing_utils import (
     normalize_tool_call_json, parse_tool_calls, check_is_c_ntx_too_long
 )
+from distiller_cm5_python.client.ui.events.event_types import EventType, UIEvent, StatusType
+from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
 
 
 class LLMClient:
@@ -342,7 +345,7 @@ class LLMClient:
     async def get_chat_completion_response(
         self,
         messages: List[Dict[str, Any]],
-        tools: Optional[List[Dict[str, Any]]] = None,
+        tools: Optional[List[Dict[str, Any]]] = [],
         callback: Optional[Callable[[str], None]] = lambda x: print(f"\033[94m{x}\033[0m")
     ) -> Dict[str, Any]:
         """Get a non-streaming response from the /chat/completions endpoint."""
@@ -422,7 +425,7 @@ class LLMClient:
 
             # trigger callback if provided
             if callback:
-                callback(full_response_content)
+                callback(full_response_content, uuid.uuid4(), EventType.MESSAGE)
 
             return result
 
@@ -440,11 +443,11 @@ class LLMClient:
     async def get_chat_completion_streaming_response(
         self,
         messages: List[Dict[str, Any]],
-        tools: Optional[List[Dict[str, Any]]] = None,
-        callback: Callable[[str], None] = None
+        tools: Optional[List[Dict[str, Any]]] = [],
+        dispatcher: EventDispatcher = None
     ) -> Dict[str, Any]:
         """Get a streaming response from the /chat/completions endpoint.
-           Yields content chunks into the callback function.
+           Dispatches events (chunks, tool calls) via the dispatcher.
         """
         logger.info(f"LLMClient.get_chat_completion_streaming_response ===== SENDING STREAMING REQUEST TO LLM ({self.provider_type}) =====")
         start_time_req = time.time()
@@ -462,6 +465,8 @@ class LLMClient:
         full_response_content = ""
         accumulated_tool_calls = []
         data_str = ""
+        current_event_id = str(uuid.uuid4())
+        current_etype = EventType.MESSAGE
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -511,10 +516,18 @@ class LLMClient:
                                             content_piece = delta["content"]
 
                                             # check for in content tool call, emit message break
-                                            if "<tool_call>" in content_piece : 
-                                                callback("<new message>")
+                                            # check for tool call keyword and switch event type if needed
+                                            if "<tool_call>" in content_piece and current_etype != EventType.ACTION:
+                                                current_event_id = str(uuid.uuid4())  # new ID for tool call
+                                                current_etype = EventType.ACTION
 
-                                            callback(content_piece)
+                                            # Dispatch the chunk using current ID and type
+                                            if dispatcher:
+                                                if current_etype == EventType.MESSAGE:
+                                                    dispatcher.dispatch(UIEvent.message_chunk(content_piece, current_event_id))
+                                                else:  # EventType.ACTION
+                                                    dispatcher.dispatch(UIEvent(current_event_id, EventType.ACTION, content_piece, StatusType.IN_PROGRESS))
+                                            
                                             full_response_content += content_piece
 
                                         if "tool_calls" in delta and delta["tool_calls"]:
@@ -532,6 +545,12 @@ class LLMClient:
                                                           current_tool["function"]["name"] += tool_call_chunk["function"]["name"]
                                                       if "arguments" in tool_call_chunk["function"] and tool_call_chunk["function"]["arguments"]:
                                                           current_tool["function"]["arguments"] += tool_call_chunk["function"]["arguments"]
+                                                 
+                                                 # Check if tool call is complete and hasn't been dispatched
+                                                 if current_tool.get("id") and current_tool.get("function", {}).get("name") and not current_tool.get("_dispatched"):
+                                                     if dispatcher:
+                                                         dispatcher.dispatch(UIEvent.tool_call(current_tool))
+                                                         current_tool["_dispatched"] = True
 
                                 except json.JSONDecodeError:
                                     logger.error(f"LLMClient.get_chat_completion_streaming_response: Failed to parse JSON from line: '{data_str}'")
@@ -549,13 +568,14 @@ class LLMClient:
             for i, tool in enumerate(accumulated_tool_calls):
                  if tool.get("id") and tool.get("function", {}).get("name"):
                      final_tool_calls.append(tool)
-                     # TODO send out formatted tool
-                     callback("<new message>")
-                     callback(str(tool))
+                     # Dispatch any complete tool calls that weren't dispatched during streaming
+                     if not tool.get("_dispatched") and dispatcher:
+                         dispatcher.dispatch(UIEvent.tool_call(tool))
+                         tool["_dispatched"] = True
                  else:
                       logger.warning(f"Skipping incomplete accumulated tool call at index {i}: {tool}")
 
-            if not final_tool_calls and isinstance(full_response_content, str) and "<tool_call>" in full_response_content:
+            if not final_tool_calls and isinstance(full_response_content, str) and "Popover" in full_response_content:
                  logger.warning("Stream ended, but found <tool_call> tags in accumulated text content. Attempting parse.")
                  parsed_calls = parse_tool_calls(full_response_content)
                  if parsed_calls:
