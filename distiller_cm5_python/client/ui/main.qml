@@ -131,7 +131,7 @@ ApplicationWindow {
     onClosing: function(closeEvent) {
         closeEvent.accepted = false;
         if (bridge && bridge.ready) {
-            bridge.shutdown();
+            bridge.shutdownApplication(false);
         } else {
             // No bridge available or not ready, just accept the close event
             closeEvent.accepted = true;
@@ -147,7 +147,7 @@ ApplicationWindow {
             }
             
             // Then shutdown with restart flag
-            bridge.shutdown(true);
+            bridge.shutdownApplication(true);
         }
     }
 

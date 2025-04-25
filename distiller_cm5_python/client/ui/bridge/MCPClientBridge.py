@@ -611,6 +611,18 @@ class MCPClientBridge(QObject):
         except Exception as e:
             logger.error(f"MCPClientBridge._handle_event: Error handling event: {e}", exc_info=True)
 
+    @pyqtSlot(bool)
+    def shutdownApplication(self, restart=False):
+        """
+        Exposed QML method to handle application shutdown gracefully.
+        Args:
+            restart: Whether to restart after shutdown
+        """
+        logger.info(f"Shutdown requested from QML with restart={restart}")
+        # Create a task to run the async shutdown
+        asyncio.create_task(self.shutdown())
+        return True
+
     async def shutdown(self):
         """Handle application shutdown gracefully."""
         logger.info("Bridge shutdown requested")
