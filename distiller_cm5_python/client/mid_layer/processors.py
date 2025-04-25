@@ -125,28 +125,32 @@ class MessageProcessor:
         if self.is_debug_mode:
             self._save_debug_traffic()
         # Return UIEvent
-        return UIEvent.create_tool_call(tool_call)
+        return UIEvent.tool_call(tool_call)
 
     def add_tool_result(self, tool_call: Dict[str, Any], result: str) -> None:
         """Add a tool result to the conversation history and return a UIEvent"""
-        tool_call_id = tool_call.get("id", "")
-        for msg in reversed(self.message_history):
-            if msg.get("tool_calls"):
-                for tc in msg["tool_calls"]:
-                    if tc["id"] == tool_call_id:
-                        tc["result"] = result
-                        logger.info(f"Tool result added: {tool_call_id}")
-                        if self.is_debug_mode:
-                            self._save_debug_traffic()
-                        return UIEvent.create_tool_result(tool_call, result)
-        logger.warning(f"Tool call id {tool_call_id} not found in history when adding result.")
-        return UIEvent.create_tool_result(tool_call, result)
-        
+
+        tool_name = tool_call.get("function", {}).get("name", "") if "function" in tool_call else tool_call.get("name", "")
+        tool_args = tool_call.get("function", {}).get("arguments", {}) if "function" in tool_call else tool_call.get("arguments", {})
+        tool_call_id = tool_call.get("id", tool_name)
+
+        metadata = {
+            "tool_name": tool_name,
+            "tool_call_id": tool_call_id,
+            "tool_args": tool_args,
+            "is_tool_result": True,
+            "message_type": "tool_result"
+        }
+
+        self.add_message("tool", result, metadata)
+
         # If in debug mode, track detailed message traffic
         if self.is_debug_mode:
             self._save_debug_traffic()
 
         logger.debug(f"MessageProcessor.add_tool_result: {tool_name} and it's result({result}) are added into message history")
+        return UIEvent.tool_result(tool_call, result)
+
 
     def get_formatted_messages(self) -> List[Dict[str, Union[str, List[Dict[str, Any]]]]]:
         """Get the message history formatted for LLM API

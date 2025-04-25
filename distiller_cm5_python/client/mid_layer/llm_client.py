@@ -575,7 +575,7 @@ class LLMClient:
                  else:
                       logger.warning(f"Skipping incomplete accumulated tool call at index {i}: {tool}")
 
-            if not final_tool_calls and isinstance(full_response_content, str) and "Popover" in full_response_content:
+            if not final_tool_calls and isinstance(full_response_content, str) and "<tool_call>" in full_response_content:
                  logger.warning("Stream ended, but found <tool_call> tags in accumulated text content. Attempting parse.")
                  parsed_calls = parse_tool_calls(full_response_content)
                  if parsed_calls:

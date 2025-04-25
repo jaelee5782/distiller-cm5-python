@@ -228,8 +228,7 @@ class MCPClient:
                     logger.error(error_msg)
                     tool_result_content = error_msg
                 else:
-                    # Note: MessageProcessor.add_tool_call might be redundant now if _process_llm_response handles it.
-                    # self.message_processor.add_tool_call(tool_call)
+                    self.message_processor.add_tool_call(tool_call)
                     tool_result_content = await self.tool_processor.execute_tool_call_async(tool_call)
                     logger.info(f"Executed tool name: {tool_call.get('id', 'N/A')}")
                     logger.info(f"Executed tool result: {tool_result_content}")
@@ -261,6 +260,9 @@ class MCPClient:
         # Dispatch initial thinking event
         self.dispatcher.dispatch(start_evt)
 
+        # Record the user's message
+        self.message_processor.add_message("user", query)
+
         messages = self.message_processor.get_formatted_messages()
         max_tool_iterations = 5
         current_iteration = 0
@@ -284,6 +286,8 @@ class MCPClient:
                 # Dispatch final non-streaming message event
                 self.dispatcher.dispatch(ev)
                 response = resp
+
+            self.message_processor.add_message("assistant", response.get("message", {}).get("content", ""))
 
             # Extract tool calls
             tool_calls = (response or {}).get("message", {}).get("tool_calls", [])

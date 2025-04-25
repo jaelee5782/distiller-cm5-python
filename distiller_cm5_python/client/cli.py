@@ -10,6 +10,8 @@ import time
 from colorama import Fore, Style, init as colorama_init
 
 from distiller_cm5_python.client.mid_layer.mcp_client import MCPClient
+from distiller_cm5_python.client.ui.events.event_types import UIEvent, EventType, StatusType
+from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
 from distiller_cm5_python.utils.logger import logger
 from distiller_cm5_python.utils.config import (STREAMING_ENABLED, SERVER_URL, PROVIDER_TYPE,
                           MODEL_NAME, TIMEOUT, LOGGING_LEVEL, MCP_SERVER_SCRIPT_PATH, API_KEY)
@@ -22,6 +24,38 @@ try:
     from distiller_cm5_sdk import whisper
 except ImportError:
     whisper = None # Placeholder if the SDK isn't installed
+
+class CLIEventHandler:
+    """Handles UI events for CLI display"""
+    def __init__(self):
+        self.current_message_id = None
+        self.message_chunks = []
+
+    def handle_event(self, evt: UIEvent):
+        if evt.type == EventType.INFO:
+            print(f"{Fore.CYAN}{evt.content}{Style.RESET_ALL}")
+        elif evt.type == EventType.WARNING:
+            print(f"{Fore.YELLOW}{evt.content}{Style.RESET_ALL}")
+        elif evt.type == EventType.ERROR:
+            print(f"{Fore.RED}{evt.content}{Style.RESET_ALL}")
+        elif evt.type == EventType.MESSAGE:
+            if evt.status == StatusType.IN_PROGRESS:
+                # Handle streaming message chunks
+                if evt.id != self.current_message_id:
+                    self.current_message_id = evt.id
+                    self.message_chunks = []
+                    print(f"\n{Style.BRIGHT}Assistant: {Style.RESET_ALL}", end="")
+                self.message_chunks.append(evt.content)
+                print(evt.content, end="", flush=True)
+            elif evt.status == StatusType.SUCCESS:
+                # Handle complete message
+                print()  # New line after streaming
+        elif evt.type == EventType.ACTION:
+            if evt.status == StatusType.IN_PROGRESS:
+                print(f"{Fore.BLUE}{evt.content}...{Style.RESET_ALL}")
+            elif evt.status == StatusType.SUCCESS:
+                if evt.data:
+                    print(f"{Fore.GREEN}{evt.content}{Style.RESET_ALL}")
 
 async def chat_loop(client: MCPClient, whisper_instance):
     """Start an interactive chat loop with the user, supporting text and audio input."""
@@ -80,6 +114,8 @@ async def chat_loop(client: MCPClient, whisper_instance):
                             transcribed_text = " ".join(transcribed_segments).strip()
                             print(f"{Style.BRIGHT}You (Audio): {Style.RESET_ALL}{transcribed_text}")
                             user_input_for_llm = transcribed_text # Use transcribed text
+                            # Send transcribed text to client
+                            await client.send_message(user_input_for_llm)
                         else:
                              print(f"{Fore.YELLOW}Transcription returned no text.{Style.RESET_ALL}")
                              continue # Skip processing if transcription is empty
@@ -96,13 +132,8 @@ async def chat_loop(client: MCPClient, whisper_instance):
             if not user_input_for_llm: # Should only happen if text input was empty
                  continue
 
-            start_time = time.time()
-            print(f"\n{Style.BRIGHT}Assistant: {Style.RESET_ALL}", end="", flush=True)
-
-            # SIMPLIFIED: Always iterate over process_query, which handles streaming internally.
-            # The generator yields chunks for streaming, or a single block for non-streaming.
             try:
-                await client.process_query(user_input_for_llm, callback=lambda x: print(f"{Fore.CYAN}{x}{Style.RESET_ALL} \n\n", end="", flush=True)) # Pass the correct input
+                await client.process_query(user_input_for_llm)
                 print() # Ensure newline after the full response/stream is printed
             except LogOnlyError as e:
                  # Handle errors potentially raised from within process_query's streaming
@@ -116,8 +147,6 @@ async def chat_loop(client: MCPClient, whisper_instance):
                  print(f"{Fore.RED}\nError: {e}{Style.RESET_ALL}")
                  # History is handled by process_query yielding the error message
 
-            end_time = time.time()
-            logger.debug(f"Query processed in {end_time - start_time:.2f}s")
 
         except KeyboardInterrupt:
             print("\nChat interrupted by user. Exiting...")
@@ -165,13 +194,19 @@ async def main():
 
     logger.info(f"Using server script: {server_script_path}")
 
+    # Initialize event dispatcher and handler
+    event_handler = CLIEventHandler()
+    event_dispatcher = EventDispatcher(debug=args.log_level == 'DEBUG')
+    event_dispatcher.event_dispatched.connect(event_handler.handle_event)
+
     client = MCPClient(
         streaming=args.stream,
         llm_server_url=args.llm_url,
         provider_type=args.provider,
         model=args.model,
         api_key=args.api_key,
-        timeout=args.timeout
+        timeout=args.timeout,
+        dispatcher=event_dispatcher
     )
 
     # Instantiate Whisper only if SDK is available and not disabled
@@ -229,6 +264,8 @@ async def main():
              whisper_instance.cleanup() # Cleanup Whisper resources only if it exists
         else:
              logger.info("Whisper resources cleanup skipped (instance not created).")
+        logger.info("Cleaning up event dispatcher...")
+        event_dispatcher.close()
         logger.info("Client cleanup complete. Exiting.")
 
 if __name__ == "__main__":
