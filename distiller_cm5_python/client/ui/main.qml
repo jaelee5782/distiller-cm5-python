@@ -71,7 +71,6 @@ ApplicationWindow {
         }
         
         Component.onCompleted: {
-            console.log("Key handler initialized");
             forceActiveFocus();
         }
         
@@ -97,7 +96,6 @@ ApplicationWindow {
             // Force additional update for any target that might still be in scroll mode
             if (FocusManager.scrollTargetItem) {
                 FocusManager.scrollTargetItem.scrollModeActive = false;
-                console.log("Forced update of scroll mode state");
             }
         }
     }
@@ -191,7 +189,6 @@ ApplicationWindow {
             onTriggered: {
                 if (stackView.currentItem && stackView.currentItem.resetFocusState) {
                     stackView.currentItem.resetFocusState();
-                    console.log("Focus state reset on page transition");
                 }
             }
         }
@@ -231,7 +228,6 @@ ApplicationWindow {
                         return;
                     }
                     
-                    console.log("Connecting to server...");
                     
                     // Push the voice assistant page with a placeholder name
                     var voiceAssistantPage = stackView.push(voiceAssistantComponent);

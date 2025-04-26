@@ -175,12 +175,9 @@ NavigableItem {
     
     // Handle activating this section
     onClicked: {
-        console.log("AppSection: " + title + " clicked");
-        
         // Try to focus the first control in this section
         var controls = getNavigableControls();
         if (controls.length > 0) {
-            console.log("AppSection: Focusing first control in " + title);
             controls[0].forceActiveFocus();
         } else if (collapsible) {
             collapsed = !collapsed;

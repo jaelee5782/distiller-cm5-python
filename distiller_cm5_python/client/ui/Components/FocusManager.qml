@@ -46,21 +46,21 @@ QtObject {
     
     // Initialize/update the array of focusable items
     function initializeFocusItems(items, scrollView) {
-        console.log("FocusManager: Initializing focus items, count: " + items.length);
+        // console.log("FocusManager: Initializing focus items, count: " + items.length);
         currentFocusItems = items.slice() // Make a copy of the array
         currentFocusIndex = items.length > 0 ? 0 : -1
         
         // Store the scroll view reference if provided
         if (scrollView) {
             currentScrollView = scrollView;
-            console.log("FocusManager: Registered scroll view for combined navigation");
+            // console.log("FocusManager: Registered scroll view for combined navigation");
         } else {
             currentScrollView = null;
         }
         
         // Set initial focus
         if (currentFocusIndex >= 0 && currentFocusItems[currentFocusIndex]) {
-            console.log("FocusManager: Setting initial focus to item at index " + currentFocusIndex);
+            // console.log("FocusManager: Setting initial focus to item at index " + currentFocusIndex);
             currentFocusItems[currentFocusIndex].isActiveItem = true;
             setFocusToItem(currentFocusItems[currentFocusIndex]);
         }
@@ -104,12 +104,12 @@ QtObject {
         }
         
         // Set focus to the item safely, checking if forceActiveFocus exists and is a function
-        console.log("FocusManager: Setting focus to item at index " + currentFocusIndex);
+        // console.log("FocusManager: Setting focus to item at index " + currentFocusIndex);
         try {
             if (item.forceActiveFocus && typeof item.forceActiveFocus === "function") {
                 item.forceActiveFocus();
             } else {
-                console.log("FocusManager: Item does not have forceActiveFocus function");
+                console.warn("FocusManager: Item does not have forceActiveFocus function");
             }
         } catch (e) {
             console.error("FocusManager: Error setting focus: " + e);
@@ -132,8 +132,8 @@ QtObject {
             var scrollViewHeight = currentScrollView.height;
             var viewBottom = scrollViewY + scrollViewHeight;
             
-            console.log("Item position: " + itemY + ", height: " + itemHeight);
-            console.log("Scroll view position: " + scrollViewY + ", height: " + scrollViewHeight);
+            // console.log("Item position: " + itemY + ", height: " + itemHeight);
+            // console.log("Scroll view position: " + scrollViewY + ", height: " + scrollViewHeight);
             
             // Check if item is outside the visible area
             if (itemY < scrollViewY) {
@@ -177,7 +177,7 @@ QtObject {
         
         scrollModeActive = true;
         scrollTargetItem = item;
-        console.log("FocusManager: Entering scroll mode for item");
+        // console.log("FocusManager: Entering scroll mode for item");
     }
     
     // Exit scroll mode
@@ -202,12 +202,12 @@ QtObject {
         }
         
         scrollModeActive = false;
-        console.log("FocusManager: Exiting scroll mode");
+        // console.log("FocusManager: Exiting scroll mode");
     }
     
     // Move focus up
     function moveFocusUp() {
-        console.log("FocusManager: Moving focus up, current index: " + currentFocusIndex);
+        // console.log("FocusManager: Moving focus up, current index: " + currentFocusIndex);
         
         // If in scroll mode, scroll the target view instead of changing focus
         if (scrollModeActive && scrollTargetItem) {
@@ -231,7 +231,7 @@ QtObject {
         
         // Make sure we have focusable items before proceeding
         if (currentFocusItems.length === 0) {
-            console.log("FocusManager: No focusable items available");
+            console.warn("FocusManager: No focusable items available");
             // If we have a scroll view but no focusable items, just scroll
             if (currentScrollView) {
                 scrollUp();
@@ -274,7 +274,7 @@ QtObject {
     
     // Move focus down
     function moveFocusDown() {
-        console.log("FocusManager: Moving focus down, current index: " + currentFocusIndex);
+        // console.log("FocusManager: Moving focus down, current index: " + currentFocusIndex);
         
         // If in scroll mode, scroll the target view instead of changing focus
         if (scrollModeActive && scrollTargetItem) {
@@ -299,7 +299,7 @@ QtObject {
         
         // Make sure we have focusable items before proceeding
         if (currentFocusItems.length === 0) {
-            console.log("FocusManager: No focusable items available");
+            // console.log("FocusManager: No focusable items available");
             // If we have a scroll view but no focusable items, just scroll
             if (currentScrollView) {
                 scrollDown();
@@ -361,7 +361,7 @@ QtObject {
     
     // Handle Enter key press based on current mode
     function handleEnterKey() {
-        console.log("FocusManager: Handling Enter key, current index: " + currentFocusIndex);
+        // console.log("FocusManager: Handling Enter key, current index: " + currentFocusIndex);
         if (currentFocusItems.length === 0 || currentFocusIndex < 0) {
             console.log("FocusManager: No item focused");
             return;
@@ -391,7 +391,7 @@ QtObject {
         
         if (currentMode === normalMode) {
             // Normal mode - activate the current item
-            console.log("FocusManager: Activating item");
+            // console.log("FocusManager: Activating item");
             if (item.activate && typeof item.activate === "function") {
                 item.activate();
             } else if (item.clicked && typeof item.clicked === "function") {
@@ -403,7 +403,7 @@ QtObject {
             }
         } else if (currentMode === sliderMode) {
             // Exit slider mode
-            console.log("FocusManager: Exiting slider mode");
+            // console.log("FocusManager: Exiting slider mode");
             exitSpecialMode();
         }
     }

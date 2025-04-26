@@ -36,7 +36,6 @@ ListView {
     
     // Observe changes to scroll mode from FocusManager
     onScrollModeActiveChanged: {
-        console.log("ConversationView scroll mode: " + (scrollModeActive ? "active" : "inactive"));
         // Force UI update
         activeScrollModeInstructions.visible = scrollModeActive;
     }

@@ -19,31 +19,31 @@ PageBase {
     // Collect all focusable items on this page
     function collectFocusItems() {
         focusableItems = []
-        console.log("ServerSelectionPage: Collecting focusable items");
+        // console.log("ServerSelectionPage: Collecting focusable items");
         
         // Add server grid cards if available
         if (serverGrid && availableServers.length > 0) {
-            console.log("ServerSelectionPage: Processing server grid with " + serverGrid.children.length + " potential items");
+            // console.log("ServerSelectionPage: Processing server grid with " + serverGrid.children.length + " potential items");
             for (var i = 0; i < serverGrid.children.length; i++) {
                 var child = serverGrid.children[i]
                 if (child && child.navigable) {
-                    console.log("ServerSelectionPage: Adding server card to focusable items: " + child.serverName);
+                    // console.log("ServerSelectionPage: Adding server card to focusable items: " + child.serverName);
                     child.objectName = "ServerCard_" + i; // Add a name for debugging
                     focusableItems.push(child)
                 }
             }
         } else {
-            console.log("ServerSelectionPage: No server cards available");
+            console.error("ServerSelectionPage: No server cards available");
         }
         
         // Add the refresh button
         if (refreshButton && refreshButton.navigable) {
-            console.log("ServerSelectionPage: Adding refresh button to focusable items");
+            // console.log("ServerSelectionPage: Adding refresh button to focusable items");
             refreshButton.objectName = "RefreshButton"; // Add a name for debugging
             focusableItems.push(refreshButton)
         }
         
-        console.log("ServerSelectionPage: Total focusable items: " + focusableItems.length);
+        // console.log("ServerSelectionPage: Total focusable items: " + focusableItems.length);
         
         // Initialize focus with our FocusManager, passing the scroll view
         FocusManager.initializeFocusItems(focusableItems, serverScrollView)
@@ -62,7 +62,7 @@ PageBase {
         }
         
         function onAvailableServersChanged(servers) {
-            console.log("Received servers: " + servers.length);
+            // console.log("Received servers: " + servers.length);
             availableServers = servers;
             isLoading = false;
             
@@ -71,7 +71,7 @@ PageBase {
                 messageToast.showMessage("No servers found. Please check your installation.", 4000);
             } else {
                 // Use a small delay to ensure the Repeater has created all items
-                console.log("ServerSelectionPage: Servers changed, scheduling focus collection");
+                // console.log("ServerSelectionPage: Servers changed, scheduling focus collection");
                 focusCollectionTimer.restart();
             }
         }
@@ -94,7 +94,7 @@ PageBase {
     
     // Prevent operations when being destroyed
     Component.onDestruction: {
-        console.log("Server selection page being destroyed");
+        // console.log("Server selection page being destroyed");
         // Stop any pending operations
         if (serverInitTimer.running)
             serverInitTimer.stop();
@@ -336,7 +336,7 @@ PageBase {
         interval: 100
         repeat: false
         onTriggered: {
-            console.log("ServerSelectionPage: Running delayed focus collection");
+            // console.log("ServerSelectionPage: Running delayed focus collection");
             collectFocusItems();
         }
     }

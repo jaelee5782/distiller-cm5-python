@@ -59,7 +59,7 @@ Item {
     // Explicit key handling for this item
     Keys.onReturnPressed: function(event) {
         if (navigable) {
-            console.log("NavigableItem: Return key pressed on item");
+            // console.log("NavigableItem: Return key pressed on item");
             clicked();
             event.accepted = true;
         }
@@ -67,7 +67,7 @@ Item {
     
     Keys.onEnterPressed: function(event) {
         if (navigable) {
-            console.log("NavigableItem: Enter key pressed on item");
+            // console.log("NavigableItem: Enter key pressed on item");
             clicked();
             event.accepted = true;
         }
@@ -75,25 +75,25 @@ Item {
     
     // Handle property changes
     onIsActiveItemChanged: {
-        console.log("NavigableItem: isActiveItem changed to: " + isActiveItem + " for " + (parent ? parent.objectName || "unnamed" : "no parent"));
+        // console.log("NavigableItem: isActiveItem changed to: " + isActiveItem + " for " + (parent ? parent.objectName || "unnamed" : "no parent"));
         if (isActiveItem) {
-            console.log("NavigableItem: Forcing focus");
+            // console.log("NavigableItem: Forcing focus");
             forceActiveFocus();
         }
     }
     
     // Handle focused state
     onActiveFocusChanged: {
-        console.log("NavigableItem: activeFocus changed to: " + activeFocus + " for " + (parent ? parent.objectName || "unnamed" : "no parent"));
+        // console.log("NavigableItem: activeFocus changed to: " + activeFocus + " for " + (parent ? parent.objectName || "unnamed" : "no parent"));
         if (activeFocus && !isActiveItem) {
             isActiveItem = true;
         }
     }
     
     // Make the component ready for focus
-    Component.onCompleted: {
-        if (navigable) {
-            console.log("NavigableItem: Initialized with navigable=true");
-        }
-    }
+    // Component.onCompleted: {
+    //     if (navigable) {
+    //         console.log("NavigableItem: Initialized with navigable=true");
+    //     }
+    // }
 } 
