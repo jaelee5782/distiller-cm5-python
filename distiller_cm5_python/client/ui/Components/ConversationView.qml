@@ -72,7 +72,7 @@ ListView {
             anchors.centerIn: parent
             text: "Press Enter to enable scroll mode"
             color: ThemeManager.textColor
-            font.pixelSize: ThemeManager.fontSizeSmall
+            font.pixelSize: FontManager.fontSizeSmall
         }
     }
     
@@ -103,7 +103,7 @@ ListView {
             anchors.centerIn: parent
             text: "Use ↑/↓ to scroll, Enter to exit"
             color: ThemeManager.textColor
-            font.pixelSize: ThemeManager.fontSizeSmall
+            font.pixelSize: FontManager.fontSizeSmall
         }
     }
 
