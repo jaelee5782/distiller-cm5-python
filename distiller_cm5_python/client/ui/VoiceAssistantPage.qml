@@ -160,6 +160,57 @@ PageBase {
             transcriptionInProgress = false;
         }
 
+        // Handler for SSH information events
+        function onSshInfoReceived(content, eventId, timestamp) {
+            console.log("SSH Info received: " + content);
+            
+            // Add to conversation if not empty
+            if (content && content.trim().length > 0) {
+                // Update the UI to show SSH connection info
+                if (conversationView) {
+                    conversationView.updateModel(bridge.get_conversation());
+                }
+                
+                // Show a toast notification for the SSH info
+                messageToast.showMessage("SSH Connection Info: " + content, 5000);
+            }
+        }
+        
+        // Handler for function events
+        function onFunctionReceived(content, eventId, timestamp) {
+            console.log("Function info received: " + content);
+            
+            // Add the function information to the conversation view
+            if (conversationView) {
+                conversationView.updateModel(bridge.get_conversation());
+            }
+        }
+        
+        // Handler for detailed function information
+        function onFunctionDetailsReceived(name, description, eventId, parameters) {
+            console.log("Function details received: " + name);
+            
+            // Add function details to conversation and update view
+            if (conversationView) {
+                conversationView.updateModel(bridge.get_conversation());
+            }
+            
+            // Set thinking state to indicate processing
+            if (voiceInputArea && voiceInputArea.setToolExecutionState) {
+                voiceInputArea.setToolExecutionState();
+            }
+        }
+        
+        // Handler for raw message schema objects
+        function onMessageSchemaReceived(messageData) {
+            console.log("Message schema received: " + JSON.stringify(messageData));
+            
+            // Update conversation view with latest messages
+            if (conversationView) {
+                conversationView.updateModel(bridge.get_conversation());
+            }
+        }
+
         function onRecordingStateChanged(is_recording) {
             isListening = is_recording;
             if (is_recording) {

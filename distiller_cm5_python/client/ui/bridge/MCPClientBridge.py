@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import QApplication
 from distiller_cm5_python.client.mid_layer.mcp_client import MCPClient
 from qasync import asyncSlot
 from distiller_cm5_python.utils.config import *
-from distiller_cm5_python.client.ui.events.event_types import EventType, UIEvent, StatusType
+from distiller_cm5_python.client.ui.events.event_types import EventType, UIEvent, StatusType, MessageSchema
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
 from distiller_cm5_python.utils.logger import logger
 from distiller_cm5_python.client.ui.bridge.ConversationManager import ConversationManager
@@ -18,6 +18,7 @@ import sys
 import time
 import psutil
 import threading
+from typing import Union
 
 # Exit delay constant
 EXIT_DELAY_MS = 500  # Reduced delay from 1000ms to 500ms
@@ -48,6 +49,11 @@ class MCPClientBridge(QObject):
     errorReceived = pyqtSignal(str, str, str)  # Signal for errors
     transcriptionUpdate = pyqtSignal(str, arguments=['transcription'])  # Signal for transcription updates
     transcriptionComplete = pyqtSignal(str, arguments=['full_text'])  # Signal for completed transcription
+    # New signals for architecture diagram support
+    sshInfoReceived = pyqtSignal(str, str, str)  # Signal for SSH info events (content, event_id, timestamp)
+    functionReceived = pyqtSignal(str, str, str)  # Signal for function events (content, event_id, timestamp)
+    functionDetailsReceived = pyqtSignal(str, str, str, 'QVariantMap')  # Signal for detailed function information (name, description, id, parameters)
+    messageSchemaReceived = pyqtSignal('QVariantMap')  # Signal for raw message schema objects
 
     def __init__(self, parent=None):
         """MCPClientBridge initializes the MCPClient and manages the conversation state."""
@@ -448,30 +454,80 @@ class MCPClientBridge(QObject):
 
         return True
 
-    def _handle_event(self, event: UIEvent) -> None:
+    def _handle_event(self, event: Union[UIEvent, MessageSchema]) -> None:
         """Handle events from the dispatcher."""
         try:
-            if not isinstance(event, UIEvent):
+            # Handle new MessageSchema format
+            if isinstance(event, MessageSchema):
+                # Convert timestamp to string if it exists
+                timestamp_str = str(event.timestamp) if event.timestamp else None
+                
+                # Emit the appropriate signal based on event type
+                if event.type == EventType.MESSAGE:
+                    # Pass status as string (.value from Enum) to the UI
+                    status_value = event.status.value if hasattr(event.status, 'value') else event.status
+                    self.messageReceived.emit(event.content, str(event.id), timestamp_str, status_value)
+                elif event.type == EventType.ACTION:
+                    self.actionReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.INFO:
+                    self.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.WARNING:
+                    self.warningReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.ERROR:
+                    self.errorReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.SSH_INFO:
+                    # Add handling for SSH_INFO events
+                    # This would need a new signal in the bridge class
+                    if hasattr(self, 'sshInfoReceived'):
+                        self.sshInfoReceived.emit(event.content, str(event.id), timestamp_str)
+                    else:
+                        # Fall back to info message if no dedicated handler
+                        self.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.FUNCTION:
+                    # Add handling for FUNCTION events
+                    # This would need a new signal in the bridge class
+                    if hasattr(self, 'functionReceived'):
+                        self.functionReceived.emit(event.content, str(event.id), timestamp_str)
+                    else:
+                        # Fall back to info message if no dedicated handler
+                        self.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.STATUS:
+                    # Update status if STATUS event
+                    status_str = event.content
+                    self.status_manager.update_status(status_str)
+                    self.statusChanged.emit(status_str)
+                else:
+                    logger.warning(f"MCPClientBridge._handle_event: Unknown event type: {event.type}")
+            
+            # Handle legacy UIEvent format (backward compatibility)
+            elif isinstance(event, UIEvent):
+                # Convert timestamp to string if it exists
+                timestamp_str = str(event.timestamp) if event.timestamp else None
+
+                # Emit the appropriate signal based on event type
+                if event.type == EventType.MESSAGE:
+                    # Pass status as string (.value from Enum) to the UI
+                    status_value = event.status.value if hasattr(event.status, 'value') else event.status
+                    self.messageReceived.emit(event.content, str(event.id), timestamp_str, status_value)
+                elif event.type == EventType.ACTION:
+                    self.actionReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.INFO:
+                    self.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.WARNING:
+                    self.warningReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.ERROR:
+                    self.errorReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.SSH_INFO:
+                    # Handle SSH info with generic info signal if available
+                    self.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.FUNCTION:
+                    # Handle function info with generic info signal if available
+                    self.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                else:
+                    logger.warning(f"MCPClientBridge._handle_event: Unknown event type: {event.type}")
+            else:
                 logger.error(f"MCPClientBridge._handle_event: Invalid event type: {type(event)}")
                 return
-
-            # Convert timestamp to string if it exists
-            timestamp_str = str(event.timestamp) if event.timestamp else None
-
-            # Emit the appropriate signal based on event type
-            if event.type == EventType.MESSAGE:
-                # Pass status as string (.value from Enum) to the UI
-                self.messageReceived.emit(event.content, str(event.id), timestamp_str, event.status.value)
-            elif event.type == EventType.ACTION:
-                self.actionReceived.emit(event.content, str(event.id), timestamp_str)
-            elif event.type == EventType.INFO:
-                self.infoReceived.emit(event.content, str(event.id), timestamp_str)
-            elif event.type == EventType.WARNING:
-                self.warningReceived.emit(event.content, str(event.id), timestamp_str)
-            elif event.type == EventType.ERROR:
-                self.errorReceived.emit(event.content, str(event.id), timestamp_str)
-            else:
-                logger.warning(f"MCPClientBridge._handle_event: Unknown event type: {event.type}")
 
         except Exception as e:
             logger.error(f"MCPClientBridge._handle_event: Error handling event: {e}", exc_info=True)

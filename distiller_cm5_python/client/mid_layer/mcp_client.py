@@ -1,6 +1,6 @@
 import time
 import asyncio
-from typing import Optional, List, Dict, Any, AsyncGenerator, Callable
+from typing import Optional, List, Dict, Any, AsyncGenerator, Callable, Union
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -21,7 +21,10 @@ import traceback
 import concurrent.futures
 import uuid
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
-from distiller_cm5_python.client.ui.events.event_types import EventType, UIEvent
+from distiller_cm5_python.client.ui.events.event_types import (
+    EventType, UIEvent, StatusType, MessageSchema, 
+    MessageEvent, ActionEvent, StatusEvent, ObservationEvent
+)
 
 
 class MCPClient:
@@ -222,21 +225,67 @@ class MCPClient:
         for i, tool_call in enumerate(tool_calls):
             logger.info(f"Executing tool call {i + 1}/{len(tool_calls)}")
             tool_result_content = "Error: Tool call execution failed."
+            
+            # Create action event for tool execution start
+            tool_name = tool_call.get('function', {}).get('name', 'unknown') if 'function' in tool_call else tool_call.get('name', 'unknown')
+            
+            action_event = ActionEvent(
+                type=EventType.ACTION,
+                content=f"Executing tool: {tool_name}",
+                status=StatusType.IN_PROGRESS,
+                tool_name=tool_name,
+                tool_args=tool_call.get('function', {}).get('arguments', {}),
+                data={"tool_call": tool_call}
+            )
+            self.dispatcher.dispatch(action_event)
+            
             try:
                 if not isinstance(tool_call, dict) or 'function' not in tool_call:
                     error_msg = f"Invalid tool call format: {tool_call}"
                     logger.error(error_msg)
                     tool_result_content = error_msg
+                    
+                    # Dispatch error event
+                    error_event = ActionEvent(
+                        type=EventType.ERROR,
+                        content=error_msg,
+                        status=StatusType.FAILED,
+                        tool_name=tool_name,
+                        data={"tool_call": tool_call}
+                    )
+                    self.dispatcher.dispatch(error_event)
                 else:
                     self.message_processor.add_tool_call(tool_call)
                     tool_result_content = await self.tool_processor.execute_tool_call_async(tool_call)
                     logger.info(f"Executed tool name: {tool_call.get('id', 'N/A')}")
                     logger.info(f"Executed tool result: {tool_result_content}")
+                    
+                    # Dispatch success event
+                    result_event = ActionEvent(
+                        type=EventType.ACTION,
+                        content=f"Tool result: {tool_name}",
+                        status=StatusType.SUCCESS,
+                        tool_name=tool_name,
+                        tool_args=tool_call.get('function', {}).get('arguments', {}),
+                        data={"tool_call": tool_call, "result": tool_result_content}
+                    )
+                    self.dispatcher.dispatch(result_event)
 
             except Exception as e:
                 error_msg = f"Error executing tool call {tool_call.get('function',{}).get('name', 'N/A')}: {e}"
                 logger.error(f"{error_msg}")
                 tool_result_content = error_msg # Store error as result
+                
+                # Dispatch error event
+                error_event = ActionEvent(
+                    type=EventType.ERROR,
+                    content=error_msg,
+                    status=StatusType.FAILED,
+                    tool_name=tool_name,
+                    tool_args=tool_call.get('function', {}).get('arguments', {}),
+                    data={"tool_call": tool_call, "error": str(e)}
+                )
+                self.dispatcher.dispatch(error_event)
             finally:
                 # Add the tool call result (or error) to the message history
                 self.message_processor.add_tool_result(
@@ -253,15 +302,24 @@ class MCPClient:
             The processed response from the LLM client.
         """
         import time, uuid
-        from distiller_cm5_python.client.ui.events.event_types import EventType, StatusType, UIEvent
-
-        # Initial INFO event: thinking
-        start_evt = UIEvent(uuid.uuid4(), EventType.INFO, "Thinking...", StatusType.IN_PROGRESS, timestamp=time.time())
-        # Dispatch initial thinking event
-        self.dispatcher.dispatch(start_evt)
+        
+        # Create standard message schema for thinking state
+        thinking_msg = MessageEvent(
+            type=EventType.INFO,
+            content="Thinking...",
+            status=StatusType.IN_PROGRESS,
+            role="assistant",
+            data=None
+        )
+        
+        # Dispatch using new message schema
+        self.dispatcher.dispatch(thinking_msg)
 
         # Record the user's message
-        self.message_processor.add_message("user", query)
+        user_msg = self.message_processor.add_message("user", query)
+        
+        # Dispatch user message event
+        self.dispatcher.dispatch(user_msg)
 
         messages = self.message_processor.get_formatted_messages()
         max_tool_iterations = 5
@@ -282,35 +340,58 @@ class MCPClient:
                 # Non-streaming
                 resp = await self.llm_provider.get_chat_completion_response(messages, self.available_tools)
                 content = resp.get("message", {}).get("content", "")
-                ev = UIEvent(uuid.uuid4(), EventType.MESSAGE, content, StatusType.IN_PROGRESS, timestamp=time.time())
-                # Dispatch final non-streaming message event
-                self.dispatcher.dispatch(ev)
+                
+                # Create and dispatch message with new schema
+                msg_event = MessageEvent(
+                    type=EventType.MESSAGE,
+                    content=content,
+                    status=StatusType.IN_PROGRESS,
+                    role="assistant"
+                )
+                self.dispatcher.dispatch(msg_event)
                 response = resp
 
-            self.message_processor.add_message("assistant", response.get("message", {}).get("content", ""))
-
+            # Add message to processor
+            assistant_msg = self.message_processor.add_message("assistant", response.get("message", {}).get("content", ""))
+            
             # Extract tool calls
             tool_calls = (response or {}).get("message", {}).get("tool_calls", [])
             if not tool_calls:
                 break
 
-            # Dispatch INFO event: before tool calls
-            ev = UIEvent(uuid.uuid4(), EventType.INFO, f"Executing tools iter {current_iteration}", StatusType.IN_PROGRESS, data={"count": len(tool_calls)}, timestamp=time.time())
-            self.dispatcher.dispatch(ev)
+            # Create and dispatch info event for tool execution
+            tool_info_event = StatusEvent(
+                type=EventType.INFO,
+                content=f"Executing tools iter {current_iteration}",
+                status=StatusType.IN_PROGRESS,
+                component="tools",
+                data={"count": len(tool_calls)}
+            )
+            self.dispatcher.dispatch(tool_info_event)
 
             # Execute tools
             await self._execute_tool_calls(tool_calls)
 
-            # Dispatch INFO event: after tool calls
-            ev = UIEvent(uuid.uuid4(), EventType.INFO, f"Executed tools iter {current_iteration}", StatusType.SUCCESS, timestamp=time.time())
-            self.dispatcher.dispatch(ev)
+            # Create and dispatch completion event for tool execution
+            tool_complete_event = StatusEvent(
+                type=EventType.INFO,
+                content=f"Executed tools iter {current_iteration}",
+                status=StatusType.SUCCESS,
+                component="tools"
+            )
+            self.dispatcher.dispatch(tool_complete_event)
 
             # Prepare for potential next iteration
             messages = self.message_processor.get_formatted_messages()
 
-        # Dispatch final INFO event: complete
-        ev = UIEvent(uuid.uuid4(), EventType.INFO, "", StatusType.SUCCESS, timestamp=time.time())
-        self.dispatcher.dispatch(ev)
+        # Create and dispatch completion event
+        complete_event = StatusEvent(
+            type=EventType.INFO,
+            content="",
+            status=StatusType.SUCCESS,
+            component="query"
+        )
+        self.dispatcher.dispatch(complete_event)
 
         logger.info("--- Query Processing Complete ---")
 

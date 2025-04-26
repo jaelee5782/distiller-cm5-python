@@ -40,7 +40,6 @@ Rectangle {
             console.log("VoiceInputArea: State changing from " + appState + " to " + newState);
             appState = newState;
             stateHint = getStateHint();
-            stateChanged(newState);
             
             // Update legacy state properties for backward compatibility
             isListening = (newState === "listening");
@@ -59,7 +58,12 @@ Rectangle {
     signal voiceReleased()
     signal settingsClicked()
     signal resetClicked()  // New signal for reset button
-    signal stateChanged(string newState)
+    
+    // Connect to the automatically generated property change signal
+    onAppStateChanged: {
+        console.log("App state changed to: " + appState);
+        // Any external components connecting to stateChanged can now connect to onAppStateChanged
+    }
 
     // Functions to manage state
     function resetState() {

@@ -36,6 +36,9 @@ class MessageProcessor:
         self.is_debug_mode = logger.isEnabledFor(logging.DEBUG)
         self.debug_history_file = f"debug_message_traffic_{self.session_start_time}.json"
         
+        # Initialize standardized message cache
+        self.standardized_messages = []
+        
         logger.debug(f"MessageProcessor.__init__: Initialized with {"DEBUG" if self.is_debug_mode else "INFO"} mode")
 
     def add_message(self, role: str, content: str, metadata: Dict[str, Any] = None, tool_calls: List[Dict[str, Any]] = None) -> None:
@@ -71,12 +74,39 @@ class MessageProcessor:
         # Add to normal message history
         self.message_history.append(message)
         
+        # Create standardized message schema
+        from distiller_cm5_python.client.ui.events.event_types import MessageSchema, EventType, StatusType, MessageEvent
+        
+        # Determine event type based on role
+        event_type = EventType.MESSAGE
+        if role == "system":
+            event_type = EventType.INFO
+        elif role == "tool":
+            event_type = EventType.ACTION
+            
+        # Create a standardized message
+        std_message = MessageEvent(
+            type=event_type,
+            content=content,
+            status=StatusType.SUCCESS,
+            role=role,
+            data={
+                "metadata": metadata,
+                "tool_calls": tool_calls
+            }
+        )
+        
+        # Add to standardized messages
+        self.standardized_messages.append(std_message)
+        
         # If in debug mode, track detailed message traffic with message type
         if self.is_debug_mode:
             self._save_debug_traffic()
 
         logger.info(f"MessageProcessor.add_message: One {role} message added, now total {len(self.message_history)} messages")
-    
+        
+        return std_message
+
     def set_system_message(self, content: str, metadata: Dict[str, Any] = None) -> None:
         """Set or replace the system message in the conversation history
         
@@ -121,10 +151,27 @@ class MessageProcessor:
 
         self.message_history[-1] = assistant_message
 
+        # Create standardized message for tool call
+        from distiller_cm5_python.client.ui.events.event_types import ActionEvent, EventType, StatusType
+        
+        std_message = ActionEvent(
+            type=EventType.ACTION,
+            content=f"Calling {tool_name}",
+            status=StatusType.IN_PROGRESS,
+            tool_name=tool_name,
+            tool_args=tool_args,
+            data={"tool_call": tool_call}
+        )
+        
+        # Add to standardized messages
+        self.standardized_messages.append(std_message)
+
         logger.info(f"Tool call added: {tool_name}")
         if self.is_debug_mode:
             self._save_debug_traffic()
-        # Return UIEvent
+            
+        # Return UIEvent for backward compatibility
+        from distiller_cm5_python.client.ui.events.event_types import UIEvent
         return UIEvent.tool_call(tool_call)
 
     def add_tool_result(self, tool_call: Dict[str, Any], result: str) -> None:
@@ -144,11 +191,29 @@ class MessageProcessor:
 
         self.add_message("tool", result, metadata)
 
+        # Create standardized message for tool result
+        from distiller_cm5_python.client.ui.events.event_types import ActionEvent, EventType, StatusType
+        
+        std_message = ActionEvent(
+            type=EventType.ACTION,
+            content=f"Result for {tool_name}",
+            status=StatusType.SUCCESS,
+            tool_name=tool_name,
+            tool_args=tool_args,
+            data={"tool_call": tool_call, "result": result}
+        )
+        
+        # Add to standardized messages
+        self.standardized_messages.append(std_message)
+
         # If in debug mode, track detailed message traffic
         if self.is_debug_mode:
             self._save_debug_traffic()
 
         logger.debug(f"MessageProcessor.add_tool_result: {tool_name} and it's result({result}) are added into message history")
+        
+        # Return UIEvent for backward compatibility
+        from distiller_cm5_python.client.ui.events.event_types import UIEvent
         return UIEvent.tool_result(tool_call, result)
 
 
@@ -236,7 +301,7 @@ class ToolProcessor:
             session: MCP client session
         """
         self.session = session
-        self.available_tools = []
+        self.tools = []
         
         logger.debug(f"ToolProcessor.__init__: Initialized with session: {session is not None}")
 
@@ -251,93 +316,234 @@ class ToolProcessor:
         # Get available tools
         try:
             tools_response = await self.session.list_tools()
-            self.available_tools = tools_response.tools
+            self.tools = tools_response.tools
 
-            logger.debug(f"ToolProcessor.refresh_capabilities: Got {len(self.available_tools)} tools")
-            for tool in self.available_tools:
+            logger.debug(f"ToolProcessor.refresh_capabilities: Got {len(self.tools)} tools")
+            for tool in self.tools:
                 logger.debug(f"ToolProcessor.refresh_capabilities: Tool: {tool.name}")
         
         except Exception as e:
             logger.error(f"ToolProcessor.refresh_capabilities: Failed to refresh tools: {e}")
-            self.available_tools = []
+            self.tools = []
 
     def format_tools(self) -> List[Dict[str, Any]]:
-        """Format tools for LLM consumption
-        
-        Returns:
-            List of formatted tools
-        """
+        """Format all available tools from server into the shape expected by LLM models"""
+        if not self.session or not hasattr(self, 'tools') or not self.tools:
+            return []
 
         formatted_tools = []
         
-        for tool in self.available_tools:
+        # Create standard tool info events for UI
+        from distiller_cm5_python.client.ui.events.event_types import FunctionEvent, EventType, StatusType
+        
+        function_events = []
+        
+        for tool in self.tools:
+            # Check if tool is a dictionary or an object with attributes
+            if isinstance(tool, dict):
+                name = tool.get("name", "")
+                description = tool.get("description", "")
+                parameters = tool.get("inputSchema", {})
+            else:
+                # Assume it's an object with attributes
+                name = getattr(tool, "name", "")
+                description = getattr(tool, "description", "")
+                parameters = getattr(tool, "inputSchema", {})
+
             formatted_tool = {
                 "type": "function",
                 "function": {
-                    "name": tool.name,
-                    "description": tool.description
+                    "name": name,
+                    "description": description,
+                    "parameters": parameters
                 }
             }
-            # To ensure compatibility with Deepseek, when the parameter list is {}, it should be removed
-            if tool.inputSchema:
-                formatted_tool["function"]["parameters"] = tool.inputSchema
             formatted_tools.append(formatted_tool)
+            
+            # Create a FunctionEvent for each tool
+            function_event = FunctionEvent(
+                type=EventType.FUNCTION,
+                content=f"Function: {name}",
+                status=StatusType.SUCCESS,
+                name=name,
+                description=description,
+                parameters=parameters 
+            )
+            function_events.append(function_event)
 
-        logger.debug(f"ToolProcessor.format_tools: Return {len(formatted_tools)} Formatted tools")
+        # Store the function events for later use
+        self.function_events = function_events
+        
+        logger.debug(f"ToolProcessor.format_tools: Return {len(formatted_tools)} formatted tools")
         return formatted_tools
 
     async def execute_tool_call_async(self, tool_call: Dict[str, Any]) -> str:
-        """Execute a tool call asynchronously
-        
+        """Execute the tool call asynchronously
+
         Args:
             tool_call: The tool call to execute
-            
+
         Returns:
             The result of the tool execution
         """
         if not self.session:
-            logger.error("ToolProcessor.execute_tool_call_async: No session available to execute tool call")
-            raise UserVisibleError("No connected Mcp server session available, please check Mcp server connection")
+            raise LogOnlyError("ToolProcessor.execute_tool_call_async: No MCP session available")
+
+        tool_name = tool_call.get("function", {}).get("name", "")
+        args = tool_call.get("function", {}).get("arguments", {})
         
-        # Extract the tool name and arguments
-        tool_name = tool_call.get("function", {}).get("name") if "function" in tool_call else tool_call.get("name")
-        args_json = tool_call.get("function", {}).get("arguments") if "function" in tool_call else tool_call.get("arguments")
-        
-        if not tool_name:
-            error = "Invalid tool call format: missing function name"
-            logger.error(f"ToolProcessor.execute_tool_call_async: {error}")
-            return error
-            
-        # Parse arguments
-        if isinstance(args_json, str):
+        # Extract arguments; could be string (JSON) or dict
+        if isinstance(args, str):
             try:
-                args = json.loads(args_json)
-            except json.JSONDecodeError:
-                error = f"Invalid JSON in tool arguments: {args_json}"
-                logger.error(f"ToolProcessor.execute_tool_call_async: {error}")
-                return error
-        else:
-            args = args_json or {}
+                # Try to parse as JSON if it's a string
+                import json
+                args = json.loads(args.strip())
+            except:
+                # If fails, use as is - will likely cause issues, 
+                # but better than failing entirely
+                pass
         
-        logger.info(f"ToolProcessor.execute_tool_call_async: Executing tool name: {tool_name}")
-        logger.info(f"ToolProcessor.execute_tool_call_async: Executing tool with args: {args}")
-
-        # Execute the tool
+        logger.debug(f"ToolProcessor.execute_tool_call_async: Executing {tool_name} with args: {args}")
+        
         try:
-            start_time = time.time()
-            tool_result = await self.session.call_tool(tool_name, dict(args))
-            end_time = time.time()
-            result = tool_result.content[0].text
+            # Call the tool via the MCP session
+            result = await self.session.call_tool(tool_name, args) if args else await self.session.call_tool(tool_name, None)
 
-            logger.info(f"ToolProcessor.execute_tool_call_async: Executed tool result: {tool_result}")
-            logger.debug(f"ToolProcessor.execute_tool_call_async: Tool executed in {end_time - start_time:.2f}s")
+            # Check if any SSH info is contained in the tool result
+            ssh_info = self._extract_ssh_info(result, tool_name, args)
+            if ssh_info:
+                # Dispatch the SSH info event
+                from distiller_cm5_python.client.ui.events.event_types import SSHInfoEvent, EventType, StatusType
+                from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
+                
+                ssh_event = SSHInfoEvent(
+                    type=EventType.SSH_INFO,
+                    content=f"SSH: {ssh_info['username']}@{ssh_info['ip_address']}:{ssh_info['port']}",
+                    status=StatusType.SUCCESS,
+                    ip_address=ssh_info['ip_address'],
+                    username=ssh_info['username'],
+                    port=ssh_info['port']
+                )
+                
+                # We need to access the event dispatcher to dispatch this event
+                # This relies on the MCPClient instance having a dispatcher attribute
+                try:
+                    # Find a way to access the event dispatcher
+                    # This is a bit of a hack, but it allows for SSH info to be displayed
+                    # Alternative would be to return special format and have MCPClient handle
+                    from distiller_cm5_python.client.ui import App
+                    if hasattr(App, "current_dispatcher"):
+                        App.current_dispatcher.dispatch(ssh_event)
+                except Exception as e:
+                    logger.warning(f"Could not dispatch SSH info event: {e}")
             
-            return result
-
+            # Format the result for display
+            formatted_result = self._format_tool_result(result)
+            return formatted_result
+        
         except Exception as e:
-            error = f"Error executing tool {tool_name}: {str(e)}"
-            logger.error(f"ToolProcessor.execute_tool_call_async: Error executing tool {tool_name}: {str(e)}")
-            return error
+            error_msg = f"Error executing tool {tool_name}: {e}"
+            logger.error(error_msg)
+            return error_msg
+
+    def _extract_ssh_info(self, result, tool_name: str, args: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Extract SSH connection information from a tool result if present.
+        
+        Args:
+            result: The raw result from the tool call
+            tool_name: The name of the tool that was called
+            args: The arguments that were passed to the tool
+            
+        Returns:
+            Dictionary with SSH info (username, ip_address, port) or None if not found
+        """
+        # Check if tool name is related to SSH
+        ssh_related_tools = ["show_ssh_instructions", "ssh_info", "get_ssh_info", "get_connection_info"]
+        
+        if tool_name in ssh_related_tools:
+            # For explicit SSH info tools
+            try:
+                # Extract from result content if it's a structured message
+                if isinstance(result, list):
+                    for item in result:
+                        content = item.get("content", "")
+                        # Look for IP address patterns in content
+                        import re
+                        ip_match = re.search(r'(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})', content)
+                        if ip_match:
+                            ip_address = ip_match.group(1)
+                            # Try to find username and port
+                            username = args.get("username", "user")
+                            port = args.get("port", 22)
+                            
+                            return {
+                                "ip_address": ip_address,
+                                "username": username,
+                                "port": port
+                            }
+            
+                # If we have direct ip_address in args
+                if "ip_address" in args:
+                    return {
+                        "ip_address": args["ip_address"],
+                        "username": args.get("username", "user"),
+                        "port": args.get("port", 22)
+                    }
+            except Exception as e:
+                logger.warning(f"Error extracting SSH info: {e}")
+        
+        return None
+
+    def _format_tool_result(self, result) -> str:
+        """Format a tool result into a string representation.
+        
+        Args:
+            result: The result object returned from the MCP server
+            
+        Returns:
+            A string representation of the result
+        """
+        # Handle different result types
+        if isinstance(result, list):
+            # Handle list of content (common MCP server response format)
+            result_text = []
+            for item in result:
+                if isinstance(item, dict):
+                    # Handle content object
+                    content_type = item.get("type", "unknown")
+                    
+                    if content_type == "text":
+                        # Extract text content
+                        text = item.get("text", "")
+                        result_text.append(text)
+                    elif "content" in item:
+                        # Extract generic content
+                        result_text.append(str(item["content"]))
+                    else:
+                        # Just extract whole item as string
+                        result_text.append(str(item))
+                else:
+                    # Just add as string
+                    result_text.append(str(item))
+            
+            # Join text items with newlines
+            return "\n".join(result_text)
+        elif isinstance(result, dict):
+            # Try to extract content from dict
+            if "text" in result:
+                return result["text"]
+            elif "content" in result:
+                return str(result["content"])
+            else:
+                # Format as JSON
+                import json
+                try:
+                    return json.dumps(result, indent=2)
+                except:
+                    return str(result)
+        else:
+            # Return as string
+            return str(result)
 
 
 class PromptProcessor:
