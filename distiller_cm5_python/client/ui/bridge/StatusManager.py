@@ -1,63 +1,100 @@
-from distiller_cm5_python.utils.logger import logger
+from PyQt6.QtCore import QObject, pyqtSignal
+import logging
 
+logger = logging.getLogger(__name__)
 
-class StatusManager:
-    """
-    Manages the status of the MCPClientBridge.
-
-    Handles status updates, formatting, and emitting signals.
-    """
-
+class StatusManager(QObject):
+    """Manages the status system for the UI/client"""
+    
     # Status constants
-    STATUS_INITIALIZING = "Initializing..."
-    STATUS_CONNECTING = "Connecting to server..."
-    STATUS_CONNECTED = "Connected to {server_name}"
-    STATUS_DISCONNECTED = "Disconnected"
-    STATUS_PROCESSING = "Processing query..."
-    STATUS_STREAMING = "Streaming response..."
-    STATUS_IDLE = "Ready"
-    STATUS_ERROR = "Error: {error}"
-    STATUS_CONFIG_APPLIED = "Configuration applied successfully"
-    STATUS_SHUTTING_DOWN = "Shutting down..."
-    STATUS_RESTARTING = "Restarting application..."
-
-    def __init__(self, bridge):
-        """Initialize the status manager.
-
-        Args:
-            bridge: The parent MCPClientBridge instance
+    STATUS_IDLE = "idle"
+    STATUS_INITIALIZING = "initializing"
+    STATUS_CONNECTING = "connecting"
+    STATUS_CONNECTED = "connected"
+    STATUS_PROCESSING = "processing"
+    STATUS_READY = "ready"
+    STATUS_ERROR = "error"
+    STATUS_DISCONNECTED = "disconnected"
+    STATUS_RESTARTING = "restarting"
+    STATUS_SHUTTING_DOWN = "shutting_down"
+    STATUS_CONFIG_APPLIED = "config_applied"
+    
+    # Signal to update UI with status changes
+    statusChanged = pyqtSignal(str, str)  # status, details
+    
+    def __init__(self, parent=None):
+        """Initialize the status manager"""
+        super().__init__(parent)
+        self._current_status = self.STATUS_IDLE
+        self._status_details = ""
+        logger.info("StatusManager initialized")
+    
+    def update_status(self, status, details="", **kwargs):
         """
-        self._bridge = bridge
-        self._status = self.STATUS_INITIALIZING
-
+        Update the current status and emit signals for UI
+        
+        Args:
+            status: The new status string (use STATUS_* constants)
+            details: Optional details about the status
+            **kwargs: Additional keyword arguments, such as server_name
+        """
+        # Process additional kwargs if needed
+        if 'server_name' in kwargs and not details:
+            details = f"Connected to {kwargs['server_name']}"
+            
+        # Only update and emit signal if status actually changed
+        status_changed = (self._current_status != status or self._status_details != details)
+        
+        if status_changed:
+            self._current_status = status
+            self._status_details = details
+            logger.debug(f"Status updated: {status} - {details}")
+            
+            # Emit signal for UI components to update
+            self.statusChanged.emit(status, details)
+    
+    def get_current_status(self):
+        """
+        Get the current status
+        
+        Returns:
+            Tuple of (status, details)
+        """
+        return (self._current_status, self._status_details)
+    
     @property
     def status(self):
-        """Get the current status string.
-
+        """Return the current status string."""
+        return self._current_status
+    
+    def is_ready(self):
+        """
+        Check if the system is in ready state
+        
         Returns:
-            The current status as a string
+            True if status is READY
         """
-        return self._status
-
-    @status.setter
-    def status(self, value):
-        """Set the status directly and emit the signal.
-
-        Args:
-            value: The new status string
+        return self._current_status == self.STATUS_READY
+    
+    def is_error(self):
         """
-        if self._status != value:
-            self._status = value
-            self._bridge.statusChanged.emit(self._status)
-            logger.info(f"Status updated: {self._status}")
-
-    def update_status(self, status: str, **kwargs):
-        """Update the status with formatting and emit the statusChanged signal.
-
-        Args:
-            status: The status template string
-            **kwargs: Format parameters for the status string
+        Check if the system is in error state
+        
+        Returns:
+            True if status is ERROR
         """
-        self._status = status.format(**kwargs)
-        self._bridge.statusChanged.emit(self._status)
-        logger.info(f"Status updated: {self._status}")
+        return self._current_status == self.STATUS_ERROR
+    
+    def is_connected(self):
+        """
+        Check if the system is connected
+        
+        Returns:
+            True if status is CONNECTED
+        """
+        return self._current_status == self.STATUS_CONNECTED
+    
+    def cleanup(self):
+        """Clean up resources and reset status"""
+        self.update_status(self.STATUS_IDLE)
+        logger.info("StatusManager cleaned up")

@@ -15,7 +15,7 @@ from distiller_cm5_python.utils.distiller_exception import UserVisibleError, Log
 import asyncio
 import os
 import sys
-import time  # Add time import for debouncing
+import time
 import psutil
 import threading
 
@@ -40,16 +40,14 @@ class MCPClientBridge(QObject):
     listeningStopped = pyqtSignal()  # Signal for when listening stops
     errorOccurred = pyqtSignal(str)  # Signal for errors
     bridgeReady = pyqtSignal()  # Signal for when the bridge is fully initialized
-    transcriptionUpdate = pyqtSignal(str)  # Signal for transcription updates
-    transcriptionComplete = pyqtSignal(str)  # Signal for completed transcription
     recordingStateChanged = pyqtSignal(bool)  # Signal for recording state changes
-    recordingError = pyqtSignal(
-        str
-    )  # Signal specifically for recording/transcription errors like "Audio too short"
+    recordingError = pyqtSignal(str)  # Signal specifically for recording/transcription errors
     actionReceived = pyqtSignal(str, str, str)  # Signal for actions
     infoReceived = pyqtSignal(str, str, str)  # Signal for info messages
     warningReceived = pyqtSignal(str, str, str)  # Signal for warnings
     errorReceived = pyqtSignal(str, str, str)  # Signal for errors
+    transcriptionUpdate = pyqtSignal(str, arguments=['transcription'])  # Signal for transcription updates
+    transcriptionComplete = pyqtSignal(str, arguments=['full_text'])  # Signal for completed transcription
 
     def __init__(self, parent=None):
         """MCPClientBridge initializes the MCPClient and manages the conversation state."""
@@ -58,7 +56,6 @@ class MCPClientBridge(QObject):
         # Initialize sub-components
         self.status_manager = StatusManager(self)
         self.conversation_manager = ConversationManager(self)
-        # Ensure streaming message is reset at startup
         self.conversation_manager.reset_streaming_message()
         self.server_discovery = ServerDiscovery(self)
         self.network_utils = NetworkUtils()
@@ -76,27 +73,20 @@ class MCPClientBridge(QObject):
         self._is_connected = False
         self._is_ready = False
         self._loop = asyncio.get_event_loop()
-        # Get configuration file path with proper default
         self.config_path = DEFAULT_CONFIG_PATH
-        # Get logging level with proper default value
-        self._current_log_level = config.get(
-            "logging", "level", default="DEBUG"
-        ).upper()
+        self._current_log_level = config.get("logging", "level", default="DEBUG").upper()
         self._selected_server_path = None
 
         # Reference to the App instance
         self._app_instance = None
 
-        # Server discovery cache for debouncing
+        # Server discovery cache
         self._last_server_discovery_time = 0
         self._server_discovery_cache_timeout = 5  # seconds
 
-        # Configuration cache for optimized access
+        # Configuration cache - simplified
         self._config_cache = {}
         self._config_dirty = False
-        self._config_save_timer = None
-        self._config_cache_timeout = 300  # seconds - how long to keep cached values
-        self._config_cache_timestamps = {}  # Track when values were cached
 
     def set_app_instance(self, app_instance):
         """Set the reference to the App instance."""
@@ -158,9 +148,7 @@ class MCPClientBridge(QObject):
                 return
 
             if not self._is_connected:
-                raise ConnectionError(
-                    "Not connected to any server. Please connect first."
-                )
+                raise ConnectionError("Not connected to any server. Please connect first.")
 
             # Add user message
             user_message = {
@@ -171,7 +159,6 @@ class MCPClientBridge(QObject):
             logger.info(f"User query added to conversation: {query}")
 
             # Process the query in a separate task to avoid blocking the UI
-            # This is particularly important for long running queries
             asyncio.create_task(self.process_query(query))
 
         except Exception as e:
@@ -194,90 +181,64 @@ class MCPClientBridge(QObject):
 
     @pyqtSlot(bool)
     def toggle_streaming(self, enabled: bool):
-        """Enable or disable streaming mode, streaming here refers to the ability to receive partial responses from the server."""
+        """Enable or disable streaming mode."""
         if self.mcp_client is None:
             logger.error("Client is not initialized")
             return
+            
         self.mcp_client.streaming = enabled
         status = "enabled" if enabled else "disabled"
         self.status_manager.status = f"Streaming {status}"
-        self.conversation_manager.add_message(
-            {
-                "timestamp": self.conversation_manager.get_timestamp(),
-                "content": f"Streaming {status}",
-            }
-        )
+        self.conversation_manager.add_message({
+            "timestamp": self.conversation_manager.get_timestamp(),
+            "content": f"Streaming {status}",
+        })
         logger.info(f"Streaming {status}")
         self.statusChanged.emit(self.status_manager.status)
 
     @pyqtSlot(str, str, result="QVariant")
     def getConfigValue(self, section: str, key: str) -> str:
-        """Get a configuration value, always returning a string.
-        Uses an in-memory cache to reduce disk I/O and improve UI responsiveness.
-        """
+        """Get a configuration value, always returning a string."""
         # Generate a cache key for this config value
         cache_key = f"{section}.{key}"
-        current_time = time.time()
-
-        # Check if the value is in the cache and not expired
-        if (
-            cache_key in self._config_cache
-            and current_time - self._config_cache_timestamps.get(cache_key, 0)
-            < self._config_cache_timeout
-        ):
+        
+        # Check if the value is in the cache
+        if cache_key in self._config_cache:
             logger.debug(f"Cache hit for {cache_key}")
             return self._config_cache[cache_key]
 
-        # Not in cache or expired, need to fetch from config
+        # Not in cache, need to fetch from config
         logger.debug(f"Cache miss for {cache_key}, fetching from config")
 
-        # Get the active provider name for LLM-specific configs
+        # Handle special cases
         if cache_key == "active_llm_provider":
             value = config.get("active_llm_provider")
-        # Special cases for provider-specific configuration
         elif section == "llm":
-            # Map old flat "llm" section to new "llm_providers.{active_provider}" structure
+            # Map to provider-specific structure
             active_provider_name = config.get("active_llm_provider")
             value = config.get("llm_providers", active_provider_name, key)
-            logger.debug(
-                f"Getting provider config value {key} for {active_provider_name}: {value} (type: {type(value)})"
-            )
         elif section == "llama_cpp" and key == "start_wait_time":
-            # Special case for llama_cpp specific settings
             value = config.get(section, key, default=30)
-            logger.debug(
-                f"Getting config value for {section}.{key}: {value} (type: {type(value)})"
-            )
         else:
             # Regular configuration paths
             value = config.get(section, key)
-            logger.debug(
-                f"Getting config value for {section}.{key}: {value} (type: {type(value)})"
-            )
 
         # Format the value for QML
         if value is None:
-            logger.debug(f"Value is None, returning empty string")
             result = ""
         elif isinstance(value, list):
             if key == "stop":
-                # For stop sequences, escape special characters for QML
-                result = "\n".join(
-                    str(v).encode("unicode_escape").decode("utf-8") for v in value
-                )
+                # Escape special characters for stop sequences
+                result = "\n".join(str(v).encode("unicode_escape").decode("utf-8") for v in value)
             else:
                 result = ",".join(str(v) for v in value)
         elif section == "logging" and key == "level":
-            # Return the current log level in uppercase
             result = self._current_log_level
         else:
             result = str(value)
 
         # Cache the result
         self._config_cache[cache_key] = result
-        self._config_cache_timestamps[cache_key] = current_time
-
-        logger.debug(f"Cached value for {cache_key}: {result}")
         return result
 
     @pyqtSlot(str, str, "QVariant")
@@ -289,12 +250,7 @@ class MCPClientBridge(QObject):
 
         # Process the value first
         if key == "stop" and isinstance(value, str):
-            # For stop sequences, escape special characters for QML
-            processed_value = [
-                v.encode("utf-8").decode("unicode_escape")
-                for v in value.split("\n")
-                if v
-            ]
+            processed_value = [v.encode("utf-8").decode("unicode_escape") for v in value.split("\n") if v]
         elif key in ["timeout", "top_k", "n_ctx", "max_tokens", "streaming_chunk_size"]:
             processed_value = int(value) if value != "" else 0
         elif key in ["temperature", "top_p", "repetition_penalty"]:
@@ -303,75 +259,45 @@ class MCPClientBridge(QObject):
             processed_value = bool(value)
         elif section == "logging" and key == "level":
             processed_value = value.upper()
-            # Update the current log level cache
             self._current_log_level = processed_value
         else:
             processed_value = value
 
         # Special cases for provider-specific configuration
         if section == "llm":
-            # Map flat "llm" section to proper nested path
             active_provider_name = self.getConfigValue("active_llm_provider", "")
             config.set("llm_providers", active_provider_name, key, processed_value)
-            logger.debug(
-                f"Setting LLM provider config: llm_providers.{active_provider_name}.{key} = {processed_value}"
-            )
-
-            # Update the cache for this specific provider setting
+            
+            # Update the cache
             provider_cache_key = f"llm_providers.{active_provider_name}.{key}"
-            self._update_config_cache(provider_cache_key, str(processed_value))
-        elif section == "llama_cpp" and key == "start_wait_time":
-            # Special case for llama_cpp specific settings
-            config.set(section, key, processed_value)
-            self._update_config_cache(cache_key, str(processed_value))
+            self._config_cache[provider_cache_key] = str(processed_value)
         else:
             # Regular configuration paths
             config.set(section, key, processed_value)
-            self._update_config_cache(cache_key, str(processed_value))
+            self._config_cache[cache_key] = str(processed_value)
 
-        # Mark configuration as dirty for delayed save
+        # Mark configuration as dirty for save
         self._config_dirty = True
-
-        # Signal that config has changed - might want to emit a dedicated signal if needed
-        # self.configChanged.emit(section, key)
-
-    def _update_config_cache(self, cache_key, value):
-        """Update the configuration cache with a new value."""
-        logger.debug(f"Updating config cache: {cache_key} = {value}")
-        self._config_cache[cache_key] = value
-        self._config_cache_timestamps[cache_key] = time.time()
 
     @asyncSlot()
     async def applyConfig(self):
         """Apply configuration changes by restarting the client."""
         try:
             self.status_manager.update_status(StatusManager.STATUS_INITIALIZING)
-            self.conversation_manager.add_message(
-                {
-                    "timestamp": self.conversation_manager.get_timestamp(),
-                    "content": "Applying configuration changes...",
-                }
-            )
+            self.conversation_manager.add_message({
+                "timestamp": self.conversation_manager.get_timestamp(),
+                "content": "Applying configuration changes...",
+            })
 
             # Store the current conversation
             current_conversation = self.conversation_manager.get_messages_copy()
 
-            # Wait for any pending configuration saves to complete
-            if self._config_save_timer and not self._config_save_timer.done():
-                try:
-                    await self._config_save_timer
-                except asyncio.CancelledError:
-                    # The timer was cancelled, which is fine - just means we'll save now
-                    pass
-                except Exception as save_error:
-                    logger.warning(f"Error in pending config save: {save_error}")
-
-            # Ensure configuration is saved to disk if there are pending changes
+            # Save config if needed
             if self._config_dirty:
                 try:
                     config.save_to_file(self.config_path)
                     self._config_dirty = False
-                    logger.info(f"Configuration saved successfully before apply")
+                    logger.info("Configuration saved successfully before apply")
                 except Exception as save_error:
                     self._handle_error(
                         save_error,
@@ -381,56 +307,40 @@ class MCPClientBridge(QObject):
 
             # Clean up existing client
             if self.mcp_client:
-                self.conversation_manager.add_message(
-                    {
-                        "timestamp": self.conversation_manager.get_timestamp(),
-                        "content": "Disconnecting from server...",
-                    }
-                )
+                self.conversation_manager.add_message({
+                    "timestamp": self.conversation_manager.get_timestamp(),
+                    "content": "Disconnecting from server...",
+                })
 
-                # First attempt - normal cleanup
                 try:
                     cleanup_task = asyncio.create_task(self.mcp_client.cleanup())
                     await asyncio.wait_for(cleanup_task, timeout=5.0)
-                    await asyncio.sleep(1)
                 except asyncio.TimeoutError:
-                    logger.warning(
-                        "Cleanup timeout during configuration apply, forcing disconnect"
-                    )
-                    self.conversation_manager.add_message(
-                        {
-                            "timestamp": self.conversation_manager.get_timestamp(),
-                            "content": "Cleanup is taking longer than expected, forcing disconnect...",
-                        }
-                    )
+                    logger.warning("Cleanup timeout during configuration apply, forcing disconnect")
+                    self.conversation_manager.add_message({
+                        "timestamp": self.conversation_manager.get_timestamp(),
+                        "content": "Cleanup is taking longer than expected, forcing disconnect...",
+                    })
                 except Exception as cleanup_error:
-                    # Use the centralized error handler with specific context
                     self._handle_error(
                         cleanup_error,
                         "Client cleanup",
-                        user_friendly_msg="Warning: Client resources may not be fully released.",
+                        user_friendly_msg="Warning: Client resources may not be properly released.",
                     )
 
-                # Ensure client is fully reset regardless of cleanup success
+                # Reset client
                 self.mcp_client = None
                 self.is_connected = False
-                self.isConnectedChanged.emit(False)
 
-            # Extra delay to ensure all resources are released
-            await asyncio.sleep(1.0)
-
-            # Reload the configuration from file
-            self.conversation_manager.add_message(
-                {
-                    "timestamp": self.conversation_manager.get_timestamp(),
-                    "content": "Reloading configuration...",
-                }
-            )
+            # Reload the configuration
+            self.conversation_manager.add_message({
+                "timestamp": self.conversation_manager.get_timestamp(),
+                "content": "Reloading configuration...",
+            })
 
             try:
-                # Clear configuration cache before reload to ensure fresh values
+                # Clear cache and reload config
                 self._config_cache = {}
-                self._config_cache_timestamps = {}
                 config.reload()
                 logger.info("Configuration cache cleared and config reloaded")
             except Exception as config_error:
@@ -438,63 +348,40 @@ class MCPClientBridge(QObject):
                     f"Failed to reload configuration: {str(config_error)}. Check your config file for syntax errors."
                 )
 
-            # Add a small delay after config reload
-            await asyncio.sleep(0.5)
-
-            # Update global variables after config reload
-            global SERVER_URL, MODEL_NAME, PROVIDER_TYPE, API_KEY, TIMEOUT, STREAMING_ENABLED
-
+            # Update global variables
             try:
                 # Get the active provider configuration
                 active_provider_name = config.get("active_llm_provider")
                 if not active_provider_name:
-                    raise ValueError(
-                        "No active LLM provider specified in configuration."
-                    )
+                    raise ValueError("No active LLM provider specified in configuration.")
 
-                active_provider_config = config.get(
-                    "llm_providers", active_provider_name
-                )
+                active_provider_config = config.get("llm_providers", active_provider_name)
                 if not active_provider_config:
-                    raise ValueError(
-                        f"Configuration for provider '{active_provider_name}' not found."
-                    )
+                    raise ValueError(f"Configuration for provider '{active_provider_name}' not found.")
 
                 # Update global variables from the active provider
                 SERVER_URL = active_provider_config.get("server_url")
                 if not SERVER_URL:
-                    raise ValueError(
-                        f"No server URL specified for provider '{active_provider_name}'."
-                    )
+                    raise ValueError(f"No server URL specified for provider '{active_provider_name}'.")
 
                 MODEL_NAME = active_provider_config.get("model_name")
                 if not MODEL_NAME:
-                    raise ValueError(
-                        f"No model name specified for provider '{active_provider_name}'."
-                    )
+                    raise ValueError(f"No model name specified for provider '{active_provider_name}'.")
 
-                PROVIDER_TYPE = active_provider_config.get(
-                    "provider_type", active_provider_name
-                )
+                PROVIDER_TYPE = active_provider_config.get("provider_type", active_provider_name)
                 API_KEY = active_provider_config.get("api_key", "")
                 TIMEOUT = active_provider_config.get("timeout", 120)
                 STREAMING_ENABLED = active_provider_config.get("streaming", True)
             except ValueError as config_value_error:
-                # Re-raise with more specific context
                 raise ValueError(f"Configuration error: {str(config_value_error)}")
             except Exception as config_extract_error:
-                # Re-raise unexpected errors with generic message
-                raise ValueError(
-                    f"Error extracting configuration values: {str(config_extract_error)}"
-                )
+                raise ValueError(f"Error extracting configuration values: {str(config_extract_error)}")
 
             # Create new client with updated config
-            self.conversation_manager.add_message(
-                {
-                    "timestamp": self.conversation_manager.get_timestamp(),
-                    "content": "Creating new client with updated configuration...",
-                }
-            )
+            self.conversation_manager.add_message({
+                "timestamp": self.conversation_manager.get_timestamp(),
+                "content": "Creating new client with updated configuration...",
+            })
 
             # Reconnect if previously connected
             if self._selected_server_path:
@@ -503,14 +390,12 @@ class MCPClientBridge(QObject):
                 )
 
             self.status_manager.update_status(StatusManager.STATUS_CONFIG_APPLIED)
-            # Ensure we keep current conversation
+            # Restore conversation
             self.conversation_manager.set_messages(current_conversation)
-            self.conversation_manager.add_message(
-                {
-                    "timestamp": self.conversation_manager.get_timestamp(),
-                    "content": "Configuration applied successfully.",
-                }
-            )
+            self.conversation_manager.add_message({
+                "timestamp": self.conversation_manager.get_timestamp(),
+                "content": "Configuration applied successfully.",
+            })
 
         except Exception as e:
             self._handle_error(
@@ -521,31 +406,13 @@ class MCPClientBridge(QObject):
 
     @pyqtSlot()
     def saveConfigToFile(self):
-        """Save the current configuration to file with debouncing.
-
-        Uses a timer to debounce rapid save requests, ensuring we don't
-        repeatedly write to disk when multiple settings are changed in succession.
-        """
+        """Save the current configuration to file."""
         if not self._config_dirty:
             logger.debug("Configuration not dirty, skipping save")
             return
 
-        logger.info(f"Scheduling configuration save to {self.config_path}")
-
-        # Cancel existing timer if it's running
-        if self._config_save_timer and not self._config_save_timer.done():
-            self._config_save_timer.cancel()
-
-        # Schedule a new save with a delay
-        self._config_save_timer = asyncio.create_task(self._debounced_save_config())
-
-    async def _debounced_save_config(self):
-        """Perform the actual configuration save after a delay."""
-        # Delay for a moment to allow batching multiple changes
-        await asyncio.sleep(1.0)
-
+        logger.info(f"Saving configuration to {self.config_path}")
         try:
-            logger.info(f"Saving configuration to {self.config_path}")
             config.save_to_file(self.config_path)
             self._config_dirty = False
             logger.info(f"Configuration saved successfully to {self.config_path}")
@@ -567,12 +434,10 @@ class MCPClientBridge(QObject):
             self.status_manager.update_status(
                 StatusManager.STATUS_ERROR, error="No MCP servers found"
             )
-            self.conversation_manager.add_message(
-                {
-                    "timestamp": self.conversation_manager.get_timestamp(),
-                    "content": "Error: No MCP servers found.",
-                }
-            )
+            self.conversation_manager.add_message({
+                "timestamp": self.conversation_manager.get_timestamp(),
+                "content": "Error: No MCP servers found.",
+            })
             self.errorOccurred.emit("No MCP servers found")
             return False
 
@@ -614,122 +479,54 @@ class MCPClientBridge(QObject):
     @pyqtSlot(bool)
     def shutdownApplication(self, restart=False):
         """
-        Exposed QML method to handle application shutdown gracefully.
+        Handle application shutdown gracefully.
         Args:
-            restart: Whether to restart after shutdown
+            restart: Whether to restart after shutdown (currently unused)
         """
         logger.info(f"Shutdown requested from QML with restart={restart}")
-        # Create a task to run the async shutdown
-        asyncio.create_task(self.shutdown())
+        asyncio.create_task(self._shutdown_process())
         return True
 
-    async def shutdown(self):
-        """Handle application shutdown gracefully."""
-        logger.info("Bridge shutdown requested")
+    async def _shutdown_process(self):
+        """Unified shutdown process to handle all cleanup."""
+        logger.info("Bridge shutdown initiated")
         self.status_manager.update_status(StatusManager.STATUS_SHUTTING_DOWN)
 
         try:
-            # Cancel any pending tasks first
-            if hasattr(self, "_pending_tasks") and self._pending_tasks:
-                for task in self._pending_tasks:
-                    if not task.done():
-                        task.cancel()
-                self._pending_tasks = []
-
-            # Cancel any pending save config task
-            if (
-                hasattr(self, "_save_config_task")
-                and self._save_config_task
-                and not self._save_config_task.done()
-            ):
-                self._save_config_task.cancel()
-                self._save_config_task = None
-
-            # Schedule cleanup to run on the event loop
-            coro = self._do_shutdown_cleanup()
-            shutdown_task = asyncio.create_task(coro)
-
-            # Add to pending tasks so it can be tracked
-            if not hasattr(self, "_pending_tasks"):
-                self._pending_tasks = []
-            self._pending_tasks.append(shutdown_task)
-
-            logger.info("Bridge shutdown initiated")
-        except Exception as e:
-            logger.error(f"Error during bridge shutdown: {e}", exc_info=True)
-            self._force_quit()
-
-    def _force_quit(self):
-        """Force the application to quit if normal shutdown doesn't complete."""
-        logger.warning("Bridge is forcing application to quit")
-        app_instance = QApplication.instance()
-        if app_instance:
-            app_instance.quit()
-        else:
-            logger.error("Failed to get QApplication instance for quit")
-            # Force exit as fallback
-            os._exit(1)  # Use os._exit for more forceful exit than sys.exit
-
-    async def _do_shutdown_cleanup(self):
-        """
-        Clean up resources when shutting down the application.
-        This is a critical method to ensure proper cleanup.
-        """
-        try:
-            logger.info("Starting shutdown cleanup")
-            # First, try normal cleanup - directly await the coroutine instead of using run_until_complete
+            # Clean up client if exists
             if self.mcp_client:
                 try:
                     await self.mcp_client.cleanup()
-                    logger.info("Completed normal cleanup")
+                    logger.info("Completed MCP client cleanup")
                 except Exception as e:
                     logger.error(f"Error during client cleanup: {e}", exc_info=True)
-            else:
-                logger.info("No client to clean up")
-        except Exception as e:
-            logger.error(f"Error during normal cleanup: {e}", exc_info=True)
-
-        try:
-            # Ensure any dangling processes are terminated
+            
+            # Terminate dangling processes
             self._terminate_dangling_processes()
-            logger.info("Completed dangling process termination")
+            
+            logger.info("Force quitting application from bridge")
+            # Use threading for final exit
+            threading.Thread(target=self._force_exit, daemon=True).start()
+            await asyncio.sleep(0.1)  # Short sleep to let logs flush
+            os._exit(0)  # Force immediate exit
         except Exception as e:
-            logger.error(f"Error terminating dangling processes: {e}", exc_info=True)
-
-        # Force exit with a short delay to allow logs to be written
-        logger.info("Force quitting application from bridge")
-        # Schedule force exit but don't wait
-        threading.Thread(target=self._final_force_exit, daemon=True).start()
-        # Start immediate exit as well (in case the thread doesn't work)
-        await asyncio.sleep(
-            0.1
-        )  # Very short sleep to let logs flush, using asyncio.sleep
-        os._exit(0)  # Force immediate exit
-
-    def _final_force_exit(self):
-        """
-        Final force exit after a short delay to allow logs to be written.
-        This is a safety measure in case the application doesn't exit properly.
-        """
+            logger.error(f"Error during shutdown: {e}", exc_info=True)
+            self._force_exit()
+    
+    def _force_exit(self):
+        """Force the application to exit."""
         time.sleep(EXIT_DELAY_MS / 1000.0)
         logger.info("Executing final force exit")
-        # Kill any remaining processes before exiting
         self._terminate_dangling_processes(force=True)
-        # Force exit the application
         os._exit(0)
 
     def _terminate_dangling_processes(self, force=False):
-        """
-        Find and terminate any dangling MCP processes.
-        """
+        """Find and terminate any dangling MCP processes."""
         logger.info("Checking for dangling MCP processes")
 
-        # Find our process ID
-        current_pid = os.getpid()
-
         try:
-            # Get all child processes of our process
-            current_process = psutil.Process(current_pid)
+            # Find our process ID
+            current_process = psutil.Process(os.getpid())
             children = current_process.children(recursive=True)
 
             for child in children:
@@ -739,90 +536,26 @@ class MCPClientBridge(QObject):
                         mcp_name in " ".join(child.cmdline()).lower()
                         for mcp_name in ["mcp", "model-control"]
                     ):
-                        logger.info(
-                            f"Terminating process {child.pid}: {' '.join(child.cmdline())}"
-                        )
+                        logger.info(f"Terminating process {child.pid}: {' '.join(child.cmdline())}")
                         if force:
                             # Force kill
                             child.kill()
                         else:
                             # Try graceful termination first
                             child.terminate()
-                            # Wait briefly for it to terminate
                             try:
                                 child.wait(timeout=1)
                             except psutil.TimeoutExpired:
                                 # Force kill if it doesn't terminate
-                                logger.info(
-                                    f"Process {child.pid} didn't terminate, force killing"
-                                )
+                                logger.info(f"Process {child.pid} didn't terminate, force killing")
                                 child.kill()
-                except (
-                    psutil.NoSuchProcess,
-                    psutil.AccessDenied,
-                    psutil.ZombieProcess,
-                ):
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                     # Process already gone or can't be accessed
                     pass
                 except Exception as e:
                     logger.error(f"Error terminating process {child.pid}: {e}")
-
         except Exception as e:
-            logger.error(
-                f"Error finding/terminating dangling processes: {e}", exc_info=True
-            )
-
-    async def cleanup(self):
-        """Complete cleanup of all bridge resources."""
-        logger.info("Bridge full cleanup started")
-
-        try:
-            # First perform shutdown cleanup which handles the client
-            await self._do_shutdown_cleanup()
-
-            # Clean up all other resources
-            # Stop all background tasks
-            if hasattr(self, "_background_tasks") and self._background_tasks:
-                for task in self._background_tasks:
-                    if not task.done():
-                        task.cancel()
-
-                # Wait for background tasks to finish
-                try:
-                    if self._background_tasks:
-                        await asyncio.wait_for(
-                            asyncio.gather(
-                                *self._background_tasks, return_exceptions=True
-                            ),
-                            timeout=2.0,
-                        )
-                except asyncio.TimeoutError:
-                    logger.warning("Some background tasks did not cancel in time")
-
-                self._background_tasks = []
-
-            # Clean up any server discovery resources
-            if hasattr(self, "server_discovery") and self.server_discovery:
-                try:
-                    self.server_discovery.cleanup()
-                except Exception as e:
-                    logger.error(
-                        f"Error cleaning up server discovery: {e}", exc_info=True
-                    )
-
-            # Clean up any audio resources if applicable
-            if hasattr(self, "_audio_enabled") and self._audio_enabled:
-                try:
-                    # Add specific audio cleanup code here if needed
-                    logger.info("Cleaning up audio resources")
-                except Exception as e:
-                    logger.error(
-                        f"Error cleaning up audio resources: {e}", exc_info=True
-                    )
-
-            logger.info("Bridge full cleanup completed")
-        except Exception as e:
-            logger.error(f"Error during bridge full cleanup: {e}", exc_info=True)
+            logger.error(f"Error finding/terminating dangling processes: {e}", exc_info=True)
 
     @pyqtSlot()
     def reset_status(self):
@@ -836,10 +569,7 @@ class MCPClientBridge(QObject):
     def getAvailableServers(self):
         """Get the list of available MCP servers."""
         current_time = time.time()
-        if (
-            current_time - self._last_server_discovery_time
-            < self._server_discovery_cache_timeout
-        ):
+        if current_time - self._last_server_discovery_time < self._server_discovery_cache_timeout:
             logger.info("Using cached server discovery results")
             self.availableServersChanged.emit(self.server_discovery.available_servers)
             return self.server_discovery.available_servers
@@ -858,12 +588,10 @@ class MCPClientBridge(QObject):
 
     @pyqtSlot(result=str)
     def connectToServer(self):
-        """Connect to the selected MCP server without blocking the UI thread."""
+        """Connect to the selected MCP server."""
         try:
             if not self._selected_server_path:
-                raise ValueError(
-                    "No server selected. Please choose a server before connecting."
-                )
+                raise ValueError("No server selected. Please choose a server before connecting.")
 
             # Extract server name for status messages
             server_name = (
@@ -873,9 +601,7 @@ class MCPClientBridge(QObject):
             )
 
             if not os.path.exists(self._selected_server_path):
-                raise FileNotFoundError(
-                    f"Server script not found: {self._selected_server_path}"
-                )
+                raise FileNotFoundError(f"Server script not found: {self._selected_server_path}")
 
             # Update UI immediately to show connecting status
             self.status_manager.update_status(StatusManager.STATUS_CONNECTING)
@@ -893,15 +619,12 @@ class MCPClientBridge(QObject):
             return error_msg  # Return error message string
 
     async def _connect_to_selected_server(self, server_name):
-        """Connect to the selected server asynchronously with enhanced error handling."""
+        """Connect to the selected server asynchronously."""
         try:
-            # Status update moved to the calling method for immediate UI feedback
-            self.conversation_manager.add_message(
-                {
-                    "timestamp": self.conversation_manager.get_timestamp(),
-                    "content": f"Connecting to server: {server_name}...",
-                }
-            )
+            self.conversation_manager.add_message({
+                "timestamp": self.conversation_manager.get_timestamp(),
+                "content": f"Connecting to server: {server_name}...",
+            })
 
             # Create new client if needed
             if not self.mcp_client:
@@ -915,7 +638,7 @@ class MCPClientBridge(QObject):
                     dispatcher=self.dispatcher
                 )
 
-            # Connect to server with explicit timeout to prevent hanging
+            # Connect to server with explicit timeout
             try:
                 connect_task = self.mcp_client.connect_to_server(self._selected_server_path)
                 connected = await asyncio.wait_for(connect_task, timeout=30.0)
@@ -934,23 +657,19 @@ class MCPClientBridge(QObject):
             self.status_manager.update_status(
                 StatusManager.STATUS_CONNECTED, server_name=server_display_name
             )
-            self.conversation_manager.add_message(
-                {
-                    "timestamp": self.conversation_manager.get_timestamp(),
-                    "content": f"Connected to {server_display_name}",
-                }
-            )
+            self.conversation_manager.add_message({
+                "timestamp": self.conversation_manager.get_timestamp(),
+                "content": f"Connected to {server_display_name}",
+            })
         except Exception as e:
             # Ensure client is reset in case of errors
             if self.mcp_client:
                 try:
                     await self.mcp_client.cleanup()
                 except Exception as cleanup_e:
-                    logger.error(
-                        f"Error cleaning up client after connection failure: {cleanup_e}"
-                    )
+                    logger.error(f"Error cleaning up client after connection failure: {cleanup_e}")
                 finally:
-                    # Always reset the client reference and connection state
+                    # Reset the client reference and connection state
                     self.mcp_client = None
 
             self._handle_error(e, f"Connection to server '{server_name}'")
@@ -962,34 +681,31 @@ class MCPClientBridge(QObject):
 
     @pyqtSlot()
     def startListening(self):
-        """Start voice listening (emit the signal for UI update)."""
+        """Start voice listening."""
         try:
             logger.info("Voice activation requested")
 
             # Check if client is connected
             if not self._is_connected:
-                raise ConnectionError(
-                    "Cannot activate voice: not connected to any server."
-                )
+                raise ConnectionError("Cannot activate voice: not connected to any server.")
 
             # Emit signal for UI update
             self.listeningStarted.emit()
 
             # Call startRecording
             self.startRecording()
-
         except Exception as e:
             self._handle_error(
                 e,
                 "Voice activation",
                 user_friendly_msg="Voice activation failed. Please check your microphone settings.",
             )
-            # Still emit the signal to update UI appropriately
+            # Update UI appropriately
             self.listeningStopped.emit()
 
     @pyqtSlot()
     def stopListening(self):
-        """Stop voice listening (emit the signal for UI update)."""
+        """Stop voice listening."""
         try:
             logger.info("Voice deactivation requested")
             # Emit signal for UI update
@@ -1016,7 +732,6 @@ class MCPClientBridge(QObject):
                 self._app_instance.startRecording()
             else:
                 raise RuntimeError("No App instance reference available")
-
         except Exception as e:
             self._handle_error(
                 e,
@@ -1035,70 +750,53 @@ class MCPClientBridge(QObject):
                 self._app_instance.stopAndTranscribe()
             else:
                 raise RuntimeError("No App instance reference available")
-
         except Exception as e:
             self._handle_error(
                 e,
                 "Voice transcription",
                 user_friendly_msg="Failed to transcribe audio.",
             )
-            # Still emit the signal to update UI appropriately
+            # Update UI appropriately
             self.listeningStopped.emit()
 
     @pyqtSlot()
     def disconnectFromServer(self):
         """Disconnect from the MCP server."""
         logger.info("Disconnecting from server")
+        asyncio.create_task(self._disconnect_process())
 
-        async def _do_disconnect():
-            try:
-                if self.mcp_client:
-                    try:
-                        # Timeout the cleanup operation to prevent hanging
-                        cleanup_task = self.mcp_client.cleanup()
-                        await asyncio.wait_for(cleanup_task, timeout=5.0)
-                    except asyncio.TimeoutError:
-                        logger.warning("Client cleanup timed out during disconnection")
-                    except Exception as e:
-                        logger.error(
-                            f"Error during client cleanup in disconnection: {e}",
-                            exc_info=True,
-                        )
-                    finally:
-                        # Always reset the client reference and connection state
-                        self.mcp_client = None
+    async def _disconnect_process(self):
+        """Disconnect process to clean up the client."""
+        try:
+            if self.mcp_client:
+                try:
+                    # Timeout the cleanup operation to prevent hanging
+                    await asyncio.wait_for(self.mcp_client.cleanup(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    logger.warning("Client cleanup timed out during disconnection")
+                except Exception as e:
+                    logger.error(f"Error during client cleanup in disconnection: {e}", exc_info=True)
+                finally:
+                    # Always reset the client reference
+                    self.mcp_client = None
 
-                # Always update the connection state
-                self.is_connected = False
-                self.status_manager.update_status(StatusManager.STATUS_DISCONNECTED)
-            except Exception as e:
-                self._handle_error(
-                    e,
-                    "Server disconnection",
-                    user_friendly_msg="Error disconnecting from server. Some resources may not be properly released.",
-                )
-
-        asyncio.create_task(_do_disconnect())
+            # Update the connection state
+            self.is_connected = False
+            self.status_manager.update_status(StatusManager.STATUS_DISCONNECTED)
+        except Exception as e:
+            self._handle_error(
+                e,
+                "Server disconnection",
+                user_friendly_msg="Error disconnecting from server. Some resources may not be properly released.",
+            )
 
     @pyqtSlot(result=str)
     def getWifiIpAddress(self):
         """Get the WiFi IP address of the system."""
         return self.network_utils.get_wifi_ip_address()
 
-    def _handle_error(
-        self, error, error_context="Operation", log_error=True, user_friendly_msg=None
-    ):
-        """Centralized error handling for consistent error reporting to UI and logs.
-
-        Args:
-            error: The exception that occurred
-            error_context: Description of what operation was being performed
-            log_error: Whether to log the error with traceback
-            user_friendly_msg: Optional user-friendly message override
-
-        Returns:
-            Formatted error message that was emitted
-        """
+    def _handle_error(self, error, error_context="Operation", log_error=True, user_friendly_msg=None):
+        """Centralized error handling for consistent error reporting to UI and logs."""
         # Format different error types appropriately
         if isinstance(error, UserVisibleError):
             # UserVisibleError is already formatted for end users
@@ -1106,15 +804,10 @@ class MCPClientBridge(QObject):
             log_with_traceback = False
         elif isinstance(error, LogOnlyError):
             # LogOnlyError should be logged with details but shown with generic message
-            error_msg = (
-                user_friendly_msg or f"{error_context} failed. See logs for details."
-            )
+            error_msg = user_friendly_msg or f"{error_context} failed. See logs for details."
             log_with_traceback = True
         elif isinstance(error, TimeoutError) or isinstance(error, asyncio.TimeoutError):
-            error_msg = (
-                user_friendly_msg
-                or f"{error_context} timed out. Server may be busy or unavailable."
-            )
+            error_msg = user_friendly_msg or f"{error_context} timed out. Server may be busy or unavailable."
             log_with_traceback = True
         elif isinstance(error, FileNotFoundError):
             error_msg = user_friendly_msg or f"Required file not found: {str(error)}"
@@ -1137,40 +830,61 @@ class MCPClientBridge(QObject):
         # Update status and conversation with error
         self.status_manager.update_status(StatusManager.STATUS_ERROR, error=error_msg)
 
-        # Add error to conversation if it's not already there
-        self.conversation_manager.add_message(
-            {
-                "timestamp": self.conversation_manager.get_timestamp(),
-                "content": f"Error: {error_msg}",
-            }
-        )
+        # Add error to conversation
+        self.conversation_manager.add_message({
+            "timestamp": self.conversation_manager.get_timestamp(),
+            "content": f"Error: {error_msg}",
+        })
 
         # Emit the error signal for QML
         self.errorOccurred.emit(error_msg)
 
         return error_msg
 
+    async def cleanup(self):
+        """
+        Compatibility method for the App class.
+        Delegates to the _shutdown_process method which handles all cleanup.
+        """
+        logger.info("cleanup() called - delegating to shutdown process")
+        # Don't actually exit the application from this method
+        try:
+            # Clean up client if exists
+            if self.mcp_client:
+                try:
+                    await self.mcp_client.cleanup()
+                    logger.info("Completed MCP client cleanup")
+                except Exception as e:
+                    logger.error(f"Error during client cleanup: {e}", exc_info=True)
+            
+            # Terminate dangling processes
+            self._terminate_dangling_processes()
+            
+            logger.info("Bridge cleanup completed")
+        except Exception as e:
+            logger.error(f"Error during bridge cleanup: {e}", exc_info=True)
+
+    def shutdown(self, restart=False):
+        """
+        Synchronous shutdown method for App.py compatibility.
+        Creates an async task to perform the actual shutdown.
+        
+        Args:
+            restart: Parameter for backward compatibility (unused)
+        """
+        logger.info(f"shutdown() called with restart={restart}")
+        # Create a task to run the async shutdown process
+        asyncio.create_task(self._shutdown_process())
+
     @pyqtSlot()
     def restartApplication(self):
-        """
-        Restart the application without completely shutting down.
-        This will reset the conversation and reconnect to the server.
-        """
+        """Restart the application without completely shutting down."""
         logger.info("Application restart requested")
         self.status_manager.update_status(StatusManager.STATUS_RESTARTING)
-
-        # Create an async task for the restart process
-        restart_task = asyncio.create_task(self._do_restart())
-
-        # Add to pending tasks
-        if not hasattr(self, "_pending_tasks"):
-            self._pending_tasks = []
-        self._pending_tasks.append(restart_task)
+        asyncio.create_task(self._do_restart())
 
     async def _do_restart(self):
-        """
-        Perform application restart by resetting state and reconnecting.
-        """
+        """Perform application restart by resetting state and reconnecting."""
         try:
             logger.info("Starting application restart")
 
@@ -1183,17 +897,14 @@ class MCPClientBridge(QObject):
             # Disconnect from the server
             if self._is_connected:
                 self.disconnectFromServer()
-                # Wait briefly for disconnect to complete
-                await asyncio.sleep(1.0)
+                # Wait for disconnect to complete
+                await asyncio.sleep(0.5)
 
-            # Reset any processing state
+            # Reset processing state
             self.status_manager.update_status(StatusManager.STATUS_DISCONNECTED)
 
             # Emit signals to reset UI state
             self.conversationChanged.emit()
-
-            # Wait briefly
-            await asyncio.sleep(0.5)
 
             # Try to reconnect to the same server
             if current_server_path and os.path.exists(current_server_path):
@@ -1232,12 +943,6 @@ class MCPClientBridge(QObject):
             # Emit bridge ready signal to refresh UI components
             logger.info("Emitting bridgeReady signal to reinitialize UI")
             self.bridgeReady.emit()
-
-            # Add a short delay to ensure UI has time to process signals
-            await asyncio.sleep(0.1)
-            # Emit the signal again to ensure the UI catches it
-            self.bridgeReady.emit()
-
         except Exception as e:
             logger.error(f"Error during application restart: {e}", exc_info=True)
             self.status_manager.update_status(StatusManager.STATUS_ERROR)

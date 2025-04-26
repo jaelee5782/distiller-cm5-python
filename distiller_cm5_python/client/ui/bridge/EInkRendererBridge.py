@@ -26,11 +26,14 @@ class EInkRendererBridge(QObject):
         """Initialize the e-ink renderer bridge"""
         super().__init__(parent)
         self.eink_driver = None
-        self.last_image_cache = None
         self.driver_lock = Lock()
         self.initialized = False
+        
+        # Dithering configuration
         self._dithering_enabled = True
         self._dithering_method = DitheringMethod.FLOYD_STEINBERG
+        
+        # Initialization
         self._init_timer = QTimer()
         self._init_timer.setSingleShot(True)
         self._init_timer.timeout.connect(self._delayed_init)
@@ -41,31 +44,32 @@ class EInkRendererBridge(QObject):
         
         # Get refresh settings from config
         self._full_refresh_interval = config["display"]["eink_full_refresh_interval"]
-        print(f"E-Ink display will do full refresh every {self._full_refresh_interval} frames")
+        logger.info(f"E-Ink display will do full refresh every {self._full_refresh_interval} frames")
         
     def initialize(self):
         """Initialize the e-ink display driver with proper sequence"""
+        if self.initialized and self.eink_driver:
+            logger.info("E-Ink display already initialized")
+            return True
+            
         try:
-            print("Initializing E-Ink display driver...")
+            logger.info("Initializing E-Ink display driver...")
             with self.driver_lock:
                 # Initialize the driver 
                 self.eink_driver = EinkDriver()
                 
-                # In headless environments, we need more robust initialization
-                # Perform a quick test to see if the driver is responsive
                 try:
                     self.eink_driver.epd_w21_init()
-                    print("E-Ink display hardware detected")
+                    logger.info("E-Ink display hardware detected")
                 except Exception as hw_err:
-                    print(f"Warning: E-Ink hardware initialization issue: {hw_err}")
-                    # Continue anyway - some errors are expected in headless mode
+                    logger.warning(f"E-Ink hardware initialization issue: {hw_err}")
                 
                 # Start a timer to complete initialization after hardware is ready
                 self._init_timer.start(100)  # 100ms delay before completing initialization
                 
             return True
         except Exception as e:
-            print(f"Error initializing e-ink display: {e}")
+            logger.error(f"Error initializing e-ink display: {e}")
             return False
             
     def _delayed_init(self):
@@ -73,19 +77,18 @@ class EInkRendererBridge(QObject):
         try:
             with self.driver_lock:
                 if not self.eink_driver:
-                    print("E-ink driver not initialized")
+                    logger.warning("E-ink driver not initialized")
                     return
                     
-                # Proper initialization sequence - only initialize with fast mode
-                # We'll call epd_init_part() when sending the first frame
+                # Proper initialization sequence
                 self.eink_driver.epd_init_fast()  # Initial hardware setup
                 
                 self.initialized = True
-                self._first_frame = True  # Mark that we need to send first frame
+                self._first_frame = True
                 self._frame_count = 0
-                print("E-ink display initialized successfully")
+                logger.info("E-ink display initialized successfully")
         except Exception as e:
-            print(f"Error in delayed e-ink initialization: {e}")
+            logger.error(f"Error in delayed e-ink initialization: {e}")
     
     def set_dithering(self, enabled: bool, method: int = DitheringMethod.FLOYD_STEINBERG.value):
         """
@@ -99,10 +102,10 @@ class EInkRendererBridge(QObject):
         try:
             self._dithering_method = DitheringMethod(method)
         except ValueError:
-            print(f"Invalid dithering method {method}, defaulting to Floyd-Steinberg")
+            logger.warning(f"Invalid dithering method {method}, defaulting to Floyd-Steinberg")
             self._dithering_method = DitheringMethod.FLOYD_STEINBERG
         
-        print(f"Dithering {'enabled' if enabled else 'disabled'}, method: {self._dithering_method.name}")
+        logger.info(f"Dithering {'enabled' if enabled else 'disabled'}, method: {self._dithering_method.name}")
     
     @pyqtSlot(bytearray, int, int)
     def handle_frame(self, frame_data: bytearray, width: int, height: int):
@@ -111,11 +114,11 @@ class EInkRendererBridge(QObject):
         
         Args:
             frame_data: Data from EInkRenderer where bit 1 = BLACK, bit 0 = WHITE
-                        (We've reverted back to the original convention where BLACK is 1, WHITE is 0)
             width: Frame width
             height: Frame height
         """
         if not self.initialized or not self.eink_driver:
+            logger.debug("Skipping frame, display not initialized")
             return
         
         try:
@@ -123,30 +126,33 @@ class EInkRendererBridge(QObject):
                 # Convert directly from frame_data to e-ink display format
                 display_data = self.frame_to_eink_data(frame_data, width, height)
                 
-                # Determine refresh strategy based on frame count
-                if self._first_frame:
-                    # First frame after initialization - already in fast mode
-                    # No need to call epd_init_fast(), already done in initialization
-                    self._first_frame = False
-                    self._frame_count = 1
-                elif self._frame_count >= self._full_refresh_interval:
-                    # Time for a full refresh
-                    self.eink_driver.epd_init_fast()
-                    self._frame_count = 1  # Reset counter
-                else:
-                    # Normal partial update
-                    self.eink_driver.epd_init_part()
-                    self._frame_count += 1
+                # Apply refresh strategy based on frame count
+                self._apply_refresh_strategy()
                 
                 # Send the data to the display
                 try:
                     self.eink_driver.pic_display(display_data)
                 except Exception as e:
-                    print(f"Error displaying frame: {e}")
+                    logger.error(f"Error displaying frame: {e}")
                 
         except Exception as e:
-            print(f"Error processing frame for e-ink: {e}")
+            logger.error(f"Error processing frame for e-ink: {e}")
             self._recover_driver()
+    
+    def _apply_refresh_strategy(self):
+        """Apply the appropriate refresh strategy based on frame count"""
+        if self._first_frame:
+            # First frame after initialization - already in fast mode
+            self._first_frame = False
+            self._frame_count = 1
+        elif self._frame_count >= self._full_refresh_interval:
+            # Time for a full refresh
+            self.eink_driver.epd_init_fast()
+            self._frame_count = 1  # Reset counter
+        else:
+            # Normal partial update
+            self.eink_driver.epd_init_part()
+            self._frame_count += 1
 
     def _recover_driver(self):
         """Attempt to recover the e-ink driver after an error"""
@@ -164,21 +170,15 @@ class EInkRendererBridge(QObject):
     def frame_to_eink_data(self, frame_data: bytearray, width: int, height: int) -> List[int]:
         """
         Convert frame data directly to e-ink display format.
-        This is a simplified pipeline that processes the data with fewer conversions.
         
         Args:
             frame_data: Data from EInkRenderer where bit 1 = BLACK, bit 0 = WHITE
-                        (We've reverted back to the original convention where BLACK is 1, WHITE is 0)
             width: Frame width
             height: Frame height
             
         Returns:
             Data ready for e-ink display
         """
-        # The frame_data is in 1-bit packed format from EInkRenderer
-        # where bit 1 = BLACK, bit 0 = WHITE (using original convention)
-        # We just need to convert it to the format expected by the e-ink display
-        
         # Calculate bytes per row in the source data
         bytes_per_row = (width + 7) // 8
         total_bytes = bytes_per_row * height
@@ -186,231 +186,15 @@ class EInkRendererBridge(QObject):
         # Ensure we have the expected amount of data
         if len(frame_data) != total_bytes:
             logger.warning(f"Unexpected data size. Got {len(frame_data)}, expected {total_bytes}")
-            frame_data = frame_data + bytearray(total_bytes - len(frame_data)) if len(frame_data) < total_bytes else frame_data[:total_bytes]
+            if len(frame_data) < total_bytes:
+                frame_data = frame_data + bytearray(total_bytes - len(frame_data))
+            else:
+                frame_data = frame_data[:total_bytes]
 
         # Invert bits (renderer: 1=WHITE, driver: 1=BLACK)
         data_np = np.array(frame_data, dtype=np.uint8)
         data_np = ~data_np  # Bitwise NOT to invert (1->0, 0->1)
         return data_np.tolist()
-    
-    def _bits_to_qimage(self, frame_data: bytearray, width: int, height: int) -> QImage:
-        """
-        Convert packed 1-bit data to a QImage.
-        
-        Args:
-            frame_data: Packed 1-bit pixel data
-            width: Image width
-            height: Image height
-            
-        Returns:
-            QImage representation of the frame
-        """
-        # Create a grayscale image
-        image = QImage(width, height, QImage.Format.Format_Grayscale8)
-        
-        # Calculate bytes per row in the source data
-        bytes_per_row = (width + 7) // 8
-        
-        # Fill image with white background
-        image.fill(255)
-        
-        # Set pixels from the packed bits
-        for y in range(height):
-            for x in range(width):
-                byte_index = y * bytes_per_row + x // 8
-                if byte_index < len(frame_data):
-                    bit_index = 7 - (x % 8)
-                    bit_value = (frame_data[byte_index] >> bit_index) & 0x01
-                    # In our data, 1 = black, 0 = white
-                    pixel_value = 0 if bit_value else 255
-                    # Use setPixel instead of setPixelColor with fromValue
-                    image.setPixel(x, y, pixel_value)
-        
-        return image
-    
-    def _qimage_to_numpy(self, image: QImage) -> np.ndarray:
-        """
-        Convert QImage to numpy array.
-        
-        Args:
-            image: QImage to convert
-            
-        Returns:
-            Numpy array representation of the image
-        """
-        width = image.width()
-        height = image.height()
-        
-        # Get image bytes per line
-        bytes_per_line = image.bytesPerLine()
-        
-        # Get pointer to image data
-        ptr = image.bits()
-        ptr.setsize(bytes_per_line * height)
-        
-        # Create numpy array from image data
-        arr = np.array(ptr).reshape(height, bytes_per_line)
-        
-        # If bytes_per_line is wider than width, trim the array
-        if bytes_per_line > width:
-            arr = arr[:, :width]
-            
-        return arr
-    
-    def preprocess_1bit(self, pixels: np.ndarray, dtype=np.float32) -> np.ndarray:
-        """
-        Preprocess image for 1-bit display.
-        
-        Args:
-            pixels: Input pixel array
-            dtype: Data type for output array
-            
-        Returns:
-            Preprocessed pixel array
-        """
-        # Convert to float for processing if not already
-        if pixels.dtype != np.float32 and dtype == np.float32:
-            pixels = pixels.astype(np.float32)
-        
-        return pixels
-    
-    def _instance_dump_1bit(self, pixels: np.ndarray) -> List[int]:
-        """
-        Convert an image to 1-bit representation.
-        
-        Args:
-            pixels: The input pixel array
-            
-        Returns:
-            A list of integers representing the 1-bit image
-        """
-        # Flatten the array for processing
-        # Ensure pixels are in valid range after dithering
-        pixels = np.clip(pixels, 0, 255)
-        
-        # Use faster thresholding - only 2 levels (0 or 1)
-        pixels_binary = (pixels > 128).astype(np.uint8)
-        
-        # Calculate the needed size for the result
-        height, width = pixels.shape
-        bytes_per_row = (width + 7) // 8
-        result_size = bytes_per_row * height
-        int_pixels = np.zeros(result_size, dtype=np.uint8)
-        
-        # Pack bits into bytes efficiently
-        row_idx = 0
-        for y in range(height):
-            for x_byte in range(bytes_per_row):
-                byte_val = 0
-                for bit in range(8):
-                    x = x_byte * 8 + bit
-                    if x < width:
-                        # If pixel is BLACK (value = 1)
-                        if pixels_binary[y, x]:
-                            byte_val |= (1 << (7 - bit))  # MSB first
-                int_pixels[row_idx] = byte_val
-                row_idx += 1
-                
-        return [int(x) for x in int_pixels]
-    
-    def _instance_dump_1bit_with_dithering(self, pixels: np.ndarray) -> List[int]:
-        """
-        Convert an image to 1-bit representation with dithering.
-        
-        Args:
-            pixels: The input pixel array
-            
-        Returns:
-            A list of integers representing the 1-bit image with dithering
-        """
-        # Make a copy of the pixels to avoid modifying the original
-        pixels_copy = pixels.copy()
-        
-        # Apply selected dithering method to the copy
-        if self._dithering_method == DitheringMethod.ORDERED:
-            pixels_dithered = self._instance_ordered_dithering(pixels_copy)
-        else:  # Default to Floyd-Steinberg
-            pixels_dithered = self._instance_floyd_steinberg_dithering(pixels_copy)
-            
-        # Convert to 1-bit
-        return self._instance_dump_1bit(pixels_dithered)
-    
-    def _instance_floyd_steinberg_dithering(self, pixels: np.ndarray) -> np.ndarray:
-        """
-        Apply Floyd-Steinberg dithering to an image.
-        
-        Args:
-            pixels: The input pixel array
-            
-        Returns:
-            The dithered pixel array
-        """
-        # Optimized Floyd-Steinberg with vectorized operations where possible
-        height, width = pixels.shape
-        
-        # Process in chunks to reduce memory usage
-        chunk_size = min(32, height)  # Process 32 rows at a time or less
-        
-        for chunk_start in range(0, height - 1, chunk_size):
-            chunk_end = min(chunk_start + chunk_size, height - 1)
-            
-            for y in range(chunk_start, chunk_end):
-                for x in range(1, width - 1):
-                    old_pixel = pixels[y, x]
-                    new_pixel = 0 if old_pixel < 128 else 255
-                    pixels[y, x] = new_pixel
-                    quant_error = old_pixel - new_pixel
-                    
-                    # Distribute error to neighboring pixels
-                    pixels[y, x + 1] += quant_error * 7 / 16
-                    pixels[y + 1, x - 1] += quant_error * 3 / 16
-                    pixels[y + 1, x] += quant_error * 5 / 16
-                    pixels[y + 1, x + 1] += quant_error * 1 / 16
-        
-        # Handle the last row separately (no pixels below)
-        y = height - 1
-        for x in range(1, width - 1):
-            old_pixel = pixels[y, x]
-            new_pixel = 0 if old_pixel < 128 else 255
-            pixels[y, x] = new_pixel
-            quant_error = old_pixel - new_pixel
-            
-            # Only distribute horizontally on the last row
-            pixels[y, x + 1] += quant_error * 7 / 16
-            
-        return pixels
-
-    def _instance_ordered_dithering(self, pixels: np.ndarray) -> np.ndarray:
-        """
-        Apply ordered dithering using Bayer matrix to an image.
-        
-        Args:
-            pixels: The input pixel array
-            
-        Returns:
-            The dithered pixel array
-        """
-        # 8x8 Bayer matrix for ordered dithering
-        bayer_matrix_8x8 = np.array([
-            [ 0, 48, 12, 60,  3, 51, 15, 63],
-            [32, 16, 44, 28, 35, 19, 47, 31],
-            [ 8, 56,  4, 52, 11, 59,  7, 55],
-            [40, 24, 36, 20, 43, 27, 39, 23],
-            [ 2, 50, 14, 62,  1, 49, 13, 61],
-            [34, 18, 46, 30, 33, 17, 45, 29],
-            [10, 58,  6, 54,  9, 57,  5, 53],
-            [42, 26, 38, 22, 41, 25, 37, 21]
-        ]) / 64.0 * 255
-        
-        height, width = pixels.shape
-        
-        # Calculate threshold map
-        for y in range(height):
-            for x in range(width):
-                threshold = bayer_matrix_8x8[y % 8, x % 8]
-                pixels[y, x] = 0 if pixels[y, x] < threshold else 255
-                
-        return pixels
     
     def cleanup(self):
         """Clean up e-ink display resources"""
@@ -420,9 +204,9 @@ class EInkRendererBridge(QObject):
                     # Clear the display before shutting down
                     self.eink_driver.pic_display_clear(poweroff=True)
                     self.eink_driver.cleanup()
-                    print("E-ink display cleaned up")
+                    logger.info("E-ink display cleaned up")
             except Exception as e:
-                print(f"Error cleaning up e-ink display: {e}")
+                logger.error(f"Error cleaning up e-ink display: {e}")
             
             self.eink_driver = None
             self.initialized = False
@@ -432,17 +216,9 @@ try:
     from numba import jit
     
     @jit(nopython=True, cache=True)
-    def dump_1bit(pixels: np.ndarray) -> list:
-        """
-        Convert an image to 1-bit representation.
-
-        Args:
-            pixels: The input pixel array
-            
-        Returns:
-            A list of integers representing the 1-bit image
-        """
-        # Optimized version using simpler thresholding
+    def _numba_dump_1bit(pixels: np.ndarray) -> list:
+        """Convert an image to 1-bit representation."""
+        # Threshold and convert to binary
         pixels = np.clip(pixels, 0, 255)
         pixels_binary = (pixels > 128).astype(np.uint8)
         
@@ -467,39 +243,26 @@ try:
         return [int(x) for x in int_pixels]
 
     @jit(nopython=True, cache=True)
-    def floydSteinbergDithering_numba(pixels: np.ndarray) -> np.ndarray:
-        """
-        Apply Floyd-Steinberg dithering to an image.
-
-        Args:
-            pixels: The input pixel array
-            
-        Returns:
-            The dithered pixel array
-        """
-        # Optimized Floyd-Steinberg dithering
+    def _numba_floyd_steinberg(pixels: np.ndarray) -> np.ndarray:
+        """Apply Floyd-Steinberg dithering to an image."""
         height, width = pixels.shape
+        pixels = pixels.copy()  # Make a copy to avoid modifying the original
         
-        # Process in chunks to improve cache efficiency
-        chunk_size = min(32, height)  # Process 32 rows at a time or less
+        # Process all rows except the last one
+        for y in range(height - 1):
+            for x in range(1, width - 1):
+                old_pixel = pixels[y, x]
+                new_pixel = 0 if old_pixel < 128 else 255
+                pixels[y, x] = new_pixel
+                quant_error = old_pixel - new_pixel
+                
+                # Distribute error to neighboring pixels
+                pixels[y, x + 1] += quant_error * 7 / 16
+                pixels[y + 1, x - 1] += quant_error * 3 / 16
+                pixels[y + 1, x] += quant_error * 5 / 16
+                pixels[y + 1, x + 1] += quant_error * 1 / 16
         
-        for chunk_start in range(0, height - 1, chunk_size):
-            chunk_end = min(chunk_start + chunk_size, height - 1)
-            
-            for y in range(chunk_start, chunk_end):
-                for x in range(1, width - 1):
-                    old_pixel = pixels[y, x]
-                    new_pixel = 0 if old_pixel < 128 else 255
-                    pixels[y, x] = new_pixel
-                    quant_error = old_pixel - new_pixel
-                    
-                    # Distribute error to neighboring pixels
-                    pixels[y, x + 1] += quant_error * 7 / 16
-                    pixels[y + 1, x - 1] += quant_error * 3 / 16
-                    pixels[y + 1, x] += quant_error * 5 / 16
-                    pixels[y + 1, x + 1] += quant_error * 1 / 16
-        
-        # Handle the last row separately (no pixels below)
+        # Handle the last row separately (no pixels below to distribute error to)
         y = height - 1
         for x in range(1, width - 1):
             old_pixel = pixels[y, x]
@@ -511,16 +274,8 @@ try:
         return pixels
     
     @jit(nopython=True, cache=True)
-    def orderedDithering_numba(pixels: np.ndarray) -> np.ndarray:
-        """
-        Apply ordered dithering to an image.
-
-        Args:
-            pixels: The input pixel array
-            
-        Returns:
-            The dithered pixel array
-        """
+    def _numba_ordered_dithering(pixels: np.ndarray) -> np.ndarray:
+        """Apply ordered dithering to an image."""
         # Define 8x8 Bayer matrix for ordered dithering
         bayer_matrix = np.array([
             [ 0, 48, 12, 60,  3, 51, 15, 63],
@@ -543,55 +298,88 @@ try:
                 result[y, x] = 0 if pixels[y, x] < threshold else 255
                 
         return result
-
-    @jit(nopython=True, cache=True)
-    def dump_1bit_with_dithering(pixels: np.ndarray, method: int = 1) -> list:
-        """
-        Convert an image to 1-bit representation with dithering.
-
-        Args:
-            pixels: The input pixel array
-            method: Dithering method (1=Floyd-Steinberg, 2=Ordered)
-            
-        Returns:
-            A list of integers representing the 1-bit image with dithering
-        """
-        # Make a copy of the pixels to avoid modifying the original
-        pixels_copy = pixels.copy()
-        
-        # Apply dithering method
-        if method == 2:  # Ordered dithering
-            pixels_dithered = orderedDithering_numba(pixels_copy)
-        else:  # Default to Floyd-Steinberg
-            pixels_dithered = floydSteinbergDithering_numba(pixels_copy)
-            
-        # Convert to 1-bit
-        return dump_1bit(pixels_dithered)
     
-    # Create wrapper functions that can be used as instance methods
-    def _instance_dump_1bit(self, pixels):
-        """Instance method wrapper for dump_1bit"""
-        return dump_1bit(pixels)
-        
-    def _instance_dump_1bit_with_dithering(self, pixels):
-        """Instance method wrapper for dump_1bit_with_dithering"""
-        method = self._dithering_method.value
-        return dump_1bit_with_dithering(pixels, method)
-        
-    def _instance_floyd_steinberg_dithering(self, pixels):
-        """Instance method wrapper for floydSteinbergDithering_numba"""
-        return floydSteinbergDithering_numba(pixels)
-        
-    def _instance_ordered_dithering(self, pixels):
-        """Instance method wrapper for orderedDithering_numba"""
-        return orderedDithering_numba(pixels)
+    # Use Numba optimized functions
+    logger.info("Using Numba-optimized e-ink conversion functions")
     
-    # Replace the methods with optimized versions using proper wrappers
-    EInkRendererBridge._instance_dump_1bit = _instance_dump_1bit
-    EInkRendererBridge._instance_dump_1bit_with_dithering = _instance_dump_1bit_with_dithering
-    EInkRendererBridge._instance_floyd_steinberg_dithering = _instance_floyd_steinberg_dithering
-    EInkRendererBridge._instance_ordered_dithering = _instance_ordered_dithering
-    
-    print("Using Numba-optimized e-ink conversion functions")
 except ImportError:
-    print("Numba not available, using standard e-ink conversion functions") 
+    # Fallback to standard Python implementation
+    logger.info("Numba not available, using standard e-ink conversion functions")
+    
+    def _numba_dump_1bit(pixels: np.ndarray) -> list:
+        """Standard Python implementation of dump_1bit"""
+        # Threshold and convert to binary
+        pixels = np.clip(pixels, 0, 255)
+        pixels_binary = (pixels > 128).astype(np.uint8)
+        
+        # Calculate the needed size for the result
+        height, width = pixels.shape
+        bytes_per_row = (width + 7) // 8
+        result_size = bytes_per_row * height
+        int_pixels = np.zeros(result_size, dtype=np.uint8)
+        
+        # Pack bits into bytes
+        idx = 0
+        for y in range(height):
+            for x_byte in range(bytes_per_row):
+                byte_val = 0
+                for bit in range(8):
+                    x = x_byte * 8 + bit
+                    if x < width and pixels_binary[y, x]:
+                        byte_val |= (1 << (7 - bit))  # MSB first
+                int_pixels[idx] = byte_val
+                idx += 1
+                
+        return [int(x) for x in int_pixels]
+    
+    def _numba_floyd_steinberg(pixels: np.ndarray) -> np.ndarray:
+        """Standard Python implementation of Floyd-Steinberg dithering"""
+        height, width = pixels.shape
+        pixels = pixels.copy()  # Make a copy to avoid modifying the original
+        
+        for y in range(height - 1):
+            for x in range(1, width - 1):
+                old_pixel = pixels[y, x]
+                new_pixel = 0 if old_pixel < 128 else 255
+                pixels[y, x] = new_pixel
+                quant_error = old_pixel - new_pixel
+                
+                pixels[y, x + 1] += quant_error * 7 / 16
+                pixels[y + 1, x - 1] += quant_error * 3 / 16
+                pixels[y + 1, x] += quant_error * 5 / 16
+                pixels[y + 1, x + 1] += quant_error * 1 / 16
+        
+        # Handle the last row separately
+        y = height - 1
+        for x in range(1, width - 1):
+            old_pixel = pixels[y, x]
+            new_pixel = 0 if old_pixel < 128 else 255
+            pixels[y, x] = new_pixel
+            quant_error = old_pixel - new_pixel
+            pixels[y, x + 1] += quant_error * 7 / 16
+            
+        return pixels
+    
+    def _numba_ordered_dithering(pixels: np.ndarray) -> np.ndarray:
+        """Standard Python implementation of ordered dithering"""
+        # Define 8x8 Bayer matrix for ordered dithering
+        bayer_matrix = np.array([
+            [ 0, 48, 12, 60,  3, 51, 15, 63],
+            [32, 16, 44, 28, 35, 19, 47, 31],
+            [ 8, 56,  4, 52, 11, 59,  7, 55],
+            [40, 24, 36, 20, 43, 27, 39, 23],
+            [ 2, 50, 14, 62,  1, 49, 13, 61],
+            [34, 18, 46, 30, 33, 17, 45, 29],
+            [10, 58,  6, 54,  9, 57,  5, 53],
+            [42, 26, 38, 22, 41, 25, 37, 21]
+        ]) / 64.0 * 255
+        
+        height, width = pixels.shape
+        result = np.zeros((height, width), dtype=np.uint8)
+        
+        for y in range(height):
+            for x in range(width):
+                threshold = bayer_matrix[y % 8, x % 8]
+                result[y, x] = 0 if pixels[y, x] < threshold else 255
+                
+        return result 
