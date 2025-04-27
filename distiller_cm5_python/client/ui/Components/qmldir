@@ -3,6 +3,7 @@ ServerSelectionPage 1.0 ../ServerSelectionPage.qml
 VoiceAssistantPage 1.0 ../VoiceAssistantPage.qml
 SettingsPage 1.0 ../SettingsPage.qml
 ServerStatusIndicator 1.0 ServerStatusIndicator.qml
+ServerGridCard 1.0 ServerGridCard.qml
 VoiceAssistantPageHeader 1.0 VoiceAssistantPageHeader.qml
 MessageItem 1.0 MessageItem.qml
 VoiceInputArea 1.0 VoiceInputArea.qml
