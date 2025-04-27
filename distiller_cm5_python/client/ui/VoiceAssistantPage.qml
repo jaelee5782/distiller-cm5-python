@@ -186,6 +186,26 @@ PageBase {
             }
         }
         
+        // Handler for observation events
+        function onObservationReceived(content, eventId, timestamp) {
+            console.log("Observation received: " + content);
+            
+            // Add the observation to the conversation view
+            if (conversationView) {
+                conversationView.updateModel(bridge.get_conversation());
+            }
+        }
+        
+        // Handler for plan events
+        function onPlanReceived(content, eventId, timestamp) {
+            console.log("Plan received: " + content);
+            
+            // Add the plan to the conversation view
+            if (conversationView) {
+                conversationView.updateModel(bridge.get_conversation());
+            }
+        }
+        
         // Handler for raw message schema objects
         function onMessageSchemaReceived(messageData) {
             console.log("Message schema received: " + JSON.stringify(messageData));

@@ -52,6 +52,8 @@ class MCPClientBridge(QObject):
     # New signals for architecture diagram support
     sshInfoReceived = pyqtSignal(str, str, str)  # Signal for SSH info events (content, event_id, timestamp)
     functionReceived = pyqtSignal(str, str, str)  # Signal for function events (content, event_id, timestamp)
+    observationReceived = pyqtSignal(str, str, str)  # Signal for observation events (content, event_id, timestamp)
+    planReceived = pyqtSignal(str, str, str)  # Signal for plan events (content, event_id, timestamp)
     messageSchemaReceived = pyqtSignal('QVariantMap')  # Signal for raw message schema objects
 
     def __init__(self, parent=None):
@@ -177,6 +179,8 @@ class MCPClientBridge(QObject):
         """Process a user query through the MCP client."""
         logger.info(f"MCPClientBridge.process_query: Processing query: {query}")
         try:
+            # Update status to processing query
+            self.status_manager.update_status(StatusManager.STATUS_PROCESSING_QUERY)
             await self.mcp_client.process_query(query)
         except LogOnlyError as e:
             # Explicitly handle connection errors
@@ -196,6 +200,10 @@ class MCPClientBridge(QObject):
                 "Query processing",
                 user_friendly_msg="Failed to process query. Please try again."
             )
+        finally:
+            # Reset to idle state if we're connected, otherwise disconnected
+            if self._is_connected and not self.status_manager.is_error:
+                self.status_manager.update_status(StatusManager.STATUS_IDLE)
 
     @pyqtSlot()
     def clear_conversation(self):
@@ -494,10 +502,27 @@ class MCPClientBridge(QObject):
                     # Pass status as string (.value from Enum) to the UI
                     status_value = event.status.value if hasattr(event.status, 'value') else event.status
                     self.messageReceived.emit(event.content, str(event.id), timestamp_str, status_value)
+                    
+                    # Update status when message is complete
+                    if status_value == "success":
+                        if self._is_connected:
+                            self.status_manager.update_status(StatusManager.STATUS_IDLE)
                 elif event.type == EventType.ACTION:
                     self.actionReceived.emit(event.content, str(event.id), timestamp_str)
+                    
+                    # Set executing tool status for actions
+                    status_value = event.status.value if hasattr(event.status, 'value') else event.status
+                    if status_value == "in_progress":
+                        self.status_manager.update_status(StatusManager.STATUS_EXECUTING_TOOL)
+                    elif status_value == "success":
+                        # Don't reset state here as we wait for the full completion
+                        pass
                 elif event.type == EventType.INFO:
                     self.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                    
+                    # For thinking info events, update status
+                    if event.content and "Thinking" in event.content:
+                        self.status_manager.update_status(StatusManager.STATUS_THINKING)
                 elif event.type == EventType.WARNING:
                     self.warningReceived.emit(event.content, str(event.id), timestamp_str)
                 elif event.type == EventType.ERROR:
@@ -515,6 +540,20 @@ class MCPClientBridge(QObject):
                     # This would need a new signal in the bridge class
                     if hasattr(self, 'functionReceived'):
                         self.functionReceived.emit(event.content, str(event.id), timestamp_str)
+                    else:
+                        # Fall back to info message if no dedicated handler
+                        self.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.OBSERVATION:
+                    # Handle observation events - fallback to info for now
+                    if hasattr(self, 'observationReceived'):
+                        self.observationReceived.emit(event.content, str(event.id), timestamp_str)
+                    else:
+                        # Fall back to info message if no dedicated handler
+                        self.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.PLAN:
+                    # Handle plan events - fallback to info for now
+                    if hasattr(self, 'planReceived'):
+                        self.planReceived.emit(event.content, str(event.id), timestamp_str)
                     else:
                         # Fall back to info message if no dedicated handler
                         self.infoReceived.emit(event.content, str(event.id), timestamp_str)
@@ -549,6 +588,12 @@ class MCPClientBridge(QObject):
                     self.infoReceived.emit(event.content, str(event.id), timestamp_str)
                 elif event.type == EventType.FUNCTION:
                     # Handle function info with generic info signal if available
+                    self.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.OBSERVATION:
+                    # Handle observation events with generic info signal
+                    self.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                elif event.type == EventType.PLAN:
+                    # Handle plan events with generic info signal
                     self.infoReceived.emit(event.content, str(event.id), timestamp_str)
                 else:
                     logger.warning(f"MCPClientBridge._handle_event: Unknown event type: {event.type}")
