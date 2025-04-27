@@ -325,75 +325,131 @@ class MCPClient:
         max_tool_iterations = 5
         current_iteration = 0
 
-        while current_iteration < max_tool_iterations:
-            current_iteration += 1
-            use_stream = self.streaming
+        try:
+            while current_iteration < max_tool_iterations:
+                current_iteration += 1
+                use_stream = self.streaming
 
-            if use_stream:
-                # Stream and dispatch events via LLM client
-                response = await self.llm_provider.get_chat_completion_streaming_response(
-                    messages=messages,
-                    tools=self.available_tools,
-                    dispatcher=self.dispatcher
-                )
-            else:
-                # Non-streaming
-                resp = await self.llm_provider.get_chat_completion_response(messages, self.available_tools)
-                content = resp.get("message", {}).get("content", "")
+                try:
+                    if use_stream:
+                        # Stream and dispatch events via LLM client
+                        response = await self.llm_provider.get_chat_completion_streaming_response(
+                            messages=messages,
+                            tools=self.available_tools,
+                            dispatcher=self.dispatcher
+                        )
+                    else:
+                        # Non-streaming
+                        resp = await self.llm_provider.get_chat_completion_response(messages, self.available_tools)
+                        content = resp.get("message", {}).get("content", "")
+                        
+                        # Create and dispatch message with new schema
+                        msg_event = MessageEvent(
+                            type=EventType.MESSAGE,
+                            content=content,
+                            status=StatusType.IN_PROGRESS,
+                            role="assistant"
+                        )
+                        self.dispatcher.dispatch(msg_event)
+                        response = resp
+                except LogOnlyError as e:
+                    # Create proper error message in case of streaming failure
+                    error_event = MessageEvent(
+                        type=EventType.ERROR,
+                        content=f"Failed to get response: {str(e)}",
+                        status=StatusType.FAILED,
+                        role="assistant",
+                        data={"error": str(e)}
+                    )
+                    self.dispatcher.dispatch(error_event)
+                    
+                    # Add error message to the conversation as assistant message
+                    error_msg = "I encountered an error while processing your request. Please try again or check your connection."
+                    self.message_processor.add_message("assistant", error_msg)
+                    
+                    # Create completion event to signal end of processing
+                    complete_event = StatusEvent(
+                        type=EventType.INFO,
+                        content="",
+                        status=StatusType.SUCCESS,
+                        component="query"
+                    )
+                    self.dispatcher.dispatch(complete_event)
+                    
+                    # Re-raise the error to be caught by the higher-level handler
+                    raise
+
+                # Add message to processor
+                assistant_msg = self.message_processor.add_message("assistant", response.get("message", {}).get("content", ""))
                 
-                # Create and dispatch message with new schema
-                msg_event = MessageEvent(
-                    type=EventType.MESSAGE,
-                    content=content,
+                # Extract tool calls
+                tool_calls = (response or {}).get("message", {}).get("tool_calls", [])
+                if not tool_calls:
+                    break
+
+                # Create and dispatch info event for tool execution
+                tool_info_event = StatusEvent(
+                    type=EventType.INFO,
+                    content=f"Executing tools iter {current_iteration}",
                     status=StatusType.IN_PROGRESS,
-                    role="assistant"
+                    component="tools",
+                    data={"count": len(tool_calls)}
                 )
-                self.dispatcher.dispatch(msg_event)
-                response = resp
+                self.dispatcher.dispatch(tool_info_event)
 
-            # Add message to processor
-            assistant_msg = self.message_processor.add_message("assistant", response.get("message", {}).get("content", ""))
-            
-            # Extract tool calls
-            tool_calls = (response or {}).get("message", {}).get("tool_calls", [])
-            if not tool_calls:
-                break
+                # Execute tools
+                await self._execute_tool_calls(tool_calls)
 
-            # Create and dispatch info event for tool execution
-            tool_info_event = StatusEvent(
+                # Create and dispatch completion event for tool execution
+                tool_complete_event = StatusEvent( 
+                    type=EventType.INFO,
+                    content=f"Executed tools iter {current_iteration}",
+                    status=StatusType.SUCCESS,
+                    component="tools"
+                )
+                self.dispatcher.dispatch(tool_complete_event)
+
+                # Prepare for potential next iteration
+                messages = self.message_processor.get_formatted_messages()
+
+            # Create and dispatch completion event
+            complete_event = StatusEvent(
                 type=EventType.INFO,
-                content=f"Executing tools iter {current_iteration}",
-                status=StatusType.IN_PROGRESS,
-                component="tools",
-                data={"count": len(tool_calls)}
-            )
-            self.dispatcher.dispatch(tool_info_event)
-
-            # Execute tools
-            await self._execute_tool_calls(tool_calls)
-
-            # Create and dispatch completion event for tool execution
-            tool_complete_event = StatusEvent(
-                type=EventType.INFO,
-                content=f"Executed tools iter {current_iteration}",
+                content="",
                 status=StatusType.SUCCESS,
-                component="tools"
+                component="query"
             )
-            self.dispatcher.dispatch(tool_complete_event)
+            self.dispatcher.dispatch(complete_event)
 
-            # Prepare for potential next iteration
-            messages = self.message_processor.get_formatted_messages()
-
-        # Create and dispatch completion event
-        complete_event = StatusEvent(
-            type=EventType.INFO,
-            content="",
-            status=StatusType.SUCCESS,
-            component="query"
-        )
-        self.dispatcher.dispatch(complete_event)
-
-        logger.info("--- Query Processing Complete ---")
+            logger.info("--- Query Processing Complete ---")
+            
+        except LogOnlyError as e:
+            # This is already handled above and has proper UI messaging
+            logger.error(f"Error during streaming: {e}")
+            raise
+        except Exception as e:
+            # Handle unexpected errors by dispatching an error event
+            error_event = MessageEvent(
+                type=EventType.ERROR,
+                content=f"Unexpected error: {str(e)}",
+                status=StatusType.FAILED,
+                role="assistant",
+                data={"error": str(e)}
+            )
+            self.dispatcher.dispatch(error_event)
+            
+            # Also dispatch completion event to signal end of processing
+            complete_event = StatusEvent(
+                type=EventType.INFO,
+                content="",
+                status=StatusType.SUCCESS, 
+                component="query"
+            )
+            self.dispatcher.dispatch(complete_event)
+            
+            # Log the error
+            logger.error(f"Unexpected error in process_query: {e}", exc_info=True)
+            raise
 
     async def cleanup(self):
         """Clean up resources used by the client."""
