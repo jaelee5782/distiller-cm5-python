@@ -16,7 +16,7 @@ from distiller_cm5_python.utils.distiller_exception import UserVisibleError, Log
 from distiller_cm5_python.client.llm_infra.parsing_utils import (
     normalize_tool_call_json, parse_tool_calls, check_is_c_ntx_too_long
 )
-from distiller_cm5_python.client.ui.events.event_types import EventType, UIEvent, StatusType
+from distiller_cm5_python.client.ui.events.event_types import EventType, UIEvent, StatusType, MessageSchema
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
 
 
@@ -526,7 +526,13 @@ class LLMClient:
                                                 if current_etype == EventType.MESSAGE:
                                                     dispatcher.dispatch(UIEvent.message_chunk(content_piece, current_event_id))
                                                 else:  # EventType.ACTION
-                                                    dispatcher.dispatch(UIEvent(current_event_id, EventType.ACTION, content_piece, StatusType.IN_PROGRESS))
+                                                    message = MessageSchema(
+                                                        id=current_event_id, 
+                                                        type=EventType.ACTION, 
+                                                        content=content_piece, 
+                                                        status=StatusType.IN_PROGRESS
+                                                    )
+                                                    dispatcher.dispatch(UIEvent.from_message_schema(message))
                                             
                                             full_response_content += content_piece
 

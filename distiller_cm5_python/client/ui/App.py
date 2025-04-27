@@ -760,7 +760,6 @@ if __name__ == "__main__":
         logger.warning(f"Received signal {signum}, forcing immediate exit")
         os._exit(0)
     
-    import signal
     signal.signal(signal.SIGINT, force_exit_handler)
     signal.signal(signal.SIGTERM, force_exit_handler)
     

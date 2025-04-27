@@ -115,55 +115,122 @@ class UIEvent:
     @classmethod
     def thinking(cls):
         import uuid, time
-        return cls(str(uuid.uuid4()), EventType.INFO, "Thinking...", StatusType.IN_PROGRESS, timestamp=time.time())
+        
+        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
+        message = MessageSchema(
+            id=str(uuid.uuid4()),
+            type=EventType.INFO,
+            content="Thinking...",
+            status=StatusType.IN_PROGRESS,
+            timestamp=time.time()
+        )
+        
+        # Convert to UIEvent for backward compatibility
+        return cls.from_message_schema(message)
 
     @classmethod
     def tool_call(cls, tool_call: dict):
         import uuid, time
         tool_name = tool_call.get("function", {}).get("name", tool_call.get("name", ""))
-        return cls(str(uuid.uuid4()), EventType.ACTION, f"Calling {tool_name}", StatusType.IN_PROGRESS, data=tool_call, timestamp=time.time())
+        
+        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
+        message = MessageSchema(
+            id=str(uuid.uuid4()),
+            type=EventType.ACTION,
+            content=f"Calling {tool_name}",
+            status=StatusType.IN_PROGRESS,
+            data=tool_call,
+            timestamp=time.time()
+        )
+        
+        # Convert to UIEvent for backward compatibility
+        return cls.from_message_schema(message)
 
     @classmethod
     def tool_result(cls, tool_call: dict, result: str):
         import uuid, time
         tool_name = tool_call.get("function", {}).get("name", tool_call.get("name", ""))
-        return cls(str(uuid.uuid4()), EventType.ACTION, f"Result for {tool_name}", StatusType.SUCCESS, data={"tool_call": tool_call, "result": result}, timestamp=time.time())
+        
+        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
+        message = MessageSchema(
+            id=str(uuid.uuid4()),
+            type=EventType.ACTION,
+            content=f"Result for {tool_name}",
+            status=StatusType.SUCCESS,
+            data={"tool_call": tool_call, "result": result},
+            timestamp=time.time()
+        )
+        
+        # Convert to UIEvent for backward compatibility
+        return cls.from_message_schema(message)
 
     @classmethod
     def message_chunk(cls, chunk: str, event_id: str):
         import time
-        return cls(event_id, EventType.MESSAGE, chunk, StatusType.IN_PROGRESS, timestamp=time.time())
+        
+        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
+        message = MessageSchema(
+            id=event_id,
+            type=EventType.MESSAGE,
+            content=chunk,
+            status=StatusType.IN_PROGRESS,
+            timestamp=time.time()
+        )
+        
+        # Convert to UIEvent for backward compatibility
+        return cls.from_message_schema(message)
 
     @classmethod
     def message_complete(cls, event_id: str, content: str):
         import time
-        return cls(event_id, EventType.MESSAGE, content, StatusType.SUCCESS, timestamp=time.time())
+        
+        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
+        message = MessageSchema(
+            id=event_id,
+            type=EventType.MESSAGE,
+            content=content,
+            status=StatusType.SUCCESS,
+            timestamp=time.time()
+        )
+        
+        # Convert to UIEvent for backward compatibility
+        return cls.from_message_schema(message)
 
     @classmethod
     def ssh_info(cls, ip_address: str, username: str = "user", port: int = 22):
         """Create SSH info event with connection details"""
         import uuid, time
-        return cls(
-            str(uuid.uuid4()),
-            EventType.SSH_INFO,
-            f"SSH: {username}@{ip_address}:{port}",
-            StatusType.SUCCESS,
+        
+        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
+        message = MessageSchema(
+            id=str(uuid.uuid4()),
+            type=EventType.SSH_INFO,
+            content=f"SSH: {username}@{ip_address}:{port}",
+            status=StatusType.SUCCESS,
             data={"ip": ip_address, "username": username, "port": port},
             timestamp=time.time()
         )
+        
+        # Convert to UIEvent for backward compatibility
+        return cls.from_message_schema(message)
 
     @classmethod
     def function_info(cls, name: str, description: str, params: dict = None):
         """Create function info event with details about available functions"""
         import uuid, time
-        return cls(
-            str(uuid.uuid4()),
-            EventType.FUNCTION,
-            f"Function: {name}",
-            StatusType.SUCCESS,
+        
+        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
+        message = MessageSchema(
+            id=str(uuid.uuid4()),
+            type=EventType.FUNCTION,
+            content=f"Function: {name}",
+            status=StatusType.SUCCESS,
             data={"name": name, "description": description, "params": params or {}},
             timestamp=time.time()
         )
+        
+        # Convert to UIEvent for backward compatibility
+        return cls.from_message_schema(message)
 
 
 # Specialized message schemas for different event types

@@ -186,21 +186,6 @@ PageBase {
             }
         }
         
-        // Handler for detailed function information
-        function onFunctionDetailsReceived(name, description, eventId, parameters) {
-            console.log("Function details received: " + name);
-            
-            // Add function details to conversation and update view
-            if (conversationView) {
-                conversationView.updateModel(bridge.get_conversation());
-            }
-            
-            // Set thinking state to indicate processing
-            if (voiceInputArea && voiceInputArea.setToolExecutionState) {
-                voiceInputArea.setToolExecutionState();
-            }
-        }
-        
         // Handler for raw message schema objects
         function onMessageSchemaReceived(messageData) {
             console.log("Message schema received: " + JSON.stringify(messageData));
@@ -305,6 +290,33 @@ PageBase {
             conversationView.setResponseInProgress(false);
             
             console.log("RecordingError: Reset all UI states due to error: " + errorMessage);
+        }
+
+        function onErrorReceived(content, eventId, timestamp) {
+            console.log("Error event received: " + content);
+            
+            // Reset all UI states on error
+            isProcessing = false;
+            isListening = false;
+            stateResetTimer.toolExecutionActive = false;
+            
+            // Force error state
+            if (voiceInputArea && voiceInputArea.setErrorState) {
+                voiceInputArea.setErrorState();
+            }
+            
+            // Update status text
+            updateStatusText("Error occurred");
+            
+            // Reset conversation view response state
+            conversationView.setResponseInProgress(false);
+            
+            // Update the conversation and show message toast
+            if (bridge && bridge.ready) {
+                conversationView.updateModel(bridge.get_conversation());
+                conversationView.scrollToBottom();
+                messageToast.showMessage("Error: " + content, 5000);
+            }
         }
 
         function onErrorOccurred(errorMessage) {
@@ -720,14 +732,15 @@ PageBase {
     // Failsafe timer to ensure processing state is properly reset
     Timer {
         id: stateResetTimer
-        interval: 20000  // Increased from 15000ms to 20000ms
+        interval: 20000  // 20 seconds timeout
         repeat: false
         running: false
         
         property bool toolExecutionActive: false
         
         onTriggered: {
-            if (isProcessing && !toolExecutionActive) {
+            if (isProcessing) {
+                console.log("StateResetTimer triggered: Forcing state reset from stuck state");
                 isProcessing = false;
                 isListening = false;
                 updateStatusText("Tap to Talk");
@@ -737,15 +750,12 @@ PageBase {
                 if (voiceInputArea.resetState) {
                     voiceInputArea.resetState();
                 }
-            } else if (toolExecutionActive) {
-                // Show processing state for any active operation
-                updateStatusText("Processing...");
-                if (voiceInputArea.setAppState) {
-                    voiceInputArea.setAppState("processing");
+                
+                // Ensure any errors are displayed in the conversation
+                if (bridge && bridge.ready) {
+                    conversationView.updateModel(bridge.get_conversation());
+                    conversationView.scrollToBottom();
                 }
-                // Restart the timer to check again later, with longer interval
-                interval = 10000; // Increased from 5000ms to 10000ms
-                stateResetTimer.restart();
             }
         }
     }

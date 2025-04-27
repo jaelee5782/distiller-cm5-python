@@ -19,6 +19,7 @@ import time
 import psutil
 import threading
 from typing import Union
+import uuid
 
 # Exit delay constant
 EXIT_DELAY_MS = 500  # Reduced delay from 1000ms to 500ms
@@ -32,7 +33,6 @@ class MCPClientBridge(QObject):
     """
 
     conversationChanged = pyqtSignal()  # Signal for conversation changes
-    logLevelChanged = pyqtSignal(str)  # Signal for logging level changes
     statusChanged = pyqtSignal(str)  # Signal for status changes
     availableServersChanged = pyqtSignal(list)  # Signal for available servers list
     isConnectedChanged = pyqtSignal(bool)  # Signal for connection status
@@ -52,7 +52,6 @@ class MCPClientBridge(QObject):
     # New signals for architecture diagram support
     sshInfoReceived = pyqtSignal(str, str, str)  # Signal for SSH info events (content, event_id, timestamp)
     functionReceived = pyqtSignal(str, str, str)  # Signal for function events (content, event_id, timestamp)
-    functionDetailsReceived = pyqtSignal(str, str, str, 'QVariantMap')  # Signal for detailed function information (name, description, id, parameters)
     messageSchemaReceived = pyqtSignal('QVariantMap')  # Signal for raw message schema objects
 
     def __init__(self, parent=None):
@@ -177,7 +176,26 @@ class MCPClientBridge(QObject):
     async def process_query(self, query: str):
         """Process a user query through the MCP client."""
         logger.info(f"MCPClientBridge.process_query: Processing query: {query}")
-        await self.mcp_client.process_query(query)
+        try:
+            await self.mcp_client.process_query(query)
+        except LogOnlyError as e:
+            # Explicitly handle connection errors
+            logger.error(f"Connection error during query processing: {str(e)}")
+            self._handle_error(
+                e,
+                "Query processing",
+                user_friendly_msg="Connection to LLM server failed. Please check your connection and try again."
+            )
+            # Ensure error state is properly set
+            self.status_manager.update_status(StatusManager.STATUS_ERROR, error=str(e))
+        except Exception as e:
+            # Handle other exceptions
+            logger.error(f"Error processing query: {str(e)}", exc_info=True)
+            self._handle_error(
+                e,
+                "Query processing",
+                user_friendly_msg="Failed to process query. Please try again."
+            )
 
     @pyqtSlot()
     def clear_conversation(self):
@@ -461,6 +479,15 @@ class MCPClientBridge(QObject):
             if isinstance(event, MessageSchema):
                 # Convert timestamp to string if it exists
                 timestamp_str = str(event.timestamp) if event.timestamp else None
+                
+                # Emit the raw message schema event
+                try:
+                    # Convert the MessageSchema to a dictionary for QML
+                    event_dict = event.dict()
+                    # Emit the messageSchemaReceived signal with the event data
+                    self.messageSchemaReceived.emit(event_dict)
+                except Exception as e:
+                    logger.error(f"Error converting MessageSchema to dict: {e}", exc_info=True)
                 
                 # Emit the appropriate signal based on event type
                 if event.type == EventType.MESSAGE:
@@ -894,6 +921,17 @@ class MCPClientBridge(QObject):
 
         # Emit the error signal for QML
         self.errorOccurred.emit(error_msg)
+        
+        # Force UI state reset
+        # Create and emit an error event to ensure the UI transitions to error state
+        error_event = MessageSchema(
+            id=str(uuid.uuid4()),
+            type=EventType.ERROR,
+            content=error_msg,
+            status=StatusType.FAILED,
+            timestamp=time.time()
+        )
+        self.dispatcher.dispatch(error_event)
 
         return error_msg
 
