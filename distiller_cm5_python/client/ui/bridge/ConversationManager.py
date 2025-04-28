@@ -47,6 +47,10 @@ class ConversationManager:
         Args:
             message: A message dict with timestamp and content keys
         """
+        # Ensure the message has a type field, default to "Message" if not provided
+        if "type" not in message:
+            message["type"] = "Message"
+        
         self._conversation.append(message)
         self._schedule_update()
 
@@ -92,12 +96,15 @@ class ConversationManager:
         for message in self._conversation:
             timestamp = message.get("timestamp", "")
             content = message.get("content", "")
-            # Format message as expected by MessageItem: "[timestamp] sender: content"
+            # Get message type, default to "Message" if not present
+            msg_type = message.get("type", "Message")
+            
+            # Format message as expected by MessageItem: "[timestamp] sender: content::type"
             # If content starts with "You: ", it's a user message, otherwise it's an assistant message
             if content.startswith("You: "):
-                formatted_messages.append(f"[{timestamp}] {content}")
+                formatted_messages.append(f"[{timestamp}] {content}::{msg_type}")
             else:
-                formatted_messages.append(f"[{timestamp}] Assistant: {content}")
+                formatted_messages.append(f"[{timestamp}] Assistant: {content}::{msg_type}")
         return formatted_messages
 
     def get_timestamp(self):

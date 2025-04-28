@@ -8,11 +8,15 @@ Rectangle {
     property string messageText: ""
     property bool isLastMessage: false
     property bool isResponding: false
-    // Parse message components from string format "[timestamp] sender: content"
+    // Parse message components from string format "[timestamp] sender: content::type"
     readonly property string timestamp: messageText.indexOf("]") > 0 ? messageText.substring(1, messageText.indexOf("]")) : ""
     readonly property string remainder: messageText.indexOf("]") > 0 ? messageText.substring(messageText.indexOf("]") + 2) : messageText
     readonly property string sender: remainder.indexOf(":") > 0 ? remainder.substring(0, remainder.indexOf(":")) : ""
-    readonly property string content: remainder.indexOf(":") > 0 ? remainder.substring(remainder.indexOf(":") + 2) : remainder
+    
+    // Extract message type if present (after ::)
+    readonly property string contentWithType: remainder.indexOf(":") > 0 ? remainder.substring(remainder.indexOf(":") + 2) : remainder
+    readonly property string messageType: contentWithType.lastIndexOf("::") > 0 ? contentWithType.substring(contentWithType.lastIndexOf("::") + 2) : "Message"
+    readonly property string content: contentWithType.lastIndexOf("::") > 0 ? contentWithType.substring(0, contentWithType.lastIndexOf("::")) : contentWithType
 
     width: parent.width
     height: messageLayout.implicitHeight + ThemeManager.spacingNormal
@@ -61,16 +65,55 @@ Rectangle {
             Layout.fillWidth: true
         }
 
-        Text {
-            text: timestamp
-            font: FontManager.small
-            color: ThemeManager.secondaryTextColor
-            horizontalAlignment: Text.AlignRight
+        RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: ThemeManager.spacingTiny / 2
-            visible: timestamp !== ""
+            
+            // Display the message type at the bottom left
+            Text {
+                text: messageType 
+                font {
+                    family: FontManager.small.family
+                    pixelSize: FontManager.small.pixelSize
+                    // Use bold for important message types
+                    weight: {
+                        switch(messageType.toLowerCase()) {
+                            case "error": 
+                            case "warning":
+                            case "ssh info":
+                                return Font.Bold;
+                            default:
+                                return Font.Normal;
+                        }
+                    }
+                    // Use italic for action-related types
+                    italic: {
+                        switch(messageType.toLowerCase()) {
+                            case "action":
+                            case "function":
+                            case "observation":
+                            case "plan":
+                                return true;
+                            default:
+                                return false;
+                        }
+                    }
+                }
+                color: ThemeManager.secondaryTextColor
+                horizontalAlignment: Text.AlignLeft
+                Layout.fillWidth: true
+                visible: messageType !== ""
+            }
+            
+            // Display timestamp at the bottom right
+            Text {
+                text: timestamp
+                font: FontManager.small
+                color: ThemeManager.secondaryTextColor
+                horizontalAlignment: Text.AlignRight
+                Layout.fillWidth: true
+                visible: timestamp !== ""
+            }
         }
-
     }
-
 }

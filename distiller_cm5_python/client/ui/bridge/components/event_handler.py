@@ -62,6 +62,12 @@ class BridgeEventHandler:
         self.signals = cast(BridgeEventSignals, signal_source)
         self.is_connected = connected_property
         
+        # Get conversation manager reference from bridge if possible
+        if hasattr(signal_source, 'conversation_manager'):
+            self.signals.conversation_manager = signal_source.conversation_manager
+        else:
+            self.signals.conversation_manager = None
+        
         # Connect to the dispatcher
         self.dispatcher.event_dispatched.connect(self.handle_event)
     
@@ -104,11 +110,23 @@ class BridgeEventHandler:
         except Exception as e:
             logger.error(f"Error converting MessageSchema to dict: {e}", exc_info=True)
         
+        # Get conversation manager from the bridge if available
+        conversation_manager = getattr(self.signals, 'conversation_manager', None)
+        
         # Emit the appropriate signal based on event type
         if event.type == EventType.MESSAGE:
             # Pass status as string (.value from Enum) to the UI
             status_value = event.status.value if hasattr(event.status, 'value') else event.status
             self.signals.messageReceived.emit(event.content, str(event.id), timestamp_str, status_value)
+            
+            # Add message type metadata for complete messages
+            if status_value == "success" and conversation_manager:
+                message = {
+                    "timestamp": self._get_formatted_timestamp(),
+                    "content": f"{event.content}",
+                    "type": "Message"
+                }
+                conversation_manager.add_message(message)
             
             # Update status when message is complete
             if status_value == "success" and self.is_connected:
@@ -122,6 +140,15 @@ class BridgeEventHandler:
             if status_value == "in_progress":
                 self.status_manager.update_status(StatusManager.STATUS_EXECUTING_TOOL)
                 
+            # Add message type metadata
+            if conversation_manager:
+                message = {
+                    "timestamp": self._get_formatted_timestamp(),
+                    "content": f"{event.content}",
+                    "type": "Action"
+                }
+                conversation_manager.add_message(message)
+                
         elif event.type == EventType.INFO:
             self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
             
@@ -129,12 +156,39 @@ class BridgeEventHandler:
             if event.content and "Thinking" in event.content:
                 self.status_manager.update_status(StatusManager.STATUS_THINKING)
                 
+            # Add message type metadata
+            if conversation_manager:
+                message = {
+                    "timestamp": self._get_formatted_timestamp(),
+                    "content": f"{event.content}",
+                    "type": "Info"
+                }
+                conversation_manager.add_message(message)
+                
         elif event.type == EventType.WARNING:
             self.signals.warningReceived.emit(event.content, str(event.id), timestamp_str)
             
+            # Add message type metadata
+            if conversation_manager:
+                message = {
+                    "timestamp": self._get_formatted_timestamp(),
+                    "content": f"{event.content}",
+                    "type": "Warning"
+                }
+                conversation_manager.add_message(message)
+                
         elif event.type == EventType.ERROR:
             self.signals.errorReceived.emit(event.content, str(event.id), timestamp_str)
             
+            # Add message type metadata
+            if conversation_manager:
+                message = {
+                    "timestamp": self._get_formatted_timestamp(),
+                    "content": f"{event.content}",
+                    "type": "Error"
+                }
+                conversation_manager.add_message(message)
+                
         elif event.type == EventType.SSH_INFO:
             # Add handling for SSH_INFO events
             if hasattr(self.signals, 'sshInfoReceived'):
@@ -142,6 +196,15 @@ class BridgeEventHandler:
             else:
                 # Fall back to info message if no dedicated handler
                 self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                
+            # Add message type metadata
+            if conversation_manager:
+                message = {
+                    "timestamp": self._get_formatted_timestamp(),
+                    "content": f"{event.content}",
+                    "type": "SSH Info"
+                }
+                conversation_manager.add_message(message)
                 
         elif event.type == EventType.FUNCTION:
             # Add handling for FUNCTION events
@@ -151,6 +214,15 @@ class BridgeEventHandler:
                 # Fall back to info message if no dedicated handler
                 self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
                 
+            # Add message type metadata
+            if conversation_manager:
+                message = {
+                    "timestamp": self._get_formatted_timestamp(),
+                    "content": f"{event.content}",
+                    "type": "Function"
+                }
+                conversation_manager.add_message(message)
+                
         elif event.type == EventType.OBSERVATION:
             # Handle observation events
             if hasattr(self.signals, 'observationReceived'):
@@ -159,6 +231,15 @@ class BridgeEventHandler:
                 # Fall back to info message if no dedicated handler
                 self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
                 
+            # Add message type metadata
+            if conversation_manager:
+                message = {
+                    "timestamp": self._get_formatted_timestamp(),
+                    "content": f"{event.content}",
+                    "type": "Observation"
+                }
+                conversation_manager.add_message(message)
+                
         elif event.type == EventType.PLAN:
             # Handle plan events
             if hasattr(self.signals, 'planReceived'):
@@ -166,6 +247,15 @@ class BridgeEventHandler:
             else:
                 # Fall back to info message if no dedicated handler
                 self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                
+            # Add message type metadata
+            if conversation_manager:
+                message = {
+                    "timestamp": self._get_formatted_timestamp(),
+                    "content": f"{event.content}",
+                    "type": "Plan"
+                }
+                conversation_manager.add_message(message)
                 
         elif event.type == EventType.STATUS:
             # Update status if STATUS event
@@ -240,3 +330,8 @@ class BridgeEventHandler:
             status=StatusType.FAILED,
             timestamp=time.time()
         ) 
+
+    def _get_formatted_timestamp(self):
+        """Get a formatted timestamp string for messages."""
+        from datetime import datetime
+        return datetime.now().strftime("%H:%M:%S") 

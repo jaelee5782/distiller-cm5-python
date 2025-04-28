@@ -89,6 +89,8 @@ class BridgeCore(QObject):
             self,
             type(self).is_connected
         )
+        # Give the event handler direct access to the conversation manager
+        self.event_handler.signals.conversation_manager = self.conversation_manager
         
         self.config_manager = ConfigManager(
             self.status_manager,
