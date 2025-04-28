@@ -12,7 +12,6 @@ Rectangle {
     readonly property string timestamp: messageText.indexOf("]") > 0 ? messageText.substring(1, messageText.indexOf("]")) : ""
     readonly property string remainder: messageText.indexOf("]") > 0 ? messageText.substring(messageText.indexOf("]") + 2) : messageText
     readonly property string sender: remainder.indexOf(":") > 0 ? remainder.substring(0, remainder.indexOf(":")) : ""
-    
     // Extract message type if present (after ::)
     readonly property string contentWithType: remainder.indexOf(":") > 0 ? remainder.substring(remainder.indexOf(":") + 2) : remainder
     readonly property string messageType: contentWithType.lastIndexOf("::") > 0 ? contentWithType.substring(contentWithType.lastIndexOf("::") + 2) : "Message"
@@ -45,12 +44,12 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.margins: ThemeManager.spacingSmall 
+        anchors.margins: ThemeManager.spacingSmall
         spacing: ThemeManager.spacingTiny
 
         Text {
             text: sender
-            font: FontManager.small 
+            font: FontManager.small
             color: ThemeManager.textColor
             Layout.fillWidth: true
             visible: sender !== ""
@@ -58,7 +57,7 @@ Rectangle {
 
         Text {
             text: content
-            font: FontManager.normal 
+            font: FontManager.normal
             color: ThemeManager.textColor
             wrapMode: Text.WordWrap
             lineHeight: 1.1
@@ -68,43 +67,45 @@ Rectangle {
         RowLayout {
             Layout.fillWidth: true
             Layout.topMargin: ThemeManager.spacingTiny / 2
-            
+
             // Display the message type at the bottom left
             Text {
-                text: messageType 
+                text: messageType
+                color: ThemeManager.secondaryTextColor
+                horizontalAlignment: Text.AlignLeft
+                Layout.fillWidth: true
+                visible: messageType !== ""
+
                 font {
                     family: FontManager.small.family
                     pixelSize: FontManager.small.pixelSize
                     // Use bold for important message types
                     weight: {
-                        switch(messageType.toLowerCase()) {
-                            case "error": 
-                            case "warning":
-                            case "ssh info":
-                                return Font.Bold;
-                            default:
-                                return Font.Normal;
+                        switch (messageType.toLowerCase()) {
+                        case "error":
+                        case "warning":
+                        case "ssh info":
+                            return Font.Bold;
+                        default:
+                            return Font.Normal;
                         }
                     }
                     // Use italic for action-related types
                     italic: {
-                        switch(messageType.toLowerCase()) {
-                            case "action":
-                            case "function":
-                            case "observation":
-                            case "plan":
-                                return true;
-                            default:
-                                return false;
+                        switch (messageType.toLowerCase()) {
+                        case "action":
+                        case "function":
+                        case "observation":
+                        case "plan":
+                            return true;
+                        default:
+                            return false;
                         }
                     }
                 }
-                color: ThemeManager.secondaryTextColor
-                horizontalAlignment: Text.AlignLeft
-                Layout.fillWidth: true
-                visible: messageType !== ""
+
             }
-            
+
             // Display timestamp at the bottom right
             Text {
                 text: timestamp
@@ -114,6 +115,9 @@ Rectangle {
                 Layout.fillWidth: true
                 visible: timestamp !== ""
             }
+
         }
+
     }
+
 }

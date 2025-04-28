@@ -20,12 +20,10 @@ AppSection {
             Layout.preferredHeight: 100
             Layout.topMargin: ThemeManager.spacingNormal
             Layout.bottomMargin: ThemeManager.spacingNormal
-
             source: ThemeManager.darkMode ? "../images/pamir_logo_white.png" : "../images/pamir_logo.png"
             fillMode: Image.PreserveAspectFit
             sourceSize.width: 200
             sourceSize.height: 200
-
             // Set fadeInDuration to match the theme animation duration
             fadeInDuration: ThemeManager.animationDuration
 
@@ -35,10 +33,12 @@ AppSection {
                     target: logoImage
                     property: "opacity"
                     from: 0.8
-                    to: 1.0
+                    to: 1
                     duration: ThemeManager.animationDuration
                 }
+
             }
+
         }
 
         Column {
@@ -68,9 +68,12 @@ AppSection {
                 color: ThemeManager.tertiaryTextColor
                 font.pixelSize: FontManager.fontSizeSmall
                 font.family: FontManager.primaryFontFamily
-                topPadding: 4
+                topPadding: ThemeManager.paddingNormal
                 Layout.alignment: Qt.AlignHCenter
             }
+
         }
+
     }
+
 }

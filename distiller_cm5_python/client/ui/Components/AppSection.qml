@@ -10,13 +10,28 @@ NavigableItem {
     property bool collapsed: false
     property bool showBorder: true
     property int contentMargins: ThemeManager.spacingNormal * 1.25
-
     // Add bottom margin for better visual separation
     property int bottomMargin: ThemeManager.spacingNormal
+    // This states that any child items added to this component should be parented to contentContainer
+    default property alias content: contentContainer.data
+
+    // Function to get navigable controls - to be implemented by children
+    function getNavigableControls() {
+        return [];
+    }
 
     height: headerContainer.height + (collapsed ? 0 : contentArea.height) + bottomMargin
     implicitHeight: height
-    
+    // Handle activating this section
+    onClicked: {
+        // Try to focus the first control in this section
+        var controls = getNavigableControls();
+        if (controls.length > 0)
+            controls[0].forceActiveFocus();
+        else if (collapsible)
+            collapsed = !collapsed;
+    }
+
     // Visual feedback for focused state
     Rectangle {
         anchors.fill: parent
@@ -32,6 +47,7 @@ NavigableItem {
     // Background rectangle for entire section
     Rectangle {
         id: sectionBackground
+
         anchors.fill: parent
         anchors.bottomMargin: bottomMargin
         color: ThemeManager.transparentColor
@@ -39,6 +55,7 @@ NavigableItem {
         // Add subtle shadow for better visual separation (optional)
         Rectangle {
             id: shadowEffect
+
             anchors.fill: parent
             anchors.topMargin: -1
             anchors.leftMargin: -1
@@ -51,6 +68,7 @@ NavigableItem {
             z: -1
             visible: showBorder
         }
+
     }
 
     // Section header
@@ -85,7 +103,7 @@ NavigableItem {
                 font.family: FontManager.primaryFontFamily
                 font.bold: true
                 elide: Text.ElideRight
-                opacity: root.visualFocus ? 1.0 : 0.9
+                opacity: root.visualFocus ? 1 : 0.9
             }
 
             Text {
@@ -99,7 +117,9 @@ NavigableItem {
                 font.family: FontManager.primaryFontFamily
                 font.bold: true
             }
+
         }
+
     }
 
     // Content area
@@ -113,7 +133,6 @@ NavigableItem {
         height: contentContainer.height + contentMargins * 2
         visible: !collapsed
         opacity: collapsed ? 0 : 1
-
         color: ThemeManager.backgroundColor
         border.color: showBorder ? ThemeManager.borderColor : "transparent"
         border.width: showBorder ? ThemeManager.borderWidth : 0
@@ -123,6 +142,7 @@ NavigableItem {
         // Special treatment for top edges to connect with header
         Rectangle {
             id: connectionRect
+
             anchors.top: parent.top
             anchors.left: parent.left
             anchors.right: parent.right
@@ -146,16 +166,13 @@ NavigableItem {
                 height: parent.height
                 color: parent.color
             }
-        }
 
-        Behavior on opacity {
-            NumberAnimation {
-                duration: ThemeManager.animationDuration / 2
-            }
         }
 
         // This is the actual content container where child items will be placed
         Item {
+            // Child items are placed here with the default layout
+
             id: contentContainer
 
             anchors.left: parent.left
@@ -163,27 +180,15 @@ NavigableItem {
             anchors.top: parent.top
             anchors.margins: contentMargins
             height: childrenRect.height
+        }
 
-            // Child items are placed here with the default layout
+        Behavior on opacity {
+            NumberAnimation {
+                duration: ThemeManager.animationDuration / 2
+            }
+
         }
-    }
-    
-    // Function to get navigable controls - to be implemented by children
-    function getNavigableControls() {
-        return [];
-    }
-    
-    // Handle activating this section
-    onClicked: {
-        // Try to focus the first control in this section
-        var controls = getNavigableControls();
-        if (controls.length > 0) {
-            controls[0].forceActiveFocus();
-        } else if (collapsible) {
-            collapsed = !collapsed;
-        }
+
     }
 
-    // This states that any child items added to this component should be parented to contentContainer
-    default property alias content: contentContainer.data
 }

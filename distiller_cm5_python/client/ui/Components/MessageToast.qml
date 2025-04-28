@@ -3,7 +3,6 @@ import QtQuick.Controls 2.15
 
 Rectangle {
     id: messageToast
-    objectName: "toastBackground"
 
     function showMessage(message, duration) {
         messageText.text = message;
@@ -13,6 +12,7 @@ Rectangle {
         fadeTimer.restart();
     }
 
+    objectName: "toastBackground"
     // Fixed width based on parent only, breaking the binding loop
     width: parent.width * 0.8
     height: messageText.implicitHeight + ThemeManager.spacingNormal
@@ -39,9 +39,11 @@ Rectangle {
     // Timer to hide message
     Timer {
         id: fadeTimer
+
         interval: 3000
         onTriggered: {
             messageToast.visible = false;
         }
     }
+
 }

@@ -4,49 +4,46 @@ import QtQuick.Layouts 1.15
 
 NavigableItem {
     id: root
-    
+
     property bool checked: false
     property bool value: checked
-    
+
     signal valueToggled(bool newValue)
     signal toggled()
-    
+
+    function toggle() {
+        checked = !checked;
+        toggled();
+    }
+
     Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
     Layout.preferredHeight: 28
     Layout.preferredWidth: 52
-    
-    function toggle() {
-        checked = !checked
-        toggled()
-    }
-    
     onCheckedChanged: {
         // Prevent signal loops by only emitting the signal if the checked state
         // is different from the property value
-        if (value !== checked) {
+        if (value !== checked)
             valueToggled(checked);
-        }
+
     }
-    
     onValueChanged: {
         // Update the checked state to match the value property
-        if (checked !== value) {
+        if (checked !== value)
             checked = value;
-        }
+
     }
-    
     // Handle Enter key press
     Keys.onReturnPressed: function() {
-        toggle()
+        toggle();
     }
-    
     // Override the clicked signal to toggle the switch
     onClicked: {
-        toggle()
+        toggle();
     }
-    
+
     Rectangle {
         id: toggleBackground
+
         width: 52
         height: 28
         anchors.centerIn: parent
@@ -57,6 +54,7 @@ NavigableItem {
 
         Rectangle {
             id: toggleHandle
+
             x: root.checked ? parent.width - width - (root.visualFocus ? 4 : 2) : (root.visualFocus ? 4 : 2)
             y: root.visualFocus ? 4 : 2
             width: parent.height - (root.visualFocus ? 8 : 4)
@@ -70,7 +68,11 @@ NavigableItem {
                 NumberAnimation {
                     duration: ThemeManager.animationDuration / 2
                 }
+
             }
+
         }
+
     }
-} 
+
+}

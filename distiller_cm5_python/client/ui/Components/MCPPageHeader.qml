@@ -25,7 +25,7 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
             elide: Text.ElideRight
-            padding: ThemeManager.spacingSmall / 2
+            padding: ThemeManager.paddingSmall
         }
 
         Text {
@@ -36,8 +36,8 @@ Item {
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
             elide: Text.ElideRight
-            padding: ThemeManager.spacingSmall / 2
-            bottomPadding: ThemeManager.spacingSmall / 2
+            padding: ThemeManager.paddingSmall
+            bottomPadding: ThemeManager.paddingSmall
             visible: text.length > 0
         }
 

@@ -4,25 +4,22 @@ import QtQuick 2.15
 Image {
     id: optimizedImage
 
-    // Default properties optimized for performance
-    asynchronous: true
-    cache: true
-    mipmap: smooth
-    smooth: true
-
     // Properties for fade-in effect (disabled for e-ink)
     property bool fadeInEffect: false
     property int fadeInDuration: 0
-
     // Optional error handling
     property string fallbackSource: ""
     property bool showPlaceholder: true
-
     // Internal state
     readonly property bool isLoading: status === Image.Loading
     readonly property bool hasError: status === Image.Error
     readonly property bool isReady: status === Image.Ready
 
+    // Default properties optimized for performance
+    asynchronous: true
+    cache: true
+    mipmap: smooth
+    smooth: true
     // Automatically handle fallback source on error
     onStatusChanged: {
         if (status === Image.Error && fallbackSource !== "") {
@@ -30,9 +27,8 @@ Image {
             source = fallbackSource;
         }
     }
-
     // No fade-in effect for e-ink display
-    opacity: 1.0
+    opacity: 1
 
     // Placeholder rectangle shown during loading or on error
     Rectangle {
@@ -50,5 +46,7 @@ Image {
             color: ThemeManager.tertiaryTextColor
             font.pixelSize: Math.min(parent.width, parent.height) * 0.2
         }
+
     }
+
 }

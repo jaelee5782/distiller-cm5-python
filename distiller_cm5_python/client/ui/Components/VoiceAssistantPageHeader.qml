@@ -14,7 +14,7 @@ Rectangle {
     signal serverSelectClicked()
 
     color: ThemeManager.headerColor
-    
+
     // Shadow effect for the header
     Rectangle {
         anchors.top: parent.bottom
@@ -35,14 +35,15 @@ Rectangle {
         // Back button (server select)
         AppButton {
             id: backButton
-            
+
             Layout.preferredWidth: 40
-            Layout.preferredHeight: 32
+            Layout.preferredHeight: 40
             Layout.alignment: Qt.AlignVCenter
-            
             text: "←"
+            fontSize: FontManager.fontSizeLarge
             navigable: true
-            
+            buttonRadius: parent.width
+            isFlat: true
             onClicked: header.serverSelectClicked()
         }
 
@@ -71,10 +72,12 @@ Rectangle {
                     width: 12
                     height: 12
                 }
+
             }
 
             Text {
                 id: statusTextItem
+
                 text: statusText
                 font: FontManager.small
                 color: ThemeManager.secondaryTextColor
@@ -85,6 +88,9 @@ Rectangle {
                 clip: true
                 visible: showStatusText
             }
+
         }
+
     }
+
 }

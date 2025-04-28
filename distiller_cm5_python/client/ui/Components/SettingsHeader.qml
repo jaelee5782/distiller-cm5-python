@@ -4,32 +4,34 @@ import QtQuick.Layouts 1.15
 
 Rectangle {
     id: header
-    
+
     property bool showApplyButton: true
     property alias backButton: backBtn
     property alias applyButton: applyBtn
     property bool applyButtonVisible: false
-    
+
     signal backClicked()
     signal applyClicked()
-    
+
     color: ThemeManager.headerColor
-    
+
     AppButton {
         id: backBtn
+
         text: "←"
+        fontSize: FontManager.fontSizeLarge
         anchors.left: parent.left
         anchors.leftMargin: ThemeManager.spacingNormal
         anchors.verticalCenter: parent.verticalCenter
         width: 40
-        height: 32
+        height: 40
+        buttonRadius: parent.width
         navigable: true
-        
         onClicked: {
             header.backClicked();
         }
     }
-    
+
     Text {
         text: "SETTINGS"
         font.pixelSize: FontManager.fontSizeLarge
@@ -37,22 +39,24 @@ Rectangle {
         anchors.centerIn: parent
         color: ThemeManager.textColor
     }
-    
+
     // Apply button with checkmark icon
-    AppRoundButton {
+    AppButton {
         id: applyBtn
-        iconText: "✓"
+
+        text: "✓"
+        fontSize: FontManager.fontSizeLarge
         anchors.right: parent.right
         anchors.rightMargin: ThemeManager.spacingNormal
         anchors.verticalCenter: parent.verticalCenter
         width: 40
-        height: 32
-        showBorder: true
+        height: 40
+        buttonRadius: parent.width
         visible: applyButtonVisible
         navigable: true
-        
         onClicked: {
             header.applyClicked();
         }
     }
+
 }

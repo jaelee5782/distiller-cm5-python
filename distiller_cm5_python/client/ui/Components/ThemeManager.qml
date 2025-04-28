@@ -1,32 +1,19 @@
-pragma Singleton
 import QtQuick 2.15
+pragma Singleton
 
 QtObject {
     // Subtle overlay for hover effects
     // No animations for e-ink display
     // Standard button height
+    // Text on accent background: Black/White
+    // Lighter version of accent color
 
     id: themeManager
 
     // Theme mode property - controls which theme to use
     property bool darkMode: false
-
     // Theme caching to reduce bridge calls
     property bool themeCached: false
-
-    // Initialize theme from bridge settings
-    function initializeTheme() {
-        if (!themeCached && bridge && bridge.ready) {
-            var savedTheme = bridge.getConfigValue("display", "dark_mode");
-            if (savedTheme !== "") {
-                setDarkMode(savedTheme === "true" || savedTheme === "True");
-            }
-            themeCached = true;
-            return true;
-        }
-        return false;
-    }
-
     // Dynamic color properties based on current theme
     readonly property color backgroundColor: darkMode ? "#000000" : "#FFFFFF"
     // Background: Black/White
@@ -51,7 +38,6 @@ QtObject {
     readonly property color highlightColor: darkMode ? "#333333" : "#F0F0F0"
     // Highlight: Dark gray/Light gray
     readonly property color subtleColor: darkMode ? Qt.rgba(1, 1, 1, 0.05) : Qt.rgba(0, 0, 0, 0.05)
-
     // Additional color properties for focus states and button variants
     readonly property color focusBackgroundColor: darkMode ? "#CCCCCC" : "#333333"
     // Background for focused items: Light gray/Dark gray
@@ -60,8 +46,6 @@ QtObject {
     readonly property color focusTextColor: darkMode ? "#000000" : "#FFFFFF"
     // Text for focused items: Black/White
     readonly property color textOnAccentColor: darkMode ? "#000000" : "#FFFFFF"
-    // Text on accent background: Black/White
-
     // Transparent and utility colors
     readonly property color transparentColor: "transparent"
     // Transparent color for backgrounds
@@ -74,14 +58,17 @@ QtObject {
     readonly property color darkAccentColor: Qt.darker(accentColor, 1.3)
     // Darker version of accent color
     readonly property color lightAccentColor: Qt.lighter(accentColor, 1.5)
-    // Lighter version of accent color
-
     // Sizes and metrics
     readonly property real borderRadius: 6
     // Border radius for rectangles
     readonly property real borderWidth: 1
     // Border width
-    readonly property real animationDuration: 0 // No animations for e-ink
+    readonly property real animationDuration: 0
+    // No animations for e-ink
+    // Padding
+    readonly property real paddingSmall: 4
+    readonly property real paddingNormal: 8
+    readonly property real paddingLarge: 12
     // Spacing
     readonly property real spacingSmall: 8
     readonly property real spacingNormal: 16
@@ -93,6 +80,19 @@ QtObject {
     readonly property string basePath: "../../images/icons/"
     readonly property string lightIconPath: basePath
     readonly property string darkIconPath: basePath + "dark/"
+
+    // Initialize theme from bridge settings
+    function initializeTheme() {
+        if (!themeCached && bridge && bridge.ready) {
+            var savedTheme = bridge.getConfigValue("display", "dark_mode");
+            if (savedTheme !== "")
+                setDarkMode(savedTheme === "true" || savedTheme === "True");
+
+            themeCached = true;
+            return true;
+        }
+        return false;
+    }
 
     // Helper function to get theme-appropriate icon path
     function getIconPath(iconName) {
@@ -111,4 +111,5 @@ QtObject {
     function setDarkMode(isDark) {
         darkMode = isDark;
     }
+
 }

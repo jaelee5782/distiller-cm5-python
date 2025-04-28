@@ -6,30 +6,68 @@ import QtQuick.Window 2.15
 ApplicationWindow {
     id: mainWindow
 
+    // Cache for theme setting to avoid repeated bridge calls
+    property bool themeCached: false
+    property bool cachedDarkMode: false
+
     // Navigation function
     function pushSettingsPage() {
         stackView.push(settingsPageComponent);
     }
 
+    // Function to handle application restart
+    function restartApp() {
+        if (bridge && bridge.ready) {
+            // First disconnect from any server
+            if (bridge.isConnected)
+                bridge.disconnectFromServer();
+
+            // Then shutdown with restart flag
+            bridge.shutdownApplication(true);
+        }
+    }
+
     visible: true
-    width: 256
-    height: 384
+    width: 240
+    height: 416
     title: AppInfo.appName
     font: FontManager.normal
-    
+    // Update the FontManager primaryFontFamily when the app loads
+    Component.onCompleted: {
+        // Use the loaded font in the components
+
+        if (jetBrainsMono.status == FontLoader.Ready)
+            FontManager.primaryFontFamily = jetBrainsMono.name;
+
+        // Set initial focus to key handler
+        keyHandler.forceActiveFocus();
+    }
+    // Handle application shutdown
+    onClosing: function(closeEvent) {
+        // No bridge available or not ready, just accept the close event
+
+        closeEvent.accepted = false;
+        if (bridge && bridge.ready)
+            bridge.shutdownApplication(false);
+        else
+            closeEvent.accepted = true;
+    }
+
     // Dedicated key handler that stays on top of everything
     FocusScope {
         id: keyHandler
-        
+
         anchors.fill: parent
         focus: true
         z: 2000 // Make sure it's above everything else
-        
+        Component.onCompleted: {
+            forceActiveFocus();
+        }
+
         // Use this Item to capture all key events
         Item {
             anchors.fill: parent
             focus: true
-            
             Keys.onPressed: function(event) {
                 // Only handle navigation keys - UP, DOWN, and ENTER
                 if (event.key === Qt.Key_Down) {
@@ -46,12 +84,10 @@ ApplicationWindow {
                         if (FocusManager.scrollTargetItem) {
                             // Force update the property first
                             FocusManager.scrollTargetItem.scrollModeActive = false;
-                            
                             // Then trigger the signal if available
-                            if (FocusManager.scrollTargetItem.scrollModeChanged) {
+                            if (FocusManager.scrollTargetItem.scrollModeChanged)
                                 FocusManager.scrollTargetItem.scrollModeChanged(false);
-                            }
-                            
+
                             // Force a UI update by using a short timer
                             exitScrollModeTimer.start();
                         }
@@ -61,92 +97,50 @@ ApplicationWindow {
                     }
                 }
             }
-            
             // Explicitly grab focus whenever anything else tries to take it
             onActiveFocusChanged: {
-                if (!activeFocus) {
+                if (!activeFocus)
                     forceActiveFocus();
-                }
+
             }
         }
-        
-        Component.onCompleted: {
-            forceActiveFocus();
-        }
-        
-        // More efficient timer for focus management
+
+        // Timer for focus management
         Timer {
-            interval: 500  // Increased from 200ms to 500ms to reduce CPU usage
+            interval: 500
             running: true
             repeat: true
             onTriggered: {
-                if (!keyHandler.activeFocus) {
+                if (!keyHandler.activeFocus)
                     keyHandler.forceActiveFocus();
-                }
+
             }
         }
+
     }
-    
+
     // Timer to ensure the UI is updated when exiting scroll mode
     Timer {
         id: exitScrollModeTimer
+
         interval: 10
         repeat: false
         onTriggered: {
             // Force additional update for any target that might still be in scroll mode
-            if (FocusManager.scrollTargetItem) {
+            if (FocusManager.scrollTargetItem)
                 FocusManager.scrollTargetItem.scrollModeActive = false;
-            }
+
         }
     }
-    
-    // Cache for theme setting to avoid repeated bridge calls
-    property bool themeCached: false
-    property bool cachedDarkMode: false
-    
+
     // Connect to the bridge ready signal
     Connections {
-        target: bridge
-        
         function onBridgeReady() {
             // Use the ThemeManager's centralized theme caching
             ThemeManager.initializeTheme();
         }
-    }
-    
-    // Update the FontManager primaryFontFamily when the app loads
-    Component.onCompleted: {
-        if (jetBrainsMono.status == FontLoader.Ready) {
-            // Use the loaded font in the components
-            FontManager.primaryFontFamily = jetBrainsMono.name;
-        }
-        
-        // Set initial focus to key handler
-        keyHandler.forceActiveFocus();
-    }
-    
-    // Handle application shutdown
-    onClosing: function(closeEvent) {
-        closeEvent.accepted = false;
-        if (bridge && bridge.ready) {
-            bridge.shutdownApplication(false);
-        } else {
-            // No bridge available or not ready, just accept the close event
-            closeEvent.accepted = true;
-        }
-    }
-    
-    // Function to handle application restart
-    function restartApp() {
-        if (bridge && bridge.ready) {
-            // First disconnect from any server
-            if (bridge.isConnected) {
-                bridge.disconnectFromServer();
-            }
-            
-            // Then shutdown with restart flag
-            bridge.shutdownApplication(true);
-        }
+
+        target: bridge
     }
 
     // Custom font
@@ -157,6 +151,7 @@ ApplicationWindow {
         onStatusChanged: {
             if (status == FontLoader.Ready)
                 console.log("JetBrains Mono font loaded successfully");
+
         }
     }
 
@@ -166,30 +161,34 @@ ApplicationWindow {
 
         anchors.fill: parent
         initialItem: serverSelectionComponent
-        
         // Monitor current page to handle transitions and focus resets
         onCurrentItemChanged: {
+            // Delay to ensure components are fully loaded
+
             // Ensure key handler has focus whenever the page changes
             keyHandler.forceActiveFocus();
-            
             // If returning to VoiceAssistantPage, reset focus state
-            if (currentItem && currentItem.resetFocusState) {
-                // Delay to ensure components are fully loaded
+            if (currentItem && currentItem.resetFocusState)
                 resetFocusStateTimer.start();
-            }
+
         }
-        
+        // No transitions for e-ink display
+        pushEnter: null
+        pushExit: null
+        popEnter: null
+        popExit: null
+
         // Timer to ensure components are loaded before resetting focus
         Timer {
             id: resetFocusStateTimer
+
             interval: 100
             repeat: false
             running: false
-            
             onTriggered: {
-                if (stackView.currentItem && stackView.currentItem.resetFocusState) {
+                if (stackView.currentItem && stackView.currentItem.resetFocusState)
                     stackView.currentItem.resetFocusState();
-                }
+
             }
         }
 
@@ -200,38 +199,31 @@ ApplicationWindow {
             ServerSelectionPage {
                 // Initialize focus items when component is loaded
                 Component.onCompleted: {
-                    if (typeof collectFocusItems === "function") {
+                    if (typeof collectFocusItems === "function")
                         collectFocusItems();
-                    }
+
                     // Ensure key handler has focus
                     keyHandler.forceActiveFocus();
                 }
-                
                 onServerSelected: function(serverPath) {
                     if (!bridge.ready) {
                         console.error("Bridge not ready, cannot connect to server");
                         // Display an error message to the user
                         globalToast.showMessage("Error: Application not fully initialized. Please restart.", 5000);
-                        return;
+                        return ;
                     }
-                    
                     // Set the selected server and connect to it
                     bridge.setServerPath(serverPath);
-                    
                     // This returns an error message if connection fails, or empty string on success
                     var connectionResult = bridge.connectToServer();
-                    
                     if (connectionResult) {
                         // Connection failed, show error message
                         console.error("Connection failed: " + connectionResult);
                         globalToast.showMessage("Connection failed: " + connectionResult, 5000);
-                        return;
+                        return ;
                     }
-                    
-                    
                     // Push the voice assistant page with a placeholder name
                     var voiceAssistantPage = stackView.push(voiceAssistantComponent);
-                    
                     // Create and start the server name update timer
                     var serverNameUpdateTimer = serverNameUpdateTimerComponent.createObject(voiceAssistantPage, {
                         "targetPage": voiceAssistantPage
@@ -239,26 +231,25 @@ ApplicationWindow {
                     serverNameUpdateTimer.start();
                 }
             }
+
         }
-        
+
         // Timer component for updating server name
         Component {
             id: serverNameUpdateTimerComponent
-            
+
             Timer {
                 property var targetPage
-                
+
                 interval: 1000
                 repeat: false
                 running: false
-                
                 onTriggered: {
                     if (!bridge.ready) {
                         console.error("Bridge not ready in timer, cannot update server name");
                         destroy();
-                        return;
+                        return ;
                     }
-                    
                     // Get the status message which should now contain the correct server name
                     var status = bridge.get_status();
                     console.log("Current status: " + status);
@@ -269,11 +260,11 @@ ApplicationWindow {
                             targetPage.serverName = extractedName;
                         }
                     }
-                    
                     // Destroy the timer after use
                     destroy();
                 }
             }
+
         }
 
         // Voice Assistant Page
@@ -283,22 +274,22 @@ ApplicationWindow {
             VoiceAssistantPage {
                 // Initialize focus items when component is loaded
                 Component.onCompleted: {
-                    if (typeof collectFocusItems === "function") {
+                    if (typeof collectFocusItems === "function")
                         collectFocusItems();
-                    }
+
                     // Ensure key handler has focus
                     keyHandler.forceActiveFocus();
                 }
-                
                 onSelectNewServer: {
                     // Replace the current view with the server selection page
                     stackView.replace(serverSelectionComponent);
                     // Request servers again to refresh the list
-                    if (bridge.ready) {
+                    if (bridge.ready)
                         bridge.getAvailableServers();
-                    }
+
                 }
             }
+
         }
 
         // Settings Page
@@ -308,24 +299,19 @@ ApplicationWindow {
             SettingsPage {
                 // Initialize focus items when component is loaded
                 Component.onCompleted: {
-                    if (typeof collectFocusItems === "function") {
+                    if (typeof collectFocusItems === "function")
                         collectFocusItems();
-                    }
+
                     // Ensure key handler has focus
                     keyHandler.forceActiveFocus();
                 }
-                
                 onBackClicked: {
                     stackView.pop();
                 }
             }
+
         }
 
-        // No transitions for e-ink display
-        pushEnter: null
-        pushExit: null
-        popEnter: null
-        popExit: null
     }
 
     // E-ink optimized splash screen without animations
@@ -376,6 +362,7 @@ ApplicationWindow {
                         sourceSize.height: 300
                         fadeInDuration: 0 // No fade in animation
                     }
+
                 }
 
                 // Improved typography
@@ -407,10 +394,13 @@ ApplicationWindow {
                         color: ThemeManager.tertiaryTextColor
                         font.pixelSize: FontManager.fontSizeSmall
                         font.family: FontManager.primaryFontFamily
-                        topPadding: 4
+                        topPadding: ThemeManager.paddingSmall
                     }
+
                 }
+
             }
+
         }
 
         // Show splash for fixed time without animation
@@ -421,6 +411,29 @@ ApplicationWindow {
                 splashScreen.visible = false;
             }
         }
+
+    }
+
+    // Global toast message for application-wide errors
+    MessageToast {
+        id: globalToast
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 100
+        z: 1001 // Above everything, including the splash screen
+    }
+
+    // Handle global bridge errors
+    Connections {
+        function onErrorOccurred(errorMessage) {
+            // Show global error messages only for severe errors
+            if (errorMessage.toLowerCase().includes("critical") || errorMessage.toLowerCase().includes("fatal") || errorMessage.toLowerCase().includes("restart"))
+                globalToast.showMessage("Error: " + errorMessage, 5000);
+
+        }
+
+        target: bridge
     }
 
     // Background
@@ -428,28 +441,4 @@ ApplicationWindow {
         color: ThemeManager.backgroundColor
     }
 
-    // Global toast message for application-wide errors
-    MessageToast {
-        id: globalToast
-        
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.bottom: parent.bottom
-        anchors.bottomMargin: 100
-        z: 1001 // Above everything, including the splash screen
-    }
-    
-    // Handle global bridge errors
-    Connections {
-        target: bridge
-        
-        function onErrorOccurred(errorMessage) {
-            // Show global error messages only for severe errors
-            if (errorMessage.toLowerCase().includes("critical") || 
-                errorMessage.toLowerCase().includes("fatal") ||
-                errorMessage.toLowerCase().includes("restart")) {
-                globalToast.showMessage("Error: " + errorMessage, 5000);
-            }
-        }
-    }
 }
-

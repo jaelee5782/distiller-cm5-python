@@ -1,58 +1,66 @@
 import Components 1.0
 import QtQuick 2.15
-import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
 
 PageBase {
+    // console.log("ServerSelectionPage: Collecting focusable items");
+    // console.log("ServerSelectionPage: Total focusable items: " + focusableItems.length);
+
     id: serverSelectionPage
-    
-    pageName: "Server Selection"
 
     property var availableServers: []
     property bool isLoading: true
     property real cardSize: 200
-    property real gridSpacing: 16
+    property real gridSpacing: ThemeManager.spacingNormal
     property var focusableItems: []
 
     signal serverSelected(string serverPath)
 
     // Collect all focusable items on this page
     function collectFocusItems() {
-        focusableItems = []
-        // console.log("ServerSelectionPage: Collecting focusable items");
-        
+        focusableItems = [];
         // Add server grid cards if available
         if (serverGrid && availableServers.length > 0) {
             // console.log("ServerSelectionPage: Processing server grid with " + serverGrid.children.length + " potential items");
             for (var i = 0; i < serverGrid.children.length; i++) {
-                var child = serverGrid.children[i]
+                var child = serverGrid.children[i];
                 if (child && child.navigable) {
                     // console.log("ServerSelectionPage: Adding server card to focusable items: " + child.serverName);
-                    child.objectName = "ServerCard_" + i; // Add a name for debugging
-                    focusableItems.push(child)
+                    child.objectName = "ServerCard_" + i;
+                    // Add a name for debugging
+                    focusableItems.push(child);
                 }
             }
         } else {
             console.error("ServerSelectionPage: No server cards available");
         }
-        
         // Add the refresh button
         if (refreshButton && refreshButton.navigable) {
             // console.log("ServerSelectionPage: Adding refresh button to focusable items");
-            refreshButton.objectName = "RefreshButton"; // Add a name for debugging
-            focusableItems.push(refreshButton)
+            refreshButton.objectName = "RefreshButton";
+            // Add a name for debugging
+            focusableItems.push(refreshButton);
         }
-        
-        // console.log("ServerSelectionPage: Total focusable items: " + focusableItems.length);
-        
         // Initialize focus with our FocusManager, passing the scroll view
-        FocusManager.initializeFocusItems(focusableItems, serverScrollView)
+        FocusManager.initializeFocusItems(focusableItems, serverScrollView);
+    }
+
+    pageName: "Server Selection"
+    Component.onCompleted: {
+        // Call parent's onCompleted first
+        // Use a small delay to ensure the component is fully constructed before requesting servers
+        serverInitTimer.start();
+    }
+    // Prevent operations when being destroyed
+    Component.onDestruction: {
+        // console.log("Server selection page being destroyed");
+        // Stop any pending operations
+        if (serverInitTimer.running)
+            serverInitTimer.stop();
     }
 
     // Connect to bridge ready signal
     Connections {
-        target: bridge
-        
         function onBridgeReady() {
             // Request server list when bridge is ready
             if (serverSelectionPage.visible && serverSelectionPage.width > 0) {
@@ -60,44 +68,31 @@ PageBase {
                 bridge.getAvailableServers();
             }
         }
-        
+
         function onAvailableServersChanged(servers) {
+            // Show a message to the user when no servers are found
+            // Use a small delay to ensure the Repeater has created all items
+            // console.log("ServerSelectionPage: Servers changed, scheduling focus collection");
+
             // console.log("Received servers: " + servers.length);
             availableServers = servers;
             isLoading = false;
-            
-            if (servers.length === 0) {
-                // Show a message to the user when no servers are found
+            if (servers.length === 0)
                 messageToast.showMessage("No servers found. Please check your installation.", 4000);
-            } else {
-                // Use a small delay to ensure the Repeater has created all items
-                // console.log("ServerSelectionPage: Servers changed, scheduling focus collection");
+            else
                 focusCollectionTimer.restart();
-            }
         }
-        
+
         function onErrorOccurred(errorMessage) {
             console.error("Error in server selection: " + errorMessage);
             // Only show errors related to server discovery
-            if (errorMessage.toLowerCase().includes("server") || errorMessage.toLowerCase().includes("discover")) {
+            if (errorMessage.toLowerCase().includes("server") || errorMessage.toLowerCase().includes("discover"))
                 messageToast.showMessage("Error: " + errorMessage, 4000);
-            }
+
             isLoading = false;
         }
-    }
 
-    Component.onCompleted: {
-        // Call parent's onCompleted first
-        // Use a small delay to ensure the component is fully constructed before requesting servers
-        serverInitTimer.start();
-    }
-    
-    // Prevent operations when being destroyed
-    Component.onDestruction: {
-        // console.log("Server selection page being destroyed");
-        // Stop any pending operations
-        if (serverInitTimer.running)
-            serverInitTimer.stop();
+        target: bridge
     }
 
     // Timer to delay server loading to prevent component creation during destruction
@@ -119,7 +114,7 @@ PageBase {
         }
     }
 
-    // Loading indicator simplified for e-ink
+    // Loading indicator
     LoadingIndicator {
         anchors.fill: parent
         isLoading: serverSelectionPage.isLoading
@@ -129,72 +124,54 @@ PageBase {
     // Top margin padding area
     Item {
         id: topMargin
+
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
-        height: ThemeManager.spacingLarge // Add substantial top margin
+        height: ThemeManager.spacingNormal
     }
 
     // Header area
     MCPPageHeader {
         id: headerArea
-        
+
         anchors.top: topMargin.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         height: implicitHeight
         z: 2 // Ensure header stays above content
-        
         title: "SELECT MCP SERVER"
         subtitle: "Choose a server to connect to"
     }
 
-    // Use AppScrollView instead of standard ListView for consistent behavior with SettingsPage
     AppScrollView {
         id: serverScrollView
-        
+
         anchors.top: headerArea.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: footerArea.top
         anchors.topMargin: 1 // Connect with header
-        anchors.leftMargin: ThemeManager.spacingSmall // Reduced left margin
-        anchors.rightMargin: ThemeManager.spacingSmall // Reduced right margin
+        anchors.leftMargin: ThemeManager.spacingSmall
+        anchors.rightMargin: ThemeManager.spacingSmall
         anchors.bottomMargin: ThemeManager.spacingSmall
-        
-        // Add scrolling animations and behavior from SettingsPage
         contentHeight: contentColumn.height
         showScrollIndicator: false
         visible: !isLoading
-        
-        // Content background for better visual clarity
-        Rectangle {
-            id: contentBackground
-            width: serverScrollView.width
-            height: contentColumn.height
-            color: "transparent"
-            
-            // Light background shading for scrollable area
-            Rectangle {
-                anchors.fill: parent
-                color: Qt.darker(ThemeManager.backgroundColor, 1.02) // Very subtle darkening
-                visible: ThemeManager.darkMode ? false : true
-                opacity: 0.5
-            }
-        }
-        
+
         // Main content column
         Column {
             id: contentColumn
+
             width: serverScrollView.width
             spacing: ThemeManager.spacingLarge
-            
+
             // Add top padding
             Item {
                 width: parent.width
                 height: ThemeManager.spacingSmall
             }
-            
+
             // Simple empty state message - optimized for e-ink display
             Text {
                 width: parent.width
@@ -207,33 +184,35 @@ PageBase {
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
             }
-            
+
             // Server grid container
             Item {
                 id: gridContainer
-                width: parent.width
-                // Height will be determined by the grid
-                implicitHeight: serverGrid.implicitHeight
-                visible: availableServers.length > 0
-                
+
                 // Calculate optimal number of columns based on width
                 property int optimalColumns: Math.floor((width - ThemeManager.spacingLarge) / (cardSize + gridSpacing))
                 property int columns: Math.max(2, optimalColumns) // Minimum 2 columns
                 property real availableWidth: width - ThemeManager.spacingLarge
                 property real effectiveCardWidth: (availableWidth - (columns - 1) * gridSpacing) / columns
-                
+
+                width: parent.width
+                // Height will be determined by the grid
+                implicitHeight: serverGrid.implicitHeight
+                visible: availableServers.length > 0
+
                 // Server grid layout
                 Grid {
                     id: serverGrid
+
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: parent.availableWidth
                     columns: gridContainer.columns
                     spacing: gridSpacing
-                    
+
                     // Server grid cards
                     Repeater {
                         model: availableServers
-                        
+
                         ServerGridCard {
                             width: gridContainer.effectiveCardWidth
                             height: width
@@ -241,16 +220,15 @@ PageBase {
                             serverDescription: modelData.description || ""
                             serverPath: modelData.path
                             navigable: true
-                            
-                            onCardClicked: function(path) {
+                            onCardClicked: function (path) {
                                 // Call directly without animation delay
-                                serverSelectionPage.serverSelected(path)
+                                serverSelectionPage.serverSelected(path);
                             }
                         }
                     }
                 }
             }
-            
+
             // Add bottom padding
             Item {
                 width: parent.width
@@ -262,14 +240,14 @@ PageBase {
     // Footer area with refresh button and status text
     Rectangle {
         id: footerArea
-        
+
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: footerLayout.height + ThemeManager.spacingNormal * 2
         color: ThemeManager.backgroundColor
         visible: !isLoading
-        
+
         // Add a subtle top border
         Rectangle {
             anchors.top: parent.top
@@ -279,14 +257,14 @@ PageBase {
             color: ThemeManager.borderColor
             opacity: 0.5
         }
-        
+
         ColumnLayout {
             id: footerLayout
-            
+
             anchors.centerIn: parent
             width: parent.width - ThemeManager.spacingLarge * 2
             spacing: ThemeManager.spacingSmall
-            
+
             // Status text
             Text {
                 Layout.fillWidth: true
@@ -294,37 +272,37 @@ PageBase {
                 font.pixelSize: FontManager.fontSizeSmall
                 font.family: FontManager.primaryFontFamily
                 color: ThemeManager.secondaryTextColor
-                horizontalAlignment: Text.AlignCenter
+                horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.WordWrap
                 maximumLineCount: 2
                 elide: Text.ElideRight
             }
-            
-            // Refresh button (converted to AppButton)
+
+            // Refresh button
             AppButton {
                 id: refreshButton
+
                 text: "Refresh"
                 Layout.preferredWidth: Math.min(parent.width * 0.5, 180)
                 Layout.preferredHeight: Math.min(parent.height * 0.4, 60)
                 Layout.alignment: Qt.AlignHCenter
                 navigable: true
-                
                 onClicked: {
                     if (bridge && bridge.ready) {
-                        isLoading = true
-                        bridge.getAvailableServers()
+                        isLoading = true;
+                        bridge.getAvailableServers();
                     } else {
-                        messageToast.showMessage("Error: Application not fully initialized.", 3000)
+                        messageToast.showMessage("Error: Application not fully initialized.", 3000);
                     }
                 }
             }
         }
     }
-    
+
     // Page-specific toast for messages
     MessageToast {
         id: messageToast
-        
+
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: footerArea.top
         anchors.bottomMargin: ThemeManager.spacingNormal
@@ -333,6 +311,7 @@ PageBase {
     // Timer to collect focus items after server list changes
     Timer {
         id: focusCollectionTimer
+
         interval: 100
         repeat: false
         onTriggered: {

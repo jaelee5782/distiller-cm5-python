@@ -11,6 +11,6 @@ Text {
     font: FontManager.normal
     horizontalAlignment: Text.AlignHCenter
     width: parent.width
-    padding: ThemeManager.spacingSmall
+    padding: ThemeManager.paddingNormal
     text: isLoading ? "Loading servers..." : (itemCount > 0 ? "Found " + itemCount + " servers" : "No servers found")
 }
