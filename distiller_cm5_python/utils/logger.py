@@ -1,50 +1,53 @@
 import logging
 import sys
-from typing import Optional
+from typing import Optional, IO
 
-def setup_logging(log_level=None, verbose=False):
-    """Setup logging with specified log level
-    
+# Define the standard log format
+DEFAULT_LOG_FORMAT = '%(asctime)s - %(name)s - %(module)s.%(funcName)s - %(levelname)s - %(message)s'
+
+def setup_logging(log_level: int = logging.INFO, stream: IO = sys.stdout):
+    """Setup root logging configuration.
+
     Args:
-        log_level: The logging level to use (e.g., logging.DEBUG, logging.INFO)
-                  If None, defaults to DEBUG if verbose=True, otherwise INFO
-        verbose: Backward compatibility parameter - if True and log_level is None, 
-                sets level to DEBUG
-    
-    Returns:
-        A configured logger instance
+        log_level: The logging level to use (e.g., logging.DEBUG, logging.INFO).
+                   Defaults to logging.INFO.
+        stream: The output stream to use (e.g., sys.stdout, sys.stderr).
+                Defaults to sys.stdout.
     """
-    # Set default level based on parameters
-    if log_level is None:
-        log_level = logging.DEBUG if verbose else logging.INFO
-    
     # Create a formatter
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(module)s.%(funcName)s - %(levelname)s - %(message)s')
-    
-    # Setup console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(formatter)
-    
+    formatter = logging.Formatter(DEFAULT_LOG_FORMAT)
+
+    # Setup stream handler
+    stream_handler = logging.StreamHandler(stream)
+    stream_handler.setFormatter(formatter)
+
     # Configure root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(log_level)
-    
-    # Remove existing handlers to avoid duplicates
+
+    # Remove existing handlers to avoid duplicates if setup_logging is called multiple times
+    # (though it should ideally be called only once at the application start)
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
-    
+
     # Add our handler
-    root_logger.addHandler(console_handler)
-    
-    # Get client logger
-    logger = logging.getLogger("mcp")
-    logger.setLevel(log_level)
-    
-    # Quiet other loggers
+    root_logger.addHandler(stream_handler)
+
+    # Optionally quiet overly verbose libraries
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
-    
-    return logger
 
-# Initialize with default level, can be updated later
-logger = setup_logging() 
+# Removed the module-level call: logger = setup_logging()
+# Logging configuration should now be explicitly called by application entry points.
+# Example usage in an entry point:
+# import logging
+# from utils.logger import setup_logging
+# import sys
+#
+# if __name__ == "__main__":
+#     # Configure logging to INFO level, outputting to stderr
+#     setup_logging(log_level=logging.INFO, stream=sys.stderr) 
+#
+#     # Modules should get their own logger
+#     logger = logging.getLogger(__name__) 
+#     logger.info("Application started.") 

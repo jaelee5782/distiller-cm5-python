@@ -7,12 +7,13 @@ import argparse
 import sys
 import os
 import time
+import logging # Import standard logging
 from colorama import Fore, Style, init as colorama_init
 
 from distiller_cm5_python.client.mid_layer.mcp_client import MCPClient
-from distiller_cm5_python.client.ui.events.event_types import UIEvent, EventType, StatusType
+from distiller_cm5_python.client.ui.events.event_types import EventType, StatusType, MessageSchema
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
-from distiller_cm5_python.utils.logger import logger
+from distiller_cm5_python.utils.logger import setup_logging # Import setup_logging
 from distiller_cm5_python.utils.config import (STREAMING_ENABLED, SERVER_URL, PROVIDER_TYPE,
                           MODEL_NAME, TIMEOUT, LOGGING_LEVEL, MCP_SERVER_SCRIPT_PATH, API_KEY)
 from distiller_cm5_python.utils.distiller_exception import UserVisibleError, LogOnlyError
@@ -25,37 +26,81 @@ try:
 except ImportError:
     whisper = None # Placeholder if the SDK isn't installed
 
+# Get logger for this module after setup
+logger = logging.getLogger(__name__)
+
 class CLIEventHandler:
     """Handles UI events for CLI display"""
     def __init__(self):
         self.current_message_id = None
         self.message_chunks = []
 
-    def handle_event(self, evt: UIEvent):
-        if evt.type == EventType.INFO:
+    def handle_event(self, evt: MessageSchema):
+        """Handles dispatched MessageSchema events for CLI display"""
+        # Check event type using evt.type enum
+        if evt.type == EventType.INFO or evt.type == EventType.STATUS:
+            # Treat STATUS like INFO for basic CLI display
             print(f"{Fore.CYAN}{evt.content}{Style.RESET_ALL}")
         elif evt.type == EventType.WARNING:
             print(f"{Fore.YELLOW}{evt.content}{Style.RESET_ALL}")
         elif evt.type == EventType.ERROR:
             print(f"{Fore.RED}{evt.content}{Style.RESET_ALL}")
         elif evt.type == EventType.MESSAGE:
+            # Use evt.status enum for message state
             if evt.status == StatusType.IN_PROGRESS:
                 # Handle streaming message chunks
                 if evt.id != self.current_message_id:
+                    # Start of a new message stream
                     self.current_message_id = evt.id
                     self.message_chunks = []
                     print(f"\n{Style.BRIGHT}Assistant: {Style.RESET_ALL}", end="")
-                self.message_chunks.append(evt.content)
-                print(evt.content, end="", flush=True)
+                # Access content directly from evt.content
+                if isinstance(evt.content, str):
+                    self.message_chunks.append(evt.content)
+                    print(evt.content, end="", flush=True)
             elif evt.status == StatusType.SUCCESS:
-                # Handle complete message
-                print()  # New line after streaming
+                # Handle complete message (message_complete event)
+                # Check if this ID was the one being streamed
+                if evt.id == self.current_message_id:
+                     # If the content wasn't fully printed via chunks (e.g., non-streaming response)
+                     # ensure the full message is printed if message_chunks is empty
+                     if not self.message_chunks and isinstance(evt.content, str) and evt.content:
+                         print(f"\n{Style.BRIGHT}Assistant: {Style.RESET_ALL}{evt.content}", end="")
+                     print() # New line after streaming or complete message
+                     self.current_message_id = None # Reset for next message
+                     self.message_chunks = []
+                elif isinstance(evt.content, str) and evt.content: # Handle non-streamed complete messages
+                     print(f"\n{Style.BRIGHT}Assistant: {Style.RESET_ALL}{evt.content}")
+
         elif evt.type == EventType.ACTION:
+            # Display simplified action info
             if evt.status == StatusType.IN_PROGRESS:
-                print(f"{Fore.BLUE}{evt.content}...{Style.RESET_ALL}")
+                # Use tool_name from ActionEvent if available
+                tool_name = evt.tool_name if hasattr(evt, 'tool_name') and evt.tool_name else 'Action'
+                print(f"{Fore.BLUE}Running: {tool_name}...{Style.RESET_ALL}")
             elif evt.status == StatusType.SUCCESS:
-                if evt.data:
-                    print(f"{Fore.GREEN}{evt.content}{Style.RESET_ALL}")
+                # Indicate success, maybe show tool name again
+                tool_name = evt.tool_name if hasattr(evt, 'tool_name') and evt.tool_name else 'Action'
+                print(f"{Fore.GREEN}{tool_name} finished.{Style.RESET_ALL}")
+                # Optionally print result if needed (evt.data might contain it)
+                # if evt.data and 'result' in evt.data:
+                #    print(f"{Fore.GREEN}  Result: {str(evt.data['result'])[:100]}...{Style.RESET_ALL}")
+
+        elif evt.type == EventType.OBSERVATION:
+             # Display tool results (Observations)
+             source = evt.source if hasattr(evt, 'source') and evt.source else 'Observation'
+             print(f"{Fore.MAGENTA}Result [{source}]: {Style.RESET_ALL}{str(evt.content)}")
+             # Optionally show more details from evt.data if needed
+
+        # Add handling for other event types if necessary (e.g., PLAN, FUNCTION, SSH_INFO)
+        elif evt.type == EventType.FUNCTION:
+            # Example: Display available functions announced by ToolProcessor
+            name = evt.name if hasattr(evt, 'name') else 'Function'
+            print(f"{Fore.CYAN}Capability Found: {name}{Style.RESET_ALL}")
+
+        # Other event types can be ignored or logged
+        else:
+            logger.debug(f"CLIEventHandler received unhandled event type: {evt.type}")
 
 async def chat_loop(client: MCPClient, whisper_instance):
     """Start an interactive chat loop with the user, supporting text and audio input."""
@@ -181,9 +226,15 @@ def parse_arguments():
 async def main():
     args = parse_arguments()
 
-    # Set log level based on args
-    logger.setLevel(args.log_level)
-    logger.info(f"Log level set to: {args.log_level}")
+    # --- Setup Logging ---
+    # Convert log level string to logging constant
+    log_level_int = getattr(logging, args.log_level.upper(), logging.INFO)
+    # Configure logging using the centralized setup, sending to stderr
+    setup_logging(log_level=log_level_int, stream=sys.stderr)
+    # --- Logging is now configured ---
+
+    # Log the effective level
+    logger.info(f"Log level set to: {args.log_level}") # This logger is now configured
 
     # Make server script path absolute, default to MCP_SERVER_SCRIPT_PATH
     server_script_path = os.path.abspath(args.server_script) 
@@ -197,7 +248,7 @@ async def main():
     # Initialize event dispatcher and handler
     event_handler = CLIEventHandler()
     event_dispatcher = EventDispatcher(debug=args.log_level == 'DEBUG')
-    event_dispatcher.event_dispatched.connect(event_handler.handle_event)
+    event_dispatcher.message_dispatched.connect(event_handler.handle_event)
 
     client = MCPClient(
         streaming=args.stream,
@@ -269,10 +320,9 @@ async def main():
         logger.info("Client cleanup complete. Exiting.")
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("CLI terminated by user (KeyboardInterrupt).")
-    except Exception as e:
-        logger.critical(f"CLI failed to run: {e}", exc_info=True)
-        print(f"{Fore.RED}Critical CLI error: {e}{Style.RESET_ALL}") 
+    # We need to initialize the logger early for any potential issues during argument parsing or setup
+    # However, the level depends on args. So we do minimal setup first, then refine.
+    # This is a bit tricky. Let's configure it *after* parsing args for simplicity now.
+    # Consider moving setup *before* arg parsing if pre-arg logs are needed,
+    # potentially using a default level initially.
+    asyncio.run(main()) 

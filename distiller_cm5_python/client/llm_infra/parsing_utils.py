@@ -4,10 +4,14 @@ Utility functions for parsing LLM responses and related strings.
 
 import re
 import json
+import logging
 from typing import Optional, List, Dict, Any
 
 # Assuming utils is accessible from the project root
-from distiller_cm5_python.utils.logger import logger
+# Removed direct logger import: from distiller_cm5_python.utils.logger import logger
+
+# Get logger instance for this module
+logger = logging.getLogger(__name__)
 
 def normalize_tool_call_json(tool_call_str: str) -> str:
     """Attempt to fix common JSON issues in tool call strings."""
@@ -84,7 +88,9 @@ def parse_tool_calls(text: str) -> List[Dict[str, Any]]:
                       json.loads(arguments_value)
                       arguments_str = arguments_value # Keep valid JSON string
                  except json.JSONDecodeError:
-                      logger.warning(f"Tool call arguments for '{tool_call_data['name']}' is a string but not valid JSON: '{arguments_value}'. Keeping as string.")
+                      # Truncate potentially sensitive argument value in log
+                      log_arg_snippet = arguments_value[:100] + ('...' if len(arguments_value) > 100 else '')
+                      logger.warning(f"Tool call arguments for '{tool_call_data['name']}' is a string but not valid JSON: '{log_arg_snippet}'. Keeping as string.")
                       arguments_str = arguments_value # Keep non-JSON string as is? Or error?
             else:
                  # Handle other types (int, list etc.) by converting to string representation?

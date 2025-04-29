@@ -54,183 +54,89 @@ class MessageSchema(BaseModel):
         data = json.loads(json_str)
         return cls(**data)
 
-
-# For backward compatibility
-@dataclass
-class UIEvent:
-    """Standard event message for UI communication"""
-    id: str
-    type: EventType
-    content: Any
-    status: StatusType
-    data: Optional[Any] = None
-    timestamp: Optional[float] = None
+    @staticmethod
+    def thinking() -> 'StatusEvent':
+        """Create a 'thinking' status event."""
+        return StatusEvent(type=EventType.STATUS, content="Thinking...", status=StatusType.IN_PROGRESS)
 
     @staticmethod
-    def new(type: EventType, content: Any, status: StatusType, data: Optional[Any] = None, timestamp: Optional[float] = None) -> 'UIEvent':
-        """Helper to create a new event with unique id"""
-        return UIEvent(
-            id=str(uuid.uuid4()),
-            type=type,
-            content=content,
-            status=status,
-            data=data,
-            timestamp=timestamp or time.time()
+    def tool_call(tool_call_dict: dict) -> 'ActionEvent':
+        """Create an action event for a tool call."""
+        tool_name = tool_call_dict.get("function", {}).get("name", tool_call_dict.get("name", ""))
+        tool_args = tool_call_dict.get("function", {}).get("arguments", tool_call_dict.get("arguments", {}))
+        # Ensure args are dict, not string
+        if isinstance(tool_args, str):
+            try:
+                tool_args = json.loads(tool_args)
+            except json.JSONDecodeError:
+                tool_args = {"args_str": tool_args} # fallback
+        
+        return ActionEvent(
+            type=EventType.ACTION, 
+            content=f"Tool Call: {tool_name}", 
+            status=StatusType.IN_PROGRESS, 
+            tool_name=tool_name, 
+            tool_args=tool_args,
+            data=tool_call_dict # Keep original full call in data for context
         )
 
-    def to_dict(self):
-        """Convert event to dictionary format"""
-        return {
-            "id": self.id,
-            "type": self.type.value,
-            "content": self.content,
-            "status": self.status.value,
-            "data": self.data,
-            "timestamp": self.timestamp
-        }
-        
-    def to_message_schema(self) -> MessageSchema:
-        """Convert UIEvent to MessageSchema"""
-        return MessageSchema(
-            id=self.id,
-            type=self.type,
-            content=self.content,
-            status=self.status,
-            data=self.data,
-            timestamp=self.timestamp or time.time()
-        )
-    
-    @classmethod
-    def from_message_schema(cls, message: MessageSchema) -> 'UIEvent':
-        """Create UIEvent from MessageSchema"""
-        return cls(
-            id=message.id,
-            type=message.type,
-            content=message.content,
-            status=message.status,
-            data=message.data,
-            timestamp=message.timestamp
-        )
-
-    @classmethod
-    def thinking(cls):
-        import uuid, time
-        
-        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
-        message = MessageSchema(
-            id=str(uuid.uuid4()),
-            type=EventType.INFO,
-            content="Thinking...",
-            status=StatusType.IN_PROGRESS,
-            timestamp=time.time()
-        )
-        
-        # Convert to UIEvent for backward compatibility
-        return cls.from_message_schema(message)
-
-    @classmethod
-    def tool_call(cls, tool_call: dict):
-        import uuid, time
+    @staticmethod
+    def tool_result(tool_call: dict, result: str) -> 'ObservationEvent':
+        """Create an observation event for a tool result."""
         tool_name = tool_call.get("function", {}).get("name", tool_call.get("name", ""))
-        
-        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
-        message = MessageSchema(
-            id=str(uuid.uuid4()),
-            type=EventType.ACTION,
-            content=f"Calling {tool_name}",
-            status=StatusType.IN_PROGRESS,
-            data=tool_call,
-            timestamp=time.time()
-        )
-        
-        # Convert to UIEvent for backward compatibility
-        return cls.from_message_schema(message)
-
-    @classmethod
-    def tool_result(cls, tool_call: dict, result: str):
-        import uuid, time
-        tool_name = tool_call.get("function", {}).get("name", tool_call.get("name", ""))
-        
-        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
-        message = MessageSchema(
-            id=str(uuid.uuid4()),
-            type=EventType.ACTION,
-            content=f"Result for {tool_name}",
+        return ObservationEvent(
+            type=EventType.OBSERVATION,
+            content=f"Tool Result: {tool_name}",
             status=StatusType.SUCCESS,
-            data={"tool_call": tool_call, "result": result},
-            timestamp=time.time()
+            source=tool_name,
+            data={'tool_call': tool_call, 'result': result}
         )
-        
-        # Convert to UIEvent for backward compatibility
-        return cls.from_message_schema(message)
 
-    @classmethod
-    def message_chunk(cls, chunk: str, event_id: str):
-        import time
-        
-        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
-        message = MessageSchema(
-            id=event_id,
+    @staticmethod
+    def message_chunk(chunk: str, event_id: str) -> 'MessageEvent':
+        """Create a message event for a streaming chunk."""
+        return MessageEvent(
+            id=event_id, # Reuse ID for chunks of the same message
             type=EventType.MESSAGE,
             content=chunk,
             status=StatusType.IN_PROGRESS,
-            timestamp=time.time()
+            role='assistant'
         )
-        
-        # Convert to UIEvent for backward compatibility
-        return cls.from_message_schema(message)
 
-    @classmethod
-    def message_complete(cls, event_id: str, content: str):
-        import time
-        
-        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
-        message = MessageSchema(
-            id=event_id,
+    @staticmethod
+    def message_complete(event_id: str, content: str) -> 'MessageEvent':
+        """Create a message event for a complete message."""
+        return MessageEvent(
+            id=event_id, # Reuse ID from chunks
             type=EventType.MESSAGE,
             content=content,
             status=StatusType.SUCCESS,
-            timestamp=time.time()
+            role='assistant'
         )
-        
-        # Convert to UIEvent for backward compatibility
-        return cls.from_message_schema(message)
 
-    @classmethod
-    def ssh_info(cls, ip_address: str, username: str = "user", port: int = 22):
-        """Create SSH info event with connection details"""
-        import uuid, time
-        
-        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
-        message = MessageSchema(
-            id=str(uuid.uuid4()),
+    @staticmethod
+    def ssh_info(ip_address: str, username: str = "user", port: int = 22) -> 'SSHInfoEvent':
+        """Create an SSH info event."""
+        return SSHInfoEvent(
             type=EventType.SSH_INFO,
             content=f"SSH: {username}@{ip_address}:{port}",
             status=StatusType.SUCCESS,
-            data={"ip": ip_address, "username": username, "port": port},
-            timestamp=time.time()
+            ip_address=ip_address,
+            username=username,
+            port=port
         )
-        
-        # Convert to UIEvent for backward compatibility
-        return cls.from_message_schema(message)
 
-    @classmethod
-    def function_info(cls, name: str, description: str, params: dict = None):
-        """Create function info event with details about available functions"""
-        import uuid, time
-        
-        # Create a MessageSchema first, then convert to UIEvent for backward compatibility
-        message = MessageSchema(
-            id=str(uuid.uuid4()),
+    @staticmethod
+    def function_info(name: str, description: Optional[str] = None, params: Optional[dict] = None) -> 'FunctionEvent':
+        """Create a function info event."""
+        return FunctionEvent(
             type=EventType.FUNCTION,
             content=f"Function: {name}",
             status=StatusType.SUCCESS,
-            data={"name": name, "description": description, "params": params or {}},
-            timestamp=time.time()
+            name=name,
+            description=description,
+            parameters=params or {}
         )
-        
-        # Convert to UIEvent for backward compatibility
-        return cls.from_message_schema(message)
 
 
 # Specialized message schemas for different event types

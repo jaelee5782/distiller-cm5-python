@@ -1,3 +1,3 @@
-from .event_types import EventType, UIEvent
+from .event_types import EventType, StatusType, MessageSchema
 
-__all__ = ['EventType', 'UIEvent']
+__all__ = ['EventType', 'StatusType', 'MessageSchema']

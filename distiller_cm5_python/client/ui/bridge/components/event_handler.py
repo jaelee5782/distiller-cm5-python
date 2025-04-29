@@ -13,7 +13,6 @@ from PyQt6.QtCore import QObject, pyqtSignal
 from distiller_cm5_python.client.ui.events.event_types import (
     EventType, 
     StatusType, 
-    UIEvent, 
     MessageSchema
 )
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
@@ -71,22 +70,23 @@ class BridgeEventHandler:
         # Connect to the dispatcher
         self.dispatcher.event_dispatched.connect(self.handle_event)
     
-    def handle_event(self, event: Union[UIEvent, MessageSchema]) -> None:
+    def handle_event(self, event: MessageSchema) -> None:
         """
         Handle events from the dispatcher.
         
         Args:
-            event: The event to handle
+            event: The MessageSchema event to handle
         """
         try:
             # Handle new MessageSchema format
             if isinstance(event, MessageSchema):
                 self._handle_message_schema(event)
-            # Handle legacy UIEvent format (backward compatibility)
-            elif isinstance(event, UIEvent):
-                self._handle_ui_event(event)
+            # REMOVED legacy UIEvent handling block
+            # elif isinstance(event, UIEvent):
+            #     self._handle_ui_event(event)
             else:
-                logger.error(f"Invalid event type: {type(event)}")
+                # This case should ideally not be reached if dispatcher only sends MessageSchema
+                logger.error(f"Invalid event type received: {type(event)}")
                 return
         except Exception as e:
             logger.error(f"Error handling event: {e}", exc_info=True)
@@ -262,53 +262,6 @@ class BridgeEventHandler:
             status_str = event.content
             self.status_manager.update_status(status_str)
             self.signals.statusChanged.emit(status_str)
-            
-        else:
-            logger.warning(f"Unknown event type: {event.type}")
-
-    def _handle_ui_event(self, event: UIEvent) -> None:
-        """
-        Handle events in the legacy UIEvent format.
-        
-        Args:
-            event: The UIEvent to handle
-        """
-        # Convert timestamp to string if it exists
-        timestamp_str = str(event.timestamp) if event.timestamp else None
-
-        # Emit the appropriate signal based on event type
-        if event.type == EventType.MESSAGE:
-            # Pass status as string (.value from Enum) to the UI
-            status_value = event.status.value if hasattr(event.status, 'value') else event.status
-            self.signals.messageReceived.emit(event.content, str(event.id), timestamp_str, status_value)
-            
-        elif event.type == EventType.ACTION:
-            self.signals.actionReceived.emit(event.content, str(event.id), timestamp_str)
-            
-        elif event.type == EventType.INFO:
-            self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
-            
-        elif event.type == EventType.WARNING:
-            self.signals.warningReceived.emit(event.content, str(event.id), timestamp_str)
-            
-        elif event.type == EventType.ERROR:
-            self.signals.errorReceived.emit(event.content, str(event.id), timestamp_str)
-            
-        elif event.type == EventType.SSH_INFO:
-            # Handle SSH info with generic info signal if available
-            self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
-            
-        elif event.type == EventType.FUNCTION:
-            # Handle function info with generic info signal if available
-            self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
-            
-        elif event.type == EventType.OBSERVATION:
-            # Handle observation events with generic info signal
-            self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
-            
-        elif event.type == EventType.PLAN:
-            # Handle plan events with generic info signal
-            self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
             
         else:
             logger.warning(f"Unknown event type: {event.type}")

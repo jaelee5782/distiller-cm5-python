@@ -6,6 +6,7 @@ import argparse
 import logging
 import json
 import os
+import sys
 from typing import Dict, List, Any, Optional
 
 from fastapi import FastAPI, HTTPException
@@ -18,12 +19,14 @@ from llama_cpp.llama_cache import LlamaDiskCache
 from jinja2 import Template
 import re
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger("llm-server")
+# Import the centralized logging setup
+from distiller_cm5_python.utils.logger import setup_logging
+
+# --- Logging setup will be done in main() after parsing args ---
+
+# Get the logger for this module
+# We get the logger instance here, but configuration (level, stream) happens in main()
+logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(title="LLM Server", description="A simple LLM server that provides LLM services")
@@ -150,10 +153,8 @@ async def health_check():
 @app.get("/models")
 async def list_models():
     try:
-        # 扫描models目录下的所有gguf文件
         path = os.path.join(os.path.dirname(__file__), "models")
         model_names = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)) and f.endswith('.gguf')]
-        logger.info(f"Found {len(model_names)} models in models directory")
         return {"models": [m for m in model_names]}
     except Exception as e:
         logger.error(f"Error listing models: {e}")
@@ -164,9 +165,9 @@ async def list_models():
 async def set_model(request: SetModel):
     try:
         load_model(request.model_name, request.load_model_configs)
-        return {"status": "ok", "message": "model is change to " + request.modelName}
+        return {"status": "ok", "message": "model is change to " + request.model_name}
     except Exception as e:
-        logger.error(f"Error listing models: {e}")
+        logger.error(f"Error setting model: {e}")
         raise HTTPException(status_code=500, detail=f"Error set models: {str(e)}")
 
 def load_model(model_name, load_model_configs:dict[str, Any]):
@@ -191,6 +192,7 @@ def load_model(model_name, load_model_configs:dict[str, Any]):
 
 def _chat_completion(messages, tools, inference_configs):
     """Non-streaming version"""
+    logger.debug("Generating non-streaming chat completion...")
     response = MODEL.create_chat_completion(
         messages=messages,
         tools=tools,
@@ -206,6 +208,7 @@ def _chat_completion(messages, tools, inference_configs):
 
 def _stream_chat_completion(messages, tools, inference_configs):
     """Streaming version"""
+    logger.debug("Generating streaming chat completion...")
     response_stream = MODEL.create_chat_completion(
         messages=messages,
         tools=tools,
@@ -218,17 +221,20 @@ def _stream_chat_completion(messages, tools, inference_configs):
         stream=True
     )
 
+    chunk_count = 0
     for chunk in response_stream:
+        chunk_count += 1
         # Convert dictionary to JSON string before yielding
         yield f"data: {json.dumps(chunk)}\n\n"
+    logger.debug(f"Streaming finished after {chunk_count} chunks.")
 
 def format_prompt(messages, tools):
     # Actual input received by the model
     model_template = MODEL.metadata.get('tokenizer.chat_template')
     template = Template(model_template)
-    logger.info(f"format_prompt: {messages}, {tools}")
+    logger.debug(f"format_prompt called with {len(messages)} messages and {len(tools) if tools else 0} tools.")
     rendered_prompt = template.render(messages=messages, tools=tools)
-    logger.info("Actual prompt into llm:\n" + rendered_prompt)
+    logger.debug("Actual prompt into llm (truncated):\n" + rendered_prompt[:500] + ("..." if len(rendered_prompt) > 500 else ""))
     return rendered_prompt
 
 def format_messages(messages):
@@ -278,14 +284,29 @@ async def create_chat_completion(request: ChatCompletionRequest):
     global MODEL
     global MODEL_NAME
     if request.model is None or request.model == "":
-        return HTTPException(status_code=500, detail="please set model name")
-    elif request.model !=MODEL_NAME:
-        MODEL_NAME = request.model
-        load_model(MODEL_NAME,request.load_model_configs)
-        logger.info(f"Model is change to {MODEL_NAME}")
+        raise HTTPException(status_code=400, detail="Model name must be provided")
+    elif request.model != MODEL_NAME:
+        try:
+            load_model(request.model, request.load_model_configs)
+            logger.info(f"Model has been changed to {MODEL_NAME}")
+        except ValueError as e:
+            logger.error(f"Failed to load requested model '{request.model}': {e}")
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            logger.error(f"Unexpected error loading model '{request.model}': {e}", exc_info=True)
+            raise HTTPException(status_code=500, detail=f"Error loading model: {str(e)}")
 
     try:
-        logger.info(f"Received chat completion request: {request}")
+        # Log request details at DEBUG level (excluding potentially sensitive message content)
+        debug_request_summary = {
+            "model": request.model,
+            "num_messages": len(request.messages),
+            "num_tools": len(request.tools) if request.tools else 0,
+            "stream": request.stream,
+            "inference_keys": list(request.inference_configs.keys()),
+            "load_model_keys": list(request.load_model_configs.keys())
+        }
+        logger.debug(f"Chat completion request details: {debug_request_summary}")
 
         messages = format_messages(request.messages)
         tools = format_tools(request.tools) if request.tools else []
@@ -293,12 +314,9 @@ async def create_chat_completion(request: ChatCompletionRequest):
         # Check if stream parameter is in request
         stream = request.stream
             
-        logger.info(f"Creating completion with model={MODEL_NAME}, messages={len(messages)}, stream={stream}")
-        if tools:
-            logger.info(f"Including {len(tools)} tools")
-
+        
         if stream:
-            logger.info("Use stream to response")
+            logger.debug("Starting stream response generation.")
             return StreamingResponse(_stream_chat_completion(messages, tools, request.inference_configs),
                                     media_type="text/event-stream",
                                     headers={
@@ -306,11 +324,12 @@ async def create_chat_completion(request: ChatCompletionRequest):
                                         "Connection": "keep-alive",
                                     })
         else:
+            logger.debug("Starting non-stream response generation.")
             # Get the generator object
             return _chat_completion(messages, tools, request.inference_configs)
             
     except Exception as e:
-        logger.error(f"Error creating chat completion: {e}")
+        logger.error(f"Error creating chat completion: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Error creating chat completion: {str(e)}")
 
 def main():
@@ -319,21 +338,33 @@ def main():
     parser.add_argument("--port", type=int, default=8000, help="Port to bind the server to")
     parser.add_argument("--model_name", type=str, default="qwen2.5-3b-instruct-q4_k_m.gguf", help="Default LLM model to use")
     parser.add_argument("--n_ctx", type=int, default=4096, help="Default LLM N_CTX")
-    parser.add_argument("--log-level", type=str, default="info", choices=["debug", "info", "warning", "error"],
+    parser.add_argument("--log-level", type=str, default="info", choices=["debug", "info", "warning", "error", "critical"],
                         help="Log level")
     args = parser.parse_args()
 
-    # Set log level
-    log_level = getattr(logging, args.log_level.upper())
-    logger.setLevel(log_level)
+    # --- Setup Logging ---
+    # Convert log level string from args to logging constant
+    log_level_int = getattr(logging, args.log_level.upper(), logging.INFO)
+    # Configure logging using the centralized setup, sending to stdout for LLM server
+    setup_logging(log_level=log_level_int, stream=sys.stdout)
+    # --- Logging is now configured ---
+    logger.info(f"Logging level set to: {args.log_level.upper()}")
 
     # Set default model if provided via command line, otherwise use the one from request
     global MODEL_NAME
     if args.model_name:
-        MODEL_NAME = args.model_name
-        load_model_configs = {"n_ctx": args.n_ctx}
-        load_model(MODEL_NAME, load_model_configs)
-        logger.info(f"Default model set to {MODEL_NAME} (from command line)")
+        try:
+            MODEL_NAME = args.model_name
+            load_model_configs = {"n_ctx": args.n_ctx}
+            load_model(MODEL_NAME, load_model_configs)
+            # Logger is already configured, level is set
+        except ValueError as e:
+            logger.error(f"Failed to load default model '{args.model_name}' from command line: {e}")
+            # Decide if server should exit or continue without a default model
+            sys.exit(f"Error: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error loading default model '{args.model_name}': {e}", exc_info=True)
+            sys.exit("Error loading default model.")
 
     logger.info(f"Starting LLM Server on {args.host}:{args.port}")
 

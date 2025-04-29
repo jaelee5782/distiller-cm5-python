@@ -8,6 +8,7 @@ argument parsing and running the interactive client.
 import asyncio
 import sys
 import os
+import logging
 from typing import Optional
 
 # Add project root to sys.path if necessary, although cli.py should handle it
@@ -17,11 +18,13 @@ if project_root not in sys.path:
 
 # Import the main function from the actual CLI entry point
 from distiller_cm5_python.client.cli import main as cli_main, parse_arguments
-from distiller_cm5_python.utils.logger import logger # Keep logger for potential top-level errors
 from distiller_cm5_python.utils.distiller_exception import UserVisibleError
 # Import necessary components for LLM server management
 from distiller_cm5_python.client.llm_infra.llama_manager import LlamaCppServerManager
 from distiller_cm5_python.utils.config import PROVIDER_TYPE, SERVER_URL, MODEL_NAME
+
+# Get logger instance for this module
+logger = logging.getLogger(__name__)
 
 async def main():
     """Main entry point that handles optional LLM server startup and delegates to cli.py"""

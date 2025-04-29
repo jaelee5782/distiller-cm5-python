@@ -8,12 +8,15 @@ import subprocess
 import time
 import psutil
 import requests
+import logging
 from typing import Optional
 from urllib.parse import urlparse
 
-from distiller_cm5_python.utils.logger import logger
 from distiller_cm5_python.utils.config import N_CTX, LLAMA_CPP_START_WAIT_TIME
 from distiller_cm5_python.utils.distiller_exception import UserVisibleError
+
+# Get logger instance for this module
+logger = logging.getLogger(__name__)
 
 class LlamaCppServerManager:
     """Handles starting, stopping, and checking a local llama-cpp server process."""
@@ -193,10 +196,10 @@ class LlamaCppServerManager:
                       return True
                  return True
             else:
-                 # logger.debug(f"Llama-cpp connection check failed at {endpoint}. Status: {response.status_code}")
+                 logger.debug(f"Llama-cpp connection check failed at {endpoint}. Status: {response.status_code}")
                  return False
-        except requests.exceptions.RequestException:
-            # logger.debug(f"Llama-cpp connection check failed at {endpoint}. Error: {e}")
+        except requests.exceptions.RequestException as e:
+            logger.debug(f"Llama-cpp connection check failed at {endpoint}. Error: {e}")
             return False
         except Exception as e:
              logger.error(f"Unexpected error during llama-cpp connection check: {e}")
@@ -225,11 +228,6 @@ class LlamaCppServerManager:
     def get_pid(self) -> Optional[int]:
         """Returns the PID of the managed process, if known."""
         return self.pid
-
-    def _clear_process_info(self):
-        """Reset internal process and PID tracking."""
-        self.process = None
-        self.pid = None
 
     def _clear_process_info(self):
         """Reset internal process and PID tracking."""

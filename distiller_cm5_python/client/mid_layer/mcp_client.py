@@ -1,6 +1,8 @@
 import time
 import asyncio
 from typing import Optional, List, Dict, Any, AsyncGenerator, Callable, Union
+import json
+import logging
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -10,7 +12,6 @@ import os
 # Change back to absolute imports
 from distiller_cm5_python.client.mid_layer.llm_client import LLMClient
 from distiller_cm5_python.client.mid_layer.processors import MessageProcessor, ToolProcessor, PromptProcessor
-from distiller_cm5_python.utils.logger import logger
 from distiller_cm5_python.utils.config import (STREAMING_ENABLED, LOGGING_LEVEL,
                           SERVER_URL, PROVIDER_TYPE, MODEL_NAME, TIMEOUT)
 from contextlib import AsyncExitStack
@@ -22,9 +23,12 @@ import concurrent.futures
 import uuid
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
 from distiller_cm5_python.client.ui.events.event_types import (
-    EventType, UIEvent, StatusType, MessageSchema, 
+    EventType, StatusType, MessageSchema, 
     MessageEvent, ActionEvent, StatusEvent, ObservationEvent
 )
+
+# Get logger instance for this module
+logger = logging.getLogger(__name__)
 
 
 class MCPClient:
@@ -54,11 +58,6 @@ class MCPClient:
         # TODO questionable if we need to keep both config system and init params system
         self.server_name = None
         self._is_connected = False  # Track connection status
-
-        # Initialize log level
-        logger.setLevel(LOGGING_LEVEL)
-
-        logger.info(f"Initializing MCPClient (streaming={self.streaming}, provider={_provider_type})")
 
         # Initialize available tools, resources, and prompts
         self.available_tools = []
@@ -91,7 +90,6 @@ class MCPClient:
 
     async def connect_to_server(self, server_script_path: str) -> bool:
         """Connect to an MCP server"""
-        logger.info(f"Connecting to server at {server_script_path}")
 
         if not server_script_path.endswith('.py'):
             raise UserVisibleError("Server script must be a .py file")
@@ -145,8 +143,6 @@ class MCPClient:
             end_time = time.time()
             logger.debug(f"Server connection completed in {end_time - start_time:.2f}s")
 
-            logger.info(f"Connected to server: {self.server_name} v{init_result.serverInfo.version}")
-
             # Initialize tool processor after session is created
             self.tool_processor = ToolProcessor(self.session)
 
@@ -154,26 +150,16 @@ class MCPClient:
 
             await self.refresh_capabilities()
 
-            # Information about tools
-            logger.debug("Connected to MCP server with tools:")
-            for i, tool in enumerate(self.available_tools):
-                logger.debug(f"  - Tool {i + 1}: {tool['function']['name']}")
-                logger.debug(f"    Description: {tool['function']['description']}")
-
-            logger.debug(f"Connection and initialization successful")
-
             # setup system prompt
             self.message_processor.set_system_message(self.prompt_processor.generate_system_prompt())
 
             # setup sample (few shot) prompts
             for prompt in self.available_prompts:
-                logger.debug(f"Sample Prompt:{prompt}")
                 for message in prompt["messages"]:
                     if message["role"] in ["user", "assistant"]:
                         self.message_processor.add_message(message["role"], message["content"])
                     else:
                         logger.warning(f"Few shot injection message role not supported: {message['role']}")
-            logger.debug(f"Refreshed tool capabilities")
 
             # enable cache restore if provider is llama-cpp
             if self.llm_provider.provider_type == "llama-cpp":
@@ -214,8 +200,6 @@ class MCPClient:
             logger.warning(f"Failed to get prompts: {e}")
             self.available_prompts = []
 
-        logger.info(f"Mcp Server capabilities refreshed, total {len(self.available_tools)} tools, {len(self.available_resources)} resources, {len(self.available_prompts)} prompts")
-
     async def _execute_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> None:
         """Helper method to execute tool calls and add results to history."""
         if not tool_calls:
@@ -229,12 +213,24 @@ class MCPClient:
             # Create action event for tool execution start
             tool_name = tool_call.get('function', {}).get('name', 'unknown') if 'function' in tool_call else tool_call.get('name', 'unknown')
             
+            raw_tool_args = tool_call.get('function', {}).get('arguments', '{}') # Default to empty JSON string
+            parsed_tool_args = {}
+            try:
+                # Only parse if raw_tool_args is a non-empty string
+                if isinstance(raw_tool_args, str) and raw_tool_args.strip():
+                    parsed_tool_args = json.loads(raw_tool_args)
+                elif isinstance(raw_tool_args, dict):
+                    parsed_tool_args = raw_tool_args # Already a dict, use as is
+            except json.JSONDecodeError:
+                logger.error(f"Failed to parse tool arguments: {raw_tool_args}", exc_info=True)
+                # Keep parsed_tool_args as empty dict or handle error as needed
+
             action_event = ActionEvent(
                 type=EventType.ACTION,
                 content=f"Executing tool: {tool_name}",
                 status=StatusType.IN_PROGRESS,
                 tool_name=tool_name,
-                tool_args=tool_call.get('function', {}).get('arguments', {}),
+                tool_args=parsed_tool_args, # Use the parsed dictionary
                 data={"tool_call": tool_call}
             )
             self.dispatcher.dispatch(action_event)
@@ -266,7 +262,7 @@ class MCPClient:
                         content=f"Tool result: {tool_name}",
                         status=StatusType.SUCCESS,
                         tool_name=tool_name,
-                        tool_args=tool_call.get('function', {}).get('arguments', {}),
+                        tool_args=parsed_tool_args, # Use the parsed dictionary here too
                         data={"tool_call": tool_call, "result": tool_result_content}
                     )
                     self.dispatcher.dispatch(result_event)
@@ -282,7 +278,7 @@ class MCPClient:
                     content=error_msg,
                     status=StatusType.FAILED,
                     tool_name=tool_name,
-                    tool_args=tool_call.get('function', {}).get('arguments', {}),
+                    tool_args=parsed_tool_args, # Use the parsed dictionary here too
                     data={"tool_call": tool_call, "error": str(e)}
                 )
                 self.dispatcher.dispatch(error_event)
@@ -380,7 +376,7 @@ class MCPClient:
                     raise
 
                 # Add message to processor
-                assistant_msg = self.message_processor.add_message("assistant", response.get("message", {}).get("content", ""))
+                self.message_processor.add_message("assistant", response.get("message", {}).get("content", ""))
                 
                 # Extract tool calls
                 tool_calls = (response or {}).get("message", {}).get("tool_calls", [])

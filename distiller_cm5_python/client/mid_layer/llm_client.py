@@ -6,9 +6,8 @@ import aiohttp
 import time
 import requests # Add requests for sync check
 import uuid
-from typing import Any, Dict, List, Optional, AsyncGenerator, Callable
-
-from distiller_cm5_python.utils.logger import logger
+import logging # Added
+from typing import Any, Dict, List, Optional, AsyncGenerator, Callable, AsyncIterator
 from distiller_cm5_python.utils.config import (TEMPERATURE, TOP_P, TOP_K, REPETITION_PENALTY, N_CTX,
                             MAX_TOKENS, STOP) # Removed unused OPENAI_URL, DEEPSEEK_URL
 from distiller_cm5_python.utils.distiller_exception import UserVisibleError, LogOnlyError
@@ -16,8 +15,123 @@ from distiller_cm5_python.utils.distiller_exception import UserVisibleError, Log
 from distiller_cm5_python.client.llm_infra.parsing_utils import (
     normalize_tool_call_json, parse_tool_calls, check_is_c_ntx_too_long
 )
-from distiller_cm5_python.client.ui.events.event_types import EventType, UIEvent, StatusType, MessageSchema
+from distiller_cm5_python.client.ui.events.event_types import EventType, StatusType, MessageSchema
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
+
+# Get logger instance for this module
+logger = logging.getLogger(__name__)
+
+
+class _ToolCallAccumulator:
+    """Helper class to accumulate tool call chunks from a stream and dispatch when complete."""
+    def __init__(self, dispatcher: Optional[EventDispatcher] = None):
+        self._calls: List[Dict[str, Any]] = []
+        self._dispatcher = dispatcher
+        
+    def add_chunk(self, index: int, chunk: Dict[str, Any]):
+        """Adds a tool call chunk (delta) to the accumulator."""
+        if index is None:
+            logger.warning(f"Tool call chunk missing index: {chunk}")
+            return
+
+        # Ensure list is long enough
+        while len(self._calls) <= index:
+            self._calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}, "_dispatched": False})
+
+        current_tool = self._calls[index]
+        
+        # Merge chunk data
+        if "id" in chunk and chunk["id"]:
+            current_tool["id"] += chunk["id"]
+        if "type" in chunk and chunk["type"]: # Store type if provided
+             current_tool["type"] = chunk["type"]
+        if "function" in chunk:
+            if "name" in chunk["function"] and chunk["function"]["name"]:
+                current_tool["function"]["name"] += chunk["function"]["name"]
+            if "arguments" in chunk["function"] and chunk["function"]["arguments"]:
+                current_tool["function"]["arguments"] += chunk["function"]["arguments"]
+
+        # Check for completion and dispatch if needed
+        self._check_and_dispatch(current_tool)
+
+    def _check_and_dispatch(self, tool_call: Dict[str, Any]):
+        """Checks if a tool call is complete and dispatches it if so."""
+        if not tool_call.get("_dispatched") and \
+           tool_call.get("id") and \
+           tool_call.get("function", {}).get("name"):
+            # Mark as dispatched *before* dispatching to prevent race conditions if sync
+            tool_call["_dispatched"] = True
+            if self._dispatcher:
+                logger.debug(f"Dispatching completed tool call: {tool_call['id']} - {tool_call['function']['name']}")
+                # We need to pass a copy without the internal '_dispatched' flag
+                dispatch_payload = {k: v for k, v in tool_call.items() if k != '_dispatched'}
+                self._dispatcher.dispatch(MessageSchema.tool_call(dispatch_payload))
+            else:
+                 logger.warning("Tool call completed but no dispatcher available to send event.")
+
+
+    def get_final_calls(self) -> List[Dict[str, Any]]:
+        """Returns the list of fully accumulated and valid tool calls."""
+        final_calls = []
+        for i, tool in enumerate(self._calls):
+            # Ensure essential fields are present
+            if tool.get("id") and tool.get("function", {}).get("name"):
+                # Clean up internal flag before returning
+                final_tool = {k: v for k, v in tool.items() if k != '_dispatched'}
+                final_calls.append(final_tool)
+            else:
+                logger.warning(f"Skipping incomplete accumulated tool call at index {i}: {tool}")
+        logger.debug(f"_ToolCallAccumulator: Returning {len(final_calls)} final tool calls.") # Added log
+        return final_calls
+
+async def _parse_llm_stream(response: aiohttp.ClientResponse) -> AsyncIterator[Dict[str, Any]]:
+    """Parses Server-Sent Events (SSE) from an LLM stream response."""
+    buffer = ""
+    async for chunk in response.content.iter_any():
+        if not chunk:
+            continue
+        try:
+            buffer += chunk.decode('utf-8')
+        except UnicodeDecodeError as e:
+            logger.error(f"Unicode decode error in stream chunk: {e}. Chunk (bytes): {chunk!r}")
+            yield {"type": "error", "error": e, "detail": "Unicode decode error"}
+            continue # Skip this chunk
+
+        while '\n' in buffer:
+            line, buffer = buffer.split('\n', 1)
+            line = line.strip()
+
+            if not line: # Skip empty lines (often between events)
+                continue
+
+            if line.startswith("data:"):
+                data_str = line[len("data:"):].strip()
+                if data_str == "[DONE]":
+                    yield {"type": "done"}
+                    return # End iteration
+
+                if not data_str:
+                    continue # Skip empty data lines
+
+                try:
+                    # logger.debug(f"Processing stream data line: '{data_str}'") # Re-commented: Very verbose, uncomment for deep stream debugging
+                    chunk_data = json.loads(data_str)
+                    yield {"type": "data", "payload": chunk_data}
+                except json.JSONDecodeError as json_err:
+                    log_buffer_snippet = buffer[:200] + ('...' if len(buffer) > 200 else '')
+                    logger.error(f"JSON Decode Error in streaming response line: '{line}' | Error: {json_err}. Buffer snippet: '{log_buffer_snippet}'") # Added buffer
+                    yield {"type": "error", "error": json_err, "line": line}
+                except Exception as e: # Catch other potential errors during processing
+                     log_buffer_snippet = buffer[:200] + ('...' if len(buffer) > 200 else '')
+                     logger.error(f"Unexpected error processing stream line '{line}': {e}. Buffer snippet: '{log_buffer_snippet}'", exc_info=True) # Added buffer
+                     yield {"type": "error", "error": e, "line": line}
+            else:
+                # Log lines that don't conform to SSE "data:" format, if any
+                logger.warning(f"Received unexpected non-data line in stream: '{line}'")
+
+    # If the loop finishes without receiving "[DONE]", log a warning.
+    logger.warning("LLM stream ended without a '[DONE]' marker.")
+    yield {"type": "done"} # Still signal completion
 
 
 class LLMClient:
@@ -74,16 +188,12 @@ class LLMClient:
                   # Log a warning, but don't raise an error immediately.
                   # Let the first actual request fail if connection is terrible.
                   logger.warning(f"LLMClient.__init__: Initial check failed for llama-cpp server at {self.server_url}. Client will proceed, but requests may fail.")
-             else:
-                  logger.info(f"LLMClient.__init__: Initial check successful for llama-cpp server at {self.server_url}, model={self.model}")
-
+             
         elif self.provider_type == "openrouter":
             # Check connection for OpenRouter (or compatible API)
             if not self._check_cloud_api_connection_sync(): # Use sync check during init
                  logger.error(f"LLMClient.__init__: Could not connect to API at {self.server_url}")
                  raise UserVisibleError(f"Could not connect to API at {self.server_url}. Check URL and API key.")
-            logger.info(
-                f"LLMClient.__init__: Initialized openrouter client with server_url={self.server_url}, model={self.model}")
         else:
              logger.error(f"LLMClient.__init__: Unsupported provider type specified: '{self.provider_type}'. Use 'llama-cpp' or 'openrouter'.")
              raise ValueError(f"Unsupported provider type: {self.provider_type}")
@@ -116,7 +226,6 @@ class LLMClient:
              return False
 
         if self.provider_type == new_provider_type and self.model == new_model and self.server_url == new_server_url:
-            logger.info("Provider configuration is already set. No switch needed.")
             return True
 
         # --- Pre-switch Validation ---
@@ -161,8 +270,6 @@ class LLMClient:
         self.streaming = new_streaming
 
         # Removed creation/start of new manager
-
-        logger.info(f"LLMClient switched successfully to provider={self.provider_type}, model={self.model}, server={self.server_url}")
         return True
 
     # Removed terminate_llama_cpp_server method
@@ -170,7 +277,6 @@ class LLMClient:
 
     def check_connection(self) -> bool:
         """Check if the connection to the configured server is valid"""
-        logger.debug(f"Checking connection for provider: {self.provider_type}")
         if self.provider_type == "llama-cpp":
             # Use the synchronous check for external calls
             return self._check_llama_cpp_connection_sync()
@@ -186,11 +292,9 @@ class LLMClient:
         """Synchronously check connection for llama-cpp server using health endpoint."""
         endpoint = self._get_endpoint(self.health_endpoint)
         try:
-            logger.debug(f"Checking llama-cpp connection sync at: {endpoint}")
             # Use requests for sync check, short timeout
             response = requests.get(endpoint, timeout=2)
             if response.status_code == 200:
-                 logger.debug(f"Sync llama-cpp connection successful to {self.server_url}.")
                  return True
             else:
                  logger.warning(f"Sync llama-cpp connection check failed at {endpoint}. Status: {response.status_code}")
@@ -235,7 +339,6 @@ class LLMClient:
     async def _check_cloud_api_connection_async(self) -> bool:
         """Asynchronously check connection for cloud-based APIs (e.g., OpenRouter)."""
         endpoint = self._get_endpoint(self.models_url)
-        logger.debug(f"Checking cloud API connection async at: {endpoint}")
         headers = self._get_headers()
         if not headers.get("Authorization"):
              logger.error(f"Cannot check connection async to {self.server_url}: API key is missing.")
@@ -245,7 +348,6 @@ class LLMClient:
             async with aiohttp.ClientSession() as session:
                 async with session.get(endpoint, timeout=10, headers=headers) as response:
                     if response.status == 200:
-                        logger.debug(f"Async cloud API connection successful to {self.server_url}.")
                         return True
                     else:
                         response_text = await response.text()
@@ -269,20 +371,27 @@ class LLMClient:
 
 
     def _prepare_chat_completion_payload(self, messages: List[Dict], tools: Optional[List[Dict]], stream: bool) -> Dict:
-        """Prepare the payload for the /chat/completions endpoint."""
+        """Prepares the payload for the /chat/completions endpoint."""
         payload = {
-            "model": self.model,
             "messages": messages,
+            "model": self.model,
             "stream": stream,
-            "inference_configs": self.inference_configs
+            "inference_configs": self.inference_configs,
+            # Include load_model_configs for llama.cpp provider
+            "load_model_configs": {"n_ctx": N_CTX} if self.provider_type == "llama-cpp" else {}
         }
-
         if tools:
             payload["tools"] = tools
-            payload["tool_choice"] = "auto"
-
-        
-        logger.debug(f"Prepared payload for {self.provider_type}: {payload}")
+            
+        # Log summary
+        log_summary = {
+            "model": payload["model"],
+            "num_messages": len(payload["messages"]),
+            "num_tools": len(payload.get("tools", [])),
+            "stream": payload["stream"],
+            "provider": self.provider_type
+        }
+        logger.debug(f"Prepared chat completion payload: {log_summary}")
         return payload
 
 
@@ -346,30 +455,32 @@ class LLMClient:
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = [],
-        callback: Optional[Callable[[str], None]] = lambda x: print(f"\033[94m{x}\033[0m")
+        callback: Optional[Callable[[str, uuid.UUID, EventType], None]] = lambda text, msg_id, evt_type: logger.info(f"LLM Response Text: {text}")
     ) -> Dict[str, Any]:
-        """Get a non-streaming response from the /chat/completions endpoint."""
-        logger.info(f"LLMClient.get_chat_completion_response ===== SENDING REQUEST TO LLM ({self.provider_type}) =====")
-        start_time_req = time.time() # Use time directly here
+        """Sends a request to the LLM and returns the full response (non-streaming).
 
+        Args:
+            messages: List of messages to send to the LLM
+            tools: List of tools to include in the request
+            callback: Optional callback function to call with the response text, msg_id, and event type
+
+        Returns:
+            Dict: The full response from the LLM, formatted as {"message": {...}}
+        """
         endpoint = self._get_endpoint(self.chat_completion_url)
         payload = self._prepare_chat_completion_payload(messages, tools, stream=False)
         headers = self._get_headers()
 
-        log_payload = {k: v for k, v in payload.items() if k != 'messages'} # Avoid logging full messages
-        log_payload['messages'] = f"<{len(payload.get('messages', []))} messages>"
-        if 'tools' in log_payload: log_payload['tools'] = f"<{len(payload.get('tools', []))} tools>"
-        logger.debug(f"Request Endpoint: {endpoint}")
-        logger.debug(f"Request Payload (summary): {log_payload}")
+        start_time_req = time.time()
 
-        response_data = {}
+        response_data = None
         try:
             async with aiohttp.ClientSession() as session:
                  async with session.post(endpoint, json=payload, headers=headers, timeout=self.timeout) as response:
                      status_code = response.status
                      response_text = await response.text()
-                     logger.debug(f"Response Status: {status_code}")
-                     logger.debug(f"Response Text (first 500 chars): {response_text[:500]}")
+                     # logger.debug(f"Response Status: {status_code}") # Removed: Redundant, status checked below
+                     # logger.debug(f"Response Text (full): {response_text}") # Avoid logging full potentially large response
 
                      if status_code != 200:
                         error_detail = response_text
@@ -379,9 +490,9 @@ class LLMClient:
                         except json.JSONDecodeError: pass
 
                         if self.provider_type == "llama-cpp":
-                            req_tokens, ctx_window = check_is_c_ntx_too_long(str(error_detail))
-                            if req_tokens is not None:
-                                error_msg = f"Requested tokens ({req_tokens}) exceed context window ({ctx_window})."
+                            ctx_info = check_is_c_ntx_too_long(str(error_detail))
+                            if ctx_info:
+                                error_msg = f"Requested tokens ({ctx_info[0]}) exceed context window ({ctx_info[1]})."
                                 logger.error(f"LLMClient.get_chat_completion_response: {error_msg}")
                                 raise UserVisibleError(f"{error_msg} Please reduce message history length or query size.")
 
@@ -391,8 +502,17 @@ class LLMClient:
                      response_data = json.loads(response_text)
 
             end_time_req = time.time()
-            logger.info(f"LLMClient.get_chat_completion_response: Received successful response in {end_time_req - start_time_req:.2f}s")
-            logger.debug(f"Response Data: {response_data}")
+            # Log summary of successful response at DEBUG
+            log_summary = {
+                "id": response_data.get("id"),
+                "model": response_data.get("model"),
+                "usage_prompt": response_data.get("usage", {}).get("prompt_tokens"),
+                "usage_completion": response_data.get("usage", {}).get("completion_tokens"),
+                "has_content": bool(response_data.get('choices', [{}])[0].get('message', {}).get('content')),
+                "num_tool_calls": len(response_data.get('choices', [{}])[0].get('message', {}).get('tool_calls', [])),
+                "duration_s": round(end_time_req - start_time_req, 2)
+            }
+            logger.debug(f"Received successful non-streaming LLM response: {log_summary}") # Changed level and content
 
             if not response_data.get("choices") or not response_data["choices"][0].get("message"):
                  raise ValueError("Invalid response structure: 'choices[0].message' missing.")
@@ -414,6 +534,7 @@ class LLMClient:
                 else:
                     logger.warning("Found <tool_call> tag in response, but failed to parse any valid calls.")
 
+
             result = {
                 "message": {
                     "content": full_response_content,
@@ -424,8 +545,13 @@ class LLMClient:
             logger.info(f"LLMClient.get_chat_completion_response: Processed result. Content length: {len(full_response_content)}, Tool calls: {len(tool_calls)}")
 
             # trigger callback if provided
-            if callback:
-                callback(full_response_content, uuid.uuid4(), EventType.MESSAGE)
+            if callback and full_response_content:
+                 # Create a unique ID for this non-streaming message
+                 msg_id = uuid.uuid4()
+                 try:
+                      callback(full_response_content, msg_id, EventType.MESSAGE)
+                 except Exception as cb_err:
+                      logger.error(f"Error executing non-streaming callback: {cb_err}", exc_info=True)
 
             return result
 
@@ -434,43 +560,50 @@ class LLMClient:
         except aiohttp.ClientResponseError as e:
              error_msg = f"HTTP Error {e.status} from LLM server: {e.message}"
              logger.error(error_msg, exc_info=True)
-             return {"message": { "content": error_msg, "role": "assistant", "tool_calls": [] }}
+             # Return an error structure consistent with the success structure
+             return {"message": { "content": f"Error: {error_msg}", "role": "assistant", "tool_calls": [] }}
         except Exception as e:
             error_msg = f"Error communicating with LLM server: {str(e)}"
             logger.error(error_msg, exc_info=True)
-            return {"message": { "content": error_msg, "role": "assistant", "tool_calls": [] }}
+            return {"message": { "content": f"Error: {error_msg}", "role": "assistant", "tool_calls": [] }}
 
     async def get_chat_completion_streaming_response(
         self,
         messages: List[Dict[str, Any]],
         tools: Optional[List[Dict[str, Any]]] = [],
-        dispatcher: EventDispatcher = None
+        dispatcher: Optional[EventDispatcher] = None
     ) -> Dict[str, Any]:
-        """Get a streaming response from the /chat/completions endpoint.
-           Dispatches events (chunks, tool calls) via the dispatcher.
-        """
-        logger.info(f"LLMClient.get_chat_completion_streaming_response ===== SENDING STREAMING REQUEST TO LLM ({self.provider_type}) =====")
-        start_time_req = time.time()
+        """Sends a request to the LLM and processes the streaming response asynchronously.
 
+        Args:
+            messages: List of messages to send to the LLM
+            tools: List of tools to include in the request
+            dispatcher: Optional event dispatcher to dispatch events (chunks, tool calls)
+
+        Returns:
+            Dict: The final aggregated response dictionary after the stream ends.
+        """
+        start_time_req = time.time()
         endpoint = self._get_endpoint(self.chat_completion_url)
         payload = self._prepare_chat_completion_payload(messages, tools, stream=True)
         headers = self._get_headers()
 
-        log_payload = {k: v for k, v in payload.items() if k != 'messages'}
-        log_payload['messages'] = f"<{len(payload.get('messages', []))} messages>"
-        if 'tools' in log_payload: log_payload['tools'] = f"<{len(payload.get('tools', []))} tools>"
-        logger.debug(f"Streaming Request Endpoint: {endpoint}")
-        logger.debug(f"Streaming Request Payload (summary): {log_payload}")
+        # Use a unique ID for this streaming request for event tracking
+        stream_request_id = str(uuid.uuid4())
+        logger.info(f"Starting streaming chat completion request ({stream_request_id}) to {endpoint} for model {self.model}")
+        # Payload logging is now handled within _prepare_chat_completion_payload
 
         full_response_content = ""
-        accumulated_tool_calls = []
-        data_str = ""
-        current_event_id = str(uuid.uuid4())
-        current_etype = EventType.MESSAGE
+        tool_accumulator = _ToolCallAccumulator(dispatcher) # Pass dispatcher here
+        current_content_event_id = str(uuid.uuid4()) # ID for the current continuous message/action content
+        current_content_type = EventType.MESSAGE # Start expecting message content
+        assistant_message_id = str(uuid.uuid4())  # Unique ID for the logical assistant message stream
+        response_message_completed = False
 
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(endpoint, json=payload, headers=headers, timeout=self.timeout) as response:
+                    # --- Initial Response Check ---
                     if response.status != 200:
                          response_text = await response.text()
                          error_detail = response_text
@@ -479,6 +612,7 @@ class LLMClient:
                              error_detail = error_json.get("detail", error_json.get("error", response_text))
                          except json.JSONDecodeError: pass
 
+                         # Check for specific llama-cpp context length error
                          if self.provider_type == "llama-cpp":
                              req_tokens, ctx_window = check_is_c_ntx_too_long(str(error_detail))
                              if req_tokens is not None:
@@ -486,110 +620,110 @@ class LLMClient:
                                  logger.error(f"LLMClient.get_chat_completion_streaming_response: {error_msg}")
                                  raise UserVisibleError(f"{error_msg} Please reduce message history length or query size.")
 
+                         # General HTTP error logging and exception
                          logger.error(f"LLMClient.get_chat_completion_streaming_response: Stream request failed. Status: {response.status}, Detail: {error_detail}")
-                         response.raise_for_status()
+                         response.raise_for_status() # Raise ClientResponseError for non-200 status
 
-                    buffer = ""
-                    async for chunk in response.content.iter_any():
-                        if not chunk: continue
-                        buffer += chunk.decode('utf-8')
+                    # --- Stream Processing ---
+                    async for event in _parse_llm_stream(response):
+                        if event["type"] == "data":
+                            try:
+                                chunk_data = event["payload"]
+                                if "choices" in chunk_data and len(chunk_data["choices"]) > 0:
+                                    delta = chunk_data["choices"][0].get("delta", {})
 
-                        while '\n' in buffer:
-                            line, buffer = buffer.split('\n', 1)
-                            line = line.strip()
+                                    # -- Handle Content Delta --
+                                    if "content" in delta and delta["content"] is not None:
+                                        delta_content = delta["content"]
+                                        full_response_content += delta_content
 
-                            if line.startswith("data:"):
-                                data_str = line[len("data:"):].strip()
-                                if data_str == "[DONE]":
-                                    logger.debug("Received [DONE] marker.")
-                                    break
+                                        # Detect potential inline tool call markers (fallback)
+                                        # Switch content type if marker found and not already ACTION
+                                        if "<tool_call>" in delta_content and current_content_type != EventType.ACTION:
+                                            logger.info("Detected '<tool_call>' tag in content stream. Switching to ACTION type.")
+                                            current_content_event_id = str(uuid.uuid4()) # New ID for this action segment
+                                            current_content_type = EventType.ACTION
 
-                                if not data_str: continue
+                                        # Dispatch content chunk
+                                        if dispatcher:
+                                            if current_content_type == EventType.MESSAGE:
+                                                dispatcher.dispatch(MessageSchema.message_chunk(delta_content, current_content_event_id))
+                                            else: # EventType.ACTION (for inline tool call text)
+                                                action_message = MessageSchema(
+                                                    id=current_content_event_id,
+                                                    type=EventType.ACTION,
+                                                    content=delta_content,
+                                                    status=StatusType.IN_PROGRESS
+                                                )
+                                                dispatcher.dispatch(action_message)
 
-                                try:
-                                    logger.debug(f"Processing line: '{line}'")
-                                    chunk_data = json.loads(data_str)
-                                    if "choices" in chunk_data and len(chunk_data["choices"]) > 0:
-                                        delta = chunk_data["choices"][0].get("delta", {})
+                                    # -- Handle Tool Call Delta --
+                                    if "tool_calls" in delta and delta["tool_calls"]:
+                                        # Ensure we switch back to MESSAGE type after tool calls start
+                                        # in case content follows later
+                                        if current_content_type != EventType.MESSAGE:
+                                            current_content_event_id = str(uuid.uuid4()) # New ID for potential subsequent content
+                                            current_content_type = EventType.MESSAGE
 
-                                        if "content" in delta and delta["content"] is not None:
-                                            content_piece = delta["content"]
+                                        for tool_call_chunk in delta["tool_calls"]:
+                                            index = tool_call_chunk.get("index")
+                                            tool_accumulator.add_chunk(index, tool_call_chunk)
 
-                                            # check for in content tool call, emit message break
-                                            # check for tool call keyword and switch event type if needed
-                                            if "<tool_call>" in content_piece and current_etype != EventType.ACTION:
-                                                current_event_id = str(uuid.uuid4())  # new ID for tool call
-                                                current_etype = EventType.ACTION
+                            except Exception as processing_error:
+                                logger.error(f"Error processing stream data chunk: {processing_error}", exc_info=True)
+                                if dispatcher:
+                                     error_event = MessageSchema(type=EventType.ERROR, content=f"Internal error processing stream chunk: {processing_error}", status=StatusType.FAILED)
+                                     dispatcher.dispatch(error_event)
 
-                                            # Dispatch the chunk using current ID and type
-                                            if dispatcher:
-                                                if current_etype == EventType.MESSAGE:
-                                                    dispatcher.dispatch(UIEvent.message_chunk(content_piece, current_event_id))
-                                                else:  # EventType.ACTION
-                                                    message = MessageSchema(
-                                                        id=current_event_id, 
-                                                        type=EventType.ACTION, 
-                                                        content=content_piece, 
-                                                        status=StatusType.IN_PROGRESS
-                                                    )
-                                                    dispatcher.dispatch(UIEvent.from_message_schema(message))
-                                            
-                                            full_response_content += content_piece
+                        elif event["type"] == "done":
+                            break # Exit the async for loop
 
-                                        if "tool_calls" in delta and delta["tool_calls"]:
-                                            # Structured tool call output
-                                            for tool_call_chunk in delta["tool_calls"]:
-                                                 index = tool_call_chunk.get("index")
-                                                 if index is None: continue
-                                                 while len(accumulated_tool_calls) <= index:
-                                                     accumulated_tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
-                                                 current_tool = accumulated_tool_calls[index]
-                                                 if "id" in tool_call_chunk and tool_call_chunk["id"]:
-                                                     current_tool["id"] += tool_call_chunk["id"]
-                                                 if "function" in tool_call_chunk:
-                                                      if "name" in tool_call_chunk["function"] and tool_call_chunk["function"]["name"]:
-                                                          current_tool["function"]["name"] += tool_call_chunk["function"]["name"]
-                                                      if "arguments" in tool_call_chunk["function"] and tool_call_chunk["function"]["arguments"]:
-                                                          current_tool["function"]["arguments"] += tool_call_chunk["function"]["arguments"]
-                                                 
-                                                 # Check if tool call is complete and hasn't been dispatched
-                                                 if current_tool.get("id") and current_tool.get("function", {}).get("name") and not current_tool.get("_dispatched"):
-                                                     if dispatcher:
-                                                         dispatcher.dispatch(UIEvent.tool_call(current_tool))
-                                                         current_tool["_dispatched"] = True
+                        elif event["type"] == "error":
+                            logger.error(f"Stream parsing error: {event.get('error')} on line: {event.get('line', 'N/A')}")
+                            if dispatcher:
+                                error_content = f"Error parsing response stream: {event.get('error')}"
+                                if event.get('detail'): error_content += f" ({event['detail']})"
+                                error_event = MessageSchema(type=EventType.ERROR, content=error_content, status=StatusType.FAILED)
+                                dispatcher.dispatch(error_event)
+                            # Decide if we should continue or break on parsing error?
+                            # For now, let's continue processing subsequent lines if possible.
 
-                                except json.JSONDecodeError:
-                                    logger.error(f"LLMClient.get_chat_completion_streaming_response: Failed to parse JSON from line: '{data_str}'")
-                                    logger.debug(f"Raw data_str causing JSON error: '{data_str}'")
-                        if data_str == "[DONE]": break
-                    logger.debug("Finished iterating through response content chunks.")
-                    logger.debug(f"Final buffer state before processing end: '{buffer}'")
+                    # --- Stream Finished ---
+                    end_time_req = time.time()
+                    logger.info(f"LLMClient.get_chat_completion_streaming_response ===== STREAMING COMPLETED ({end_time_req - start_time_req:.2f}s) =====")
 
-            end_time_req = time.time()
-            logger.info(f"LLMClient.get_chat_completion_streaming_response ===== STREAMING COMPLETED ({end_time_req - start_time_req:.2f}s) =====")
-            logger.info(f"Total accumulated response length: {len(full_response_content)} characters")
-            logger.debug(f"Full accumulated response content: {full_response_content}")
+            # --- Post-Stream Processing ---
+            final_tool_calls = tool_accumulator.get_final_calls()
 
-            final_tool_calls = []
-            for i, tool in enumerate(accumulated_tool_calls):
-                 if tool.get("id") and tool.get("function", {}).get("name"):
-                     final_tool_calls.append(tool)
-                     # Dispatch any complete tool calls that weren't dispatched during streaming
-                     if not tool.get("_dispatched") and dispatcher:
-                         dispatcher.dispatch(UIEvent.tool_call(tool))
-                         tool["_dispatched"] = True
-                 else:
-                      logger.warning(f"Skipping incomplete accumulated tool call at index {i}: {tool}")
-
+            # Fallback: Check accumulated text content for tool calls if none were found structurally
             if not final_tool_calls and isinstance(full_response_content, str) and "<tool_call>" in full_response_content:
-                 logger.warning("Stream ended, but found <tool_call> tags in accumulated text content. Attempting parse.")
+                 logger.warning("Stream ended. No structured tool calls found, but found '<tool_call>' tags in accumulated text. Attempting parse.")
                  parsed_calls = parse_tool_calls(full_response_content)
                  if parsed_calls:
                      final_tool_calls = parsed_calls
+                     # Remove the tool call section from the final content
                      full_response_content = full_response_content.split("<tool_call>")[0].strip()
                      logger.debug(f"Content updated after extracting tool calls from text: '{full_response_content[:100]}...'")
+                     # Re-dispatch the extracted tool calls if a dispatcher exists
+                     if dispatcher:
+                          logger.info(f"Dispatching {len(parsed_calls)} tool calls parsed from text.")
+                          for call in parsed_calls:
+                              # Ensure the call structure matches what MessageSchema.tool_call expects
+                              if isinstance(call, dict) and 'function' in call:
+                                   dispatcher.dispatch(MessageSchema.tool_call(call))
+                              else:
+                                   logger.warning(f"Skipping dispatch of invalid tool call parsed from text: {call}")
+
 
             logger.info(f"LLMClient.get_chat_completion_streaming_response: Processed result. Content length: {len(full_response_content)}, Tool calls: {len(final_tool_calls)}")
+
+            # Dispatch final complete message event
+            if dispatcher:
+                # Send even if content is empty, but only if not already completed
+                if not response_message_completed:
+                    logger.debug(f"Dispatching final message_complete event (ID: {assistant_message_id})")
+                    dispatcher.dispatch(MessageSchema.message_complete(assistant_message_id, full_response_content))
+                    response_message_completed = True
 
             return {
                 "message": {
@@ -600,27 +734,27 @@ class LLMClient:
             }
 
         except UserVisibleError:
-            raise
+             # Logged and raised within the stream check
+             raise
         except aiohttp.ClientResponseError as e:
-             error_msg = f"HTTP Error {e.status} during streaming from LLM server: {e.message}"
+             # Error during initial connection or non-200 status before stream starts fully
+             error_msg = f"HTTP Error {e.status} during streaming setup from LLM server: {e.message}"
              logger.error(error_msg, exc_info=True)
-             raise LogOnlyError(error_msg) from e
-        except aiohttp.ClientError as e: # Catch other ClientErrors like TransferEncodingError
+             if dispatcher: dispatcher.dispatch(MessageSchema(type=EventType.ERROR, content=error_msg, status=StatusType.FAILED))
+             raise LogOnlyError(error_msg) from e # Convert to LogOnlyError for MCPClient
+        except aiohttp.ClientError as e: # Catch other ClientErrors like connection issues, timeouts during streaming
             error_msg = f"HTTP Client Error during streaming: {e}"
-            # Attempt to get more details if possible
             try:
-                 # Check if response is defined in this scope
-                 if 'response' in locals() and response:
-                     error_msg += f" (Status: {response.status}, Reason: {response.reason})"
-                     # logger.debug(f"Response headers on error: {response.headers}") # Optional: uncomment for more detail
-            except AttributeError: # response might not have status/reason
-                pass
-            logger.error(error_msg, exc_info=True) # Log with traceback
-            # Re-raise a specific error type the caller might expect
-            raise LogOnlyError(error_msg) from e
-        except Exception as e:
-            error_msg = f"Error in streaming from LLM server: {str(e)}"
-            # Add type of exception for clarity
-            error_msg += f" (Type: {type(e).__name__})"
+                 if 'response' in locals() and response: error_msg += f" (Status: {response.status}, Reason: {response.reason})"
+            except (AttributeError, NameError): pass
             logger.error(error_msg, exc_info=True)
+            if dispatcher: dispatcher.dispatch(MessageSchema(type=EventType.ERROR, content=error_msg, status=StatusType.FAILED))
+            raise LogOnlyError(error_msg) from e # Convert to LogOnlyError
+        except Exception as e:
+            # Catch-all for unexpected errors during the process
+            error_msg = f"Unexpected error during streaming chat completion: {str(e)} (Type: {type(e).__name__})"
+            logger.error(error_msg, exc_info=True)
+            if dispatcher: dispatcher.dispatch(MessageSchema(type=EventType.ERROR, content=f"An unexpected error occurred: {str(e)}", status=StatusType.FAILED))
+            # Convert to LogOnlyError so MCPClient can handle UI feedback gracefully
             raise LogOnlyError(error_msg) from e
+        # No finally block needed now as resource closing (session) is handled by 'async with'
