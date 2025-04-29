@@ -26,7 +26,6 @@ class EventType(str, Enum):
     ERROR = "Error"
     SSH_INFO = "SSHInfo"  # New event type for SSH information
     STATUS = "Status"     # New event type for status updates
-    FUNCTION = "Function" # New event type for function calls (MCP)
 
 
 class MessageSchema(BaseModel):
@@ -126,19 +125,6 @@ class MessageSchema(BaseModel):
             port=port
         )
 
-    @staticmethod
-    def function_info(name: str, description: Optional[str] = None, params: Optional[dict] = None) -> 'FunctionEvent':
-        """Create a function info event."""
-        return FunctionEvent(
-            type=EventType.FUNCTION,
-            content=f"Function: {name}",
-            status=StatusType.SUCCESS,
-            name=name,
-            description=description,
-            parameters=params or {}
-        )
-
-
 # Specialized message schemas for different event types
 class MessageEvent(MessageSchema):
     """Message from assistant or user"""
@@ -186,18 +172,6 @@ class SSHInfoEvent(MessageSchema):
     
     class Config:
         use_enum_values = True
-
-
-class FunctionEvent(MessageSchema):
-    """Function capabilities info"""
-    type: EventType = EventType.FUNCTION
-    name: str
-    description: Optional[str] = None
-    parameters: Optional[Dict[str, Any]] = None
-    
-    class Config:
-        use_enum_values = True
-
 
 class StatusEvent(MessageSchema):
     """System status information"""

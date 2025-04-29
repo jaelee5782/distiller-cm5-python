@@ -205,24 +205,7 @@ class BridgeEventHandler:
                     "type": "SSH Info"
                 }
                 conversation_manager.add_message(message)
-                
-        elif event.type == EventType.FUNCTION:
-            # Add handling for FUNCTION events
-            if hasattr(self.signals, 'functionReceived'):
-                self.signals.functionReceived.emit(event.content, str(event.id), timestamp_str)
-            else:
-                # Fall back to info message if no dedicated handler
-                self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
-                
-            # Add message type metadata
-            if conversation_manager:
-                message = {
-                    "timestamp": self._get_formatted_timestamp(),
-                    "content": f"{event.content}",
-                    "type": "Function"
-                }
-                conversation_manager.add_message(message)
-                
+       
         elif event.type == EventType.OBSERVATION:
             # Handle observation events
             if hasattr(self.signals, 'observationReceived'):

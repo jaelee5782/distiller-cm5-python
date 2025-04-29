@@ -1,16 +1,16 @@
 import logging
 import sys
 from typing import Optional, IO
-
+from distiller_cm5_python.utils.config import LOGGING_LEVEL
 # Define the standard log format
 DEFAULT_LOG_FORMAT = '%(asctime)s - %(name)s - %(module)s.%(funcName)s - %(levelname)s - %(message)s'
 
-def setup_logging(log_level: int = logging.INFO, stream: IO = sys.stdout):
+def setup_logging(log_level: int = LOGGING_LEVEL, stream: IO = sys.stdout):
     """Setup root logging configuration.
 
     Args:
         log_level: The logging level to use (e.g., logging.DEBUG, logging.INFO).
-                   Defaults to logging.INFO.
+                   Defaults to LOGGING_LEVEL.
         stream: The output stream to use (e.g., sys.stdout, sys.stderr).
                 Defaults to sys.stdout.
     """

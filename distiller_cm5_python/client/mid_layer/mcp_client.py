@@ -314,8 +314,8 @@ class MCPClient:
         # Record the user's message
         user_msg = self.message_processor.add_message("user", query)
         
-        # Dispatch user message event
-        self.dispatcher.dispatch(user_msg)
+        # Dispatch user message event 
+        # self.dispatcher.dispatch(user_msg)
 
         messages = self.message_processor.get_formatted_messages()
         max_tool_iterations = 5

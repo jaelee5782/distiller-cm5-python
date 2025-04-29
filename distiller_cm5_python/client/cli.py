@@ -59,19 +59,8 @@ class CLIEventHandler:
                     self.message_chunks.append(evt.content)
                     print(evt.content, end="", flush=True)
             elif evt.status == StatusType.SUCCESS:
-                # Handle complete message (message_complete event)
-                # Check if this ID was the one being streamed
-                if evt.id == self.current_message_id:
-                     # If the content wasn't fully printed via chunks (e.g., non-streaming response)
-                     # ensure the full message is printed if message_chunks is empty
-                     if not self.message_chunks and isinstance(evt.content, str) and evt.content:
-                         print(f"\n{Style.BRIGHT}Assistant: {Style.RESET_ALL}{evt.content}", end="")
-                     print() # New line after streaming or complete message
-                     self.current_message_id = None # Reset for next message
-                     self.message_chunks = []
-                elif isinstance(evt.content, str) and evt.content: # Handle non-streamed complete messages
-                     print(f"\n{Style.BRIGHT}Assistant: {Style.RESET_ALL}{evt.content}")
-
+                print("[SUCCESS]", flush=True)
+                
         elif evt.type == EventType.ACTION:
             # Display simplified action info
             if evt.status == StatusType.IN_PROGRESS:
@@ -81,23 +70,11 @@ class CLIEventHandler:
             elif evt.status == StatusType.SUCCESS:
                 # Indicate success, maybe show tool name again
                 tool_name = evt.tool_name if hasattr(evt, 'tool_name') and evt.tool_name else 'Action'
-                print(f"{Fore.GREEN}{tool_name} finished.{Style.RESET_ALL}")
-                # Optionally print result if needed (evt.data might contain it)
-                # if evt.data and 'result' in evt.data:
-                #    print(f"{Fore.GREEN}  Result: {str(evt.data['result'])[:100]}...{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}{tool_name} finished.{Style.RESET_ALL} , output : {evt.content}")
 
         elif evt.type == EventType.OBSERVATION:
-             # Display tool results (Observations)
-             source = evt.source if hasattr(evt, 'source') and evt.source else 'Observation'
-             print(f"{Fore.MAGENTA}Result [{source}]: {Style.RESET_ALL}{str(evt.content)}")
-             # Optionally show more details from evt.data if needed
-
-        # Add handling for other event types if necessary (e.g., PLAN, FUNCTION, SSH_INFO)
-        elif evt.type == EventType.FUNCTION:
-            # Example: Display available functions announced by ToolProcessor
-            name = evt.name if hasattr(evt, 'name') else 'Function'
-            print(f"{Fore.CYAN}Capability Found: {name}{Style.RESET_ALL}")
-
+            pass    
+        
         # Other event types can be ignored or logged
         else:
             logger.debug(f"CLIEventHandler received unhandled event type: {evt.type}")

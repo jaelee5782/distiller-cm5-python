@@ -17,29 +17,43 @@ def normalize_tool_call_json(tool_call_str: str) -> str:
     """Attempt to fix common JSON issues in tool call strings."""
     if not isinstance(tool_call_str, str): return tool_call_str # Should not happen
 
+    logger.debug(f"Original tool call string: '{tool_call_str}'")
+    
+    # First strip all surrounding whitespace including newlines
     tool_call_str = tool_call_str.strip()
+    logger.debug(f"After initial strip: '{tool_call_str}'")
+    
     # Remove markdown ```json ... ``` tags
     tool_call_str = re.sub(r'^```json\s*', '', tool_call_str, flags=re.IGNORECASE)
     tool_call_str = re.sub(r'\s*```$', '', tool_call_str)
-    tool_call_str = tool_call_str.strip()
+    tool_call_str = tool_call_str.strip()  # Strip again after removing markdown
+    logger.debug(f"After markdown removal: '{tool_call_str}'")
 
     # Handle double curly braces {{...}} -> {...}
-    if tool_call_str.startswith("{{") and tool_call_str.endswith("}}") and tool_call_str.count('{') == 2 and tool_call_str.count('}') == 2 :
-         # Be careful not to strip braces from nested valid JSON
-         try:
-              # Try parsing the inner part
-              inner_content = tool_call_str[1:-1]
-              json.loads(inner_content)
-              # If inner parse succeeds, assume the outer braces were extra
-              tool_call_str = inner_content
-              logger.debug("Normalized double curly braces in tool call JSON.")
-         except json.JSONDecodeError:
-              # If inner parse fails, leave the original string, maybe it's intentional?
-               logger.debug("Found double curly braces, but inner content is not valid JSON. Leaving as is.")
-               pass # Leave as is
+    if tool_call_str.startswith("{{") and tool_call_str.endswith("}}"):
+        # Be careful not to strip braces from nested valid JSON
+        try:
+            # Try parsing the inner part
+            inner_content = tool_call_str[1:-1].strip()  # Strip any whitespace after removing braces
+            logger.debug(f"Attempting to parse inner content: '{inner_content}'")
+            json.loads(inner_content)
+            # If inner parse succeeds, assume the outer braces were extra
+            tool_call_str = inner_content
+            logger.debug(f"Successfully normalized double curly braces: '{tool_call_str}'")
+        except json.JSONDecodeError as e:
+            # If inner parse fails, try removing both sets of braces
+            if tool_call_str.count('{') == 2 and tool_call_str.count('}') == 2:
+                inner_content = tool_call_str[2:-2].strip()  # Remove both sets of braces
+                try:
+                    json.loads(inner_content)
+                    tool_call_str = inner_content
+                    logger.debug(f"Successfully removed both sets of braces: '{tool_call_str}'")
+                except json.JSONDecodeError:
+                    logger.debug(f"Failed to parse after removing both sets of braces, leaving as is: '{tool_call_str}'")
+            else:
+                logger.debug(f"Found double curly braces, but content is not valid JSON: '{tool_call_str}'")
 
-    # TODO: Add more normalization rules if needed (e.g., fixing trailing commas)
-
+    logger.debug(f"Final normalized string: '{tool_call_str}'")
     return tool_call_str
 
 def parse_tool_calls(text: str) -> List[Dict[str, Any]]:
@@ -62,7 +76,6 @@ def parse_tool_calls(text: str) -> List[Dict[str, Any]]:
     logger.debug(f"Found {len(matches)} potential tool call blocks in text.")
 
     for i, tool_call_content in enumerate(matches):
-        parsed_tool_call = None
         original_content_for_log = tool_call_content[:200] # Log snippet
         try:
             # Normalize the extracted content (remove ```json, fix common issues)
@@ -110,7 +123,6 @@ def parse_tool_calls(text: str) -> List[Dict[str, Any]]:
                     "arguments": arguments_str
                 }
             }
-            parsed_tool_call = formatted_tool_call
             tool_calls.append(formatted_tool_call)
             logger.debug(f"parse_tool_calls: Successfully parsed tool call {i}: {formatted_tool_call}")
 

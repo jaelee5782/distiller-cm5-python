@@ -695,6 +695,8 @@ class LLMClient:
             # --- Post-Stream Processing ---
             final_tool_calls = tool_accumulator.get_final_calls()
 
+            logger.debug(f"LLMClient.get_chat_completion_streaming_response: Full response content: {full_response_content}")
+
             # Fallback: Check accumulated text content for tool calls if none were found structurally
             if not final_tool_calls and isinstance(full_response_content, str) and "<tool_call>" in full_response_content:
                  logger.warning("Stream ended. No structured tool calls found, but found '<tool_call>' tags in accumulated text. Attempting parse.")

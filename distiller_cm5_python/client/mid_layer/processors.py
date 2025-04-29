@@ -298,10 +298,6 @@ class ToolProcessor:
 
         formatted_tools = []
         
-        # Create standard tool info events for UI
-        from distiller_cm5_python.client.ui.events.event_types import FunctionEvent, EventType, StatusType
-        
-        function_events = []
         
         for tool in self.tools:
             # Check if tool is a dictionary or an object with attributes
@@ -325,20 +321,6 @@ class ToolProcessor:
             }
             formatted_tools.append(formatted_tool)
             
-            # Create a FunctionEvent for each tool
-            function_event = FunctionEvent(
-                type=EventType.FUNCTION,
-                content=f"Function: {name}",
-                status=StatusType.SUCCESS,
-                name=name,
-                description=description,
-                parameters=parameters 
-            )
-            function_events.append(function_event)
-
-        # Store the function events for later use
-        self.function_events = function_events
-        
         logger.debug(f"ToolProcessor.format_tools: Return {len(formatted_tools)} formatted tools")
         return formatted_tools
 
