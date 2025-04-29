@@ -8,7 +8,6 @@ from PyQt6.QtWidgets import QApplication
 from distiller_cm5_python.client.mid_layer.mcp_client import MCPClient
 from qasync import asyncSlot
 from distiller_cm5_python.utils.config import *
-from distiller_cm5_python.client.ui.events.event_types import EventType, UIEvent, StatusType, MessageSchema
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
 from distiller_cm5_python.utils.logger import logger
 from distiller_cm5_python.client.ui.bridge.ConversationManager import ConversationManager
@@ -84,7 +83,7 @@ class MCPClientBridge(BridgeCore):
         self.connection_manager.mcp_client = self.mcp_client
 
         # Connect dispatcher signals to bridge slots
-        self.dispatcher.event_dispatched.connect(self._handle_event)
+        self.dispatcher.message_dispatched.connect(self._handle_event)
 
         # Initialize client-related properties
         self._is_connected = False

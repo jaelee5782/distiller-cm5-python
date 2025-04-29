@@ -68,7 +68,7 @@ class BridgeEventHandler:
             self.signals.conversation_manager = None
         
         # Connect to the dispatcher
-        self.dispatcher.event_dispatched.connect(self.handle_event)
+        self.dispatcher.message_dispatched.connect(self.handle_event)
     
     def handle_event(self, event: MessageSchema) -> None:
         """
