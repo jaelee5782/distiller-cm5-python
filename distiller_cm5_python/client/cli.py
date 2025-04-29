@@ -160,7 +160,7 @@ async def chat_loop(client: MCPClient, whisper_instance):
                             print(f"{Style.BRIGHT}You (Audio): {Style.RESET_ALL}{transcribed_text}")
                             user_input_for_llm = transcribed_text # Use transcribed text
                             # Send transcribed text to client
-                            await client.send_message(user_input_for_llm)
+                            await client.process_query(user_input_for_llm)
                         else:
                              print(f"{Fore.YELLOW}Transcription returned no text.{Style.RESET_ALL}")
                              continue # Skip processing if transcription is empty
