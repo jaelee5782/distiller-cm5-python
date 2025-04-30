@@ -263,7 +263,7 @@ PageBase {
 
         // Handler for raw message schema objects
         function onMessageSchemaReceived(messageData) {
-            console.log("Message schema received: " + JSON.stringify(messageData));
+            // console.log("Message schema received: " + JSON.stringify(messageData));
             // Update conversation view with latest messages
             if (conversationView)
                 conversationView.updateModel(bridge.get_conversation());
@@ -288,6 +288,7 @@ PageBase {
         }
 
         function onStatusChanged(newStatus) {
+            console.log("QML: Status changed to:", newStatus);
             // Always show consistent status in the UI, regardless of internal state
             if (newStatus.toLowerCase().includes("thinking") || newStatus.toLowerCase().includes("tool") || newStatus.toLowerCase().includes("executing")) {
                 // Use a unified "Processing..." status for all processing-related states
@@ -296,30 +297,24 @@ PageBase {
                 if (newStatus.toLowerCase().includes("thinking")) {
                     if (voiceInputArea.setThinkingState)
                         voiceInputArea.setThinkingState();
-
                     stateResetTimer.toolExecutionActive = false;
                 } else {
                     // Tool execution or other processing
                     if (voiceInputArea.setToolExecutionState)
                         voiceInputArea.setToolExecutionState();
-
                     stateResetTimer.toolExecutionActive = true; // Flag tool execution as active
                 }
                 // Always restart the timer when status changes to ensure we don't get stuck
                 stateResetTimer.restart();
-                // Ensure conversation view is updated to show any potential errors
-                if (bridge && bridge.ready)
-                    conversationView.updateModel(bridge.get_conversation());
-
-            } else if (newStatus === "Ready") {
-                console.log("StatusChanged: Detected Ready status, resetting isProcessing to false");
+            } else if (newStatus === "idle" || newStatus === "Ready") {
+                console.log("QML: Detected idle/ready status, resetting all states");
                 isProcessing = false;
                 isListening = false;
                 stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
                 // Reset input area state
-                if (voiceInputArea.resetState)
+                if (voiceInputArea && voiceInputArea.resetState) {
                     voiceInputArea.resetState();
-
+                }
                 // Update status text
                 updateStatusText("Tap to Talk");
                 // Ensure conversation view is updated
@@ -552,6 +547,7 @@ PageBase {
                     conversationView.setResponseInProgress(true);
                     conversationView.scrollToBottom();
                 } else if (status === "success") {
+                    console.log("QML: Message complete, resetting UI state");
                     // Final message or end of streaming
                     // Reset UI state now that the response is complete
                     isProcessing = false;
@@ -561,6 +557,10 @@ PageBase {
                     // Turn off response mode
                     conversationView.setResponseInProgress(false);
                     conversationView.scrollToBottom();
+                    // Reset voice input area state
+                    if (voiceInputArea && voiceInputArea.resetState) {
+                        voiceInputArea.resetState();
+                    }
                     // Log the state reset
                     console.log("MessageReceived: Reset isProcessing to false (complete message)");
                     // Stop failsafe timer
@@ -841,6 +841,20 @@ PageBase {
                 console.log("Focus forced to key handler");
             }
         }
+    }
+
+    // Move to thinking state (for external calls)
+    function setThinkingState() {
+        setAppState("thinking");
+        // Ensure state reset timer is started
+        stateResetTimer.restart();
+    }
+
+    // Move to tool execution state (for external calls)
+    function setToolExecutionState() {
+        setAppState("executing_tool");
+        // Ensure state reset timer is started
+        stateResetTimer.restart();
     }
 
 }

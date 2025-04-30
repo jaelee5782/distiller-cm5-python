@@ -9,7 +9,6 @@ from distiller_cm5_python.client.mid_layer.mcp_client import MCPClient
 from qasync import asyncSlot
 from distiller_cm5_python.utils.config import *
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
-from distiller_cm5_python.utils.logger import logger
 from distiller_cm5_python.client.ui.bridge.ConversationManager import ConversationManager
 from distiller_cm5_python.client.ui.bridge.StatusManager import StatusManager
 from distiller_cm5_python.client.ui.bridge.ServerDiscovery import ServerDiscovery
@@ -23,8 +22,11 @@ import psutil
 import threading
 from typing import Union, Optional
 import uuid
+import logging
 
 from distiller_cm5_python.client.ui.bridge.components.bridge_core import BridgeCore
+
+logger = logging.getLogger(__name__)
 
 # Exit delay constant
 EXIT_DELAY_MS = 500  # Reduced delay from 1000ms to 500ms
@@ -253,8 +255,10 @@ class MCPClientBridge(BridgeCore):
     def _handle_event(self, event: Union[dict, object]) -> None:
         """
         Legacy method for backward compatibility.
-        Events are now handled by the event_handler component.
+        Events are now handled by the event handler component.
         """
+        # Add debug logging
+        logger.debug(f"MCPClientBridge received event: type={getattr(event, 'type', None)}, status={getattr(event, 'status', None)}")
         # Just delegate to the event handler
         self.event_handler.handle_event(event)
 

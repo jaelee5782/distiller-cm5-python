@@ -33,14 +33,8 @@ async def main():
     started_server = False
     
     try:
-        # Parse arguments and check for GUI flag before proceeding
+        # Parse arguments 
         args = parse_arguments()
-        if hasattr(args, 'gui') and args.gui:
-            logger.info("Starting GUI mode...")
-            # Import the GUI app and run it
-            from distiller_cm5_python.client.ui.App import App
-            app = App()
-            return await app.run()
         
         # --- Llama.cpp Server Management ---
         if PROVIDER_TYPE == "llama-cpp":
@@ -66,10 +60,18 @@ async def main():
                  logger.info(f"Existing llama-cpp server detected at {SERVER_URL}. Proceeding.")
         # --- End Llama.cpp Server Management ---
         
-        # Directly call the main function from cli.py
-        # cli.py handles argument parsing, client setup, and the chat loop.
-        logger.info("Starting CLI...")
-        await cli_main()
+
+        if hasattr(args, 'gui') and args.gui:
+            logger.info("Starting GUI mode...")
+            # Import the GUI app and run it
+            from distiller_cm5_python.client.ui.App import App
+            app = App()
+            return await app.run()
+        else:   
+            # Directly call the main function from cli.py
+            # cli.py handles argument parsing, client setup, and the chat loop.
+            logger.info("Starting CLI...")
+            await cli_main()
         
     except KeyboardInterrupt:
         logger.info("Application terminated by user (KeyboardInterrupt).")

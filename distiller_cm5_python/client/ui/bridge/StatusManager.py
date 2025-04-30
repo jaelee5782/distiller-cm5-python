@@ -55,13 +55,15 @@ class StatusManager(QObject):
         status_changed = (self._current_status != status or self._status_details != details)
         
         if status_changed:
+            # Add detailed logging of status transition
+            logger.info(f"Status transition: {self._current_status} -> {status} (Details: {details})")
+            
             # Reset error flag if moving to a non-error state
             if status != self.STATUS_ERROR:
                 self._is_error = False
                 
             self._current_status = status
             self._status_details = details
-            logger.debug(f"Status updated: {status} - {details}")
             
             # Emit signal for UI components to update
             self.statusChanged.emit(status, details)

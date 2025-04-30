@@ -85,7 +85,7 @@ class MessageSchema(BaseModel):
         tool_name = tool_call.get("function", {}).get("name", tool_call.get("name", ""))
         return ObservationEvent(
             type=EventType.OBSERVATION,
-            content=f"Tool Result: {tool_name}",
+            content=f"Tool Result: {result}",
             status=StatusType.SUCCESS,
             source=tool_name,
             data={'tool_call': tool_call, 'result': result}

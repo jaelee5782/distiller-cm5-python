@@ -6,19 +6,20 @@ import argparse
 import logging
 from typing import Any
 import nest_asyncio
+# Adjust import path assuming utils is one level up from mcp_server
+from ..utils.logger import setup_logging
 from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 import mcp.server.stdio
 from distiller_cm5_sdk.piper import Piper
 
-# Configure logging to write to stderr instead of stdout
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stderr
-)
-logger = logging.getLogger("speaker_server")
+# Configure logging using the centralized setup
+# MCP servers log INFO level to stderr
+setup_logging(log_level=logging.INFO, stream=sys.stderr)
+
+# Get the logger for this module
+logger = logging.getLogger(__name__) # Use __name__ for the logger
 
 # Enable nested event loops (needed for some environments)
 nest_asyncio.apply()
@@ -116,12 +117,16 @@ async def handle_call_tool(
     arguments: dict | None
 ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
     """Handle tool execution requests."""
+    # Log tool call entry - Log argument keys only for sensitivity
+    arg_keys = list(arguments.keys()) if arguments else []
+    logger.info(f"Handling tool call: '{name}' with argument keys: {arg_keys}")
+
     if not arguments:
         arguments = {}
     
     if name == "respond_text":
         text = arguments.get("text", "")
-        logger.info(f"\033[92m{text}\033[0m")  # Green text to stderr
+        logger.info(f"Responding with text: {text}")  # Removed ANSI color codes
         return [types.TextContent(
             type="text",
             text="Success"

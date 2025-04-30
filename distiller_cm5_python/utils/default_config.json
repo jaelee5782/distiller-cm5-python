@@ -15,7 +15,7 @@
       "stop": [
         "\n\n"
       ],
-      "streaming": false,
+      "streaming": true,
       "streaming_chunk_size": 4,
       "max_messages_length": 100
     },

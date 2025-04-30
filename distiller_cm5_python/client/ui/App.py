@@ -4,19 +4,30 @@ from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtWidgets import QApplication
 from contextlib import AsyncExitStack
-from .display_config import config
+import logging # Import standard logging
+import sys # Import sys
+from distiller_cm5_python.client.ui.display_config import config
 from distiller_cm5_python.client.ui.AppInfoManager import AppInfoManager
 from distiller_cm5_python.client.ui.bridge.MCPClientBridge import MCPClientBridge
-from distiller_cm5_python.utils.logger import logger
+from distiller_cm5_python.utils.logger import setup_logging # Import setup_logging
+from distiller_cm5_python.utils.config import LOGGING_LEVEL # Import LOGGING_LEVEL
 from distiller_cm5_sdk.whisper import Whisper # Assuming whisper.py is in this path
 from qasync import QEventLoop
 import asyncio
 import os
-import sys
 import signal
 from concurrent.futures import ThreadPoolExecutor
 import atexit
 
+# --- Setup Logging EARLY ---
+# Convert log level string from config to logging constant
+log_level_int = getattr(logging, LOGGING_LEVEL.upper(), logging.INFO)
+# Configure logging using the centralized setup, sending to stderr
+setup_logging(log_level=log_level_int, stream=sys.stderr)
+# Get logger for this module after setup
+logger = logging.getLogger(__name__)
+# --- Logging is now configured ---
+logger.info(f"Logging configured to level: {LOGGING_LEVEL}")
 
 if config["display"]["eink_enabled"]:
     from distiller_cm5_python.client.ui.bridge.EInkRenderer import EInkRenderer

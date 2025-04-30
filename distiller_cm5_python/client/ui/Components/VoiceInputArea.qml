@@ -63,13 +63,27 @@ Rectangle {
             // Update legacy state properties for backward compatibility
             isListening = (newState === "listening");
             isProcessing = (newState === "processing" || newState === "thinking" || newState === "executing_tool");
+            
+            // If transitioning to idle, ensure button is enabled
+            if (newState === "idle" && voiceButton) {
+                voiceButton.enabled = isConnected;
+                voiceButton.checked = false;
+            }
         }
     }
 
     // Functions to manage state
     function resetState() {
+        console.log("VoiceInputArea: Resetting state");
         setAppState("idle");
         transcribedText = "";
+        // Reset button states
+        if (voiceButton) {
+            voiceButton.checked = false;
+            voiceButton.enabled = isConnected;
+        }
+        // Force status update
+        stateHint = getStateHint();
     }
 
     // Move to thinking state (for external calls)

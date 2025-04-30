@@ -259,7 +259,7 @@ class MCPClient:
                     # Dispatch success event
                     result_event = ActionEvent(
                         type=EventType.ACTION,
-                        content=f"Tool result: {tool_name}",
+                        content=f"Tool result: {tool_result_content}",
                         status=StatusType.SUCCESS,
                         tool_name=tool_name,
                         tool_args=parsed_tool_args, # Use the parsed dictionary here too
