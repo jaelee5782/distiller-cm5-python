@@ -5,15 +5,32 @@ import QtQuick.Layouts 1.15
 Rectangle {
     id: header
 
-    property string serverName: "MCP Server"
+    property string serverName: "NO SERVER"
     property string statusText: "Ready"
     property bool isConnected: false
-    property alias serverSelectButton: backButton
     property bool showStatusText: false
+    property bool wifiConnected: false
+    property string ipAddress: ""
+    property alias serverSelectButton: serverSelectBtn
+    
+    // Update WiFi status from bridge
+    function updateWifiStatus() {
+        if (bridge && bridge.ready) {
+            var ipAddr = bridge.getWifiIpAddress();
+            wifiConnected = ipAddr && ipAddr !== "No network IP found" && !ipAddr.includes("Error");
+            ipAddress = wifiConnected ? ipAddr : "";
+        } else {
+            wifiConnected = false;
+            ipAddress = "";
+        }
+    }
 
     signal serverSelectClicked()
 
     color: ThemeManager.headerColor
+    Component.onCompleted: {
+        updateWifiStatus();
+    }
 
     // Shadow effect for the header
     Rectangle {
@@ -32,65 +49,45 @@ Rectangle {
         anchors.rightMargin: ThemeManager.spacingNormal
         spacing: ThemeManager.spacingNormal
 
-        // Back button (server select)
+        // Server selection button
         AppButton {
-            id: backButton
-
-            Layout.preferredWidth: 40
+            id: serverSelectBtn
+            Layout.preferredWidth: 140
             Layout.preferredHeight: 40
             Layout.alignment: Qt.AlignVCenter
-            text: "←"
-            fontSize: FontManager.fontSizeLarge
+            text: isConnected && serverName && serverName !== "NO SERVER" ? serverName : "SELECT SERVER"
+            fontSize: FontManager.fontSizeSmall
             navigable: true
-            buttonRadius: parent.width
             isFlat: true
+            buttonRadius: ThemeManager.borderRadius
             onClicked: header.serverSelectClicked()
+            
+            // Add a visual indicator of connection status
+            Rectangle {
+                id: connectionIndicator
+                width: 8
+                height: 8
+                radius: width / 2
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: 4
+                color: isConnected ? ThemeManager.accentColor : ThemeManager.borderColor
+                visible: true
+            }
         }
 
-        // Server name and status column
-        ColumnLayout {
+        Item {
             Layout.fillWidth: true
-            Layout.alignment: Qt.AlignVCenter
-            spacing: ThemeManager.spacingSmall / 4
-
-            RowLayout {
-                spacing: ThemeManager.spacingSmall / 2
-                Layout.fillWidth: true
-
-                Text {
-                    text: serverName.toUpperCase()
-                    font: FontManager.normal
-                    color: ThemeManager.textColor
-                    Layout.fillWidth: true
-                    elide: Text.ElideRight
-                    maximumLineCount: 1
-                }
-
-                ServerStatusIndicator {
-                    Layout.alignment: Qt.AlignVCenter
-                    isConnected: header.isConnected
-                    width: 12
-                    height: 12
-                }
-
-            }
-
-            Text {
-                id: statusTextItem
-
-                text: statusText
-                font: FontManager.small
-                color: ThemeManager.secondaryTextColor
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                elide: Text.ElideRight
-                maximumLineCount: 2
-                clip: true
-                visible: showStatusText
-            }
-
         }
-
     }
-
+    
+    // Timer to update WiFi status periodically
+    Timer {
+        interval: 5000
+        running: true
+        repeat: true
+        onTriggered: {
+            updateWifiStatus();
+        }
+    }
 }

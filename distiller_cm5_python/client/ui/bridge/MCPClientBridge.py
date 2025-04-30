@@ -342,6 +342,36 @@ class MCPClientBridge(BridgeCore):
         """Get the WiFi IP address of the system."""
         return self.network_utils.get_wifi_ip_address()
 
+    @pyqtSlot(result=str)
+    def getWifiMacAddress(self):
+        """Get the WiFi MAC address of the system."""
+        try:
+            # This is a new method we'll add to NetworkUtils
+            return self.network_utils.get_wifi_mac_address()
+        except Exception as e:
+            logger.error(f"Error getting WiFi MAC address: {e}")
+            return "Error getting MAC address"
+            
+    @pyqtSlot(result=str)
+    def getWifiSignalStrength(self):
+        """Get the WiFi signal strength."""
+        try:
+            # This is a new method we'll add to NetworkUtils
+            return self.network_utils.get_wifi_signal_strength()
+        except Exception as e:
+            logger.error(f"Error getting WiFi signal strength: {e}")
+            return "Error getting signal strength"
+            
+    @pyqtSlot(result="QVariant")
+    def getNetworkDetails(self):
+        """Get detailed information about the network."""
+        try:
+            # This is a new method we'll add to NetworkUtils
+            return self.network_utils.get_network_details()
+        except Exception as e:
+            logger.error(f"Error getting network details: {e}")
+            return {"error": "Failed to get network details"}
+
     @pyqtSlot()
     def restartApplication(self):
         """Restart the application without completely shutting down."""

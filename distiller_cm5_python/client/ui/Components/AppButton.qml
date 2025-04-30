@@ -9,8 +9,8 @@ NavigableItem {
     property string text: ""
     property color backgroundColor: getBackgroundColor()
     property color textColor: root.visualFocus ? ThemeManager.focusTextColor : ThemeManager.textColor
-    property int fontSize: FontManager.fontSizeSmall
-    property int buttonRadius: ThemeManager.borderRadius
+    property int fontSize: FontManager.fontSizeNormal
+    property int buttonRadius: ThemeManager.borderRadius * 4
     // Define standalone pressed property for visual states
     property bool pressed: false
 

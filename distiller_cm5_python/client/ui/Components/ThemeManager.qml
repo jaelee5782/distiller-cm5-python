@@ -75,7 +75,7 @@ QtObject {
     readonly property real spacingLarge: 20
     readonly property real spacingTiny: 4
     // Component specific properties
-    readonly property real buttonHeight: 44
+    readonly property real buttonHeight: 36
     // Icon management - using more defined paths
     readonly property string basePath: "../../images/icons/"
     readonly property string lightIconPath: basePath

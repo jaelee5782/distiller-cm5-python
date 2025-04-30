@@ -6,7 +6,7 @@ import QtQuick.Layouts 1.15
 PageBase {
     id: voiceAssistantPage
 
-    property string _serverName: "MCP Server"
+    property string _serverName: ""
     property string serverName: _serverName
     property bool isListening: false
     property bool isProcessing: false
@@ -19,8 +19,6 @@ PageBase {
     property bool transcriptionInProgress: false
     property bool conversationScrollMode: false // Track if conversation is in scroll mode
     property bool showStatusInBothPlaces: true // Set to true to show status in voice area instead of header
-
-    signal selectNewServer()
 
     function findChild(parent, objectName) {
         if (!parent)
@@ -41,12 +39,14 @@ PageBase {
 
     function collectFocusItems() {
         focusableItems = [];
-        // Add conversation view for keyboard scrolling
-        if (conversationView && conversationView.navigable)
-            focusableItems.push(conversationView);
-
+        
+        // Add server select button first (highest priority)
+        if (header && header.serverSelectButton && header.serverSelectButton.navigable)
+            focusableItems.push(header.serverSelectButton);
+        
+        // Add voice input area buttons only if we have a server connection
         if (voiceInputArea) {
-            // First add the voice button
+            // Add the voice button if server is connected
             if (voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable)
                 focusableItems.push(voiceInputArea.voiceButton);
 
@@ -54,15 +54,19 @@ PageBase {
             let resetButton = findChild(voiceInputArea, "resetButton");
             if (resetButton && resetButton.navigable)
                 focusableItems.push(resetButton);
-
-            // Finally add the settings button
-            let settingsButton = findChild(voiceInputArea, "settingsButton");
-            if (settingsButton && settingsButton.navigable)
-                focusableItems.push(settingsButton);
-
+                
+            // Add WiFi button
+            if (voiceInputArea.wifiButton && voiceInputArea.wifiButton.navigable)
+                focusableItems.push(voiceInputArea.wifiButton);
+                
+            // Add dark mode button
+            if (voiceInputArea.darkModeButton && voiceInputArea.darkModeButton.navigable)
+                focusableItems.push(voiceInputArea.darkModeButton);
         }
-        if (header && header.serverSelectButton && header.serverSelectButton.navigable)
-            focusableItems.push(header.serverSelectButton);
+        
+        // Add conversation view for keyboard scrolling (lowest priority)
+        if (conversationView && conversationView.navigable)
+            focusableItems.push(conversationView);
 
         // Initialize focus manager with proper activation handling
         FocusManager.initializeFocusItems(focusableItems, conversationView);
@@ -149,10 +153,27 @@ PageBase {
     }
     Component.onCompleted: {
         collectFocusItems();
-        // Set initial focus
-        if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable)
+        
+        // Explicitly disable conversationView navigability initially to prevent it from capturing focus
+        if (conversationView) {
+            conversationView.navigable = false;
+        }
+        
+        // Force focus to server select button
+        if (header && header.serverSelectButton && header.serverSelectButton.navigable) {
+            console.log("Setting initial focus to server select button");
+            FocusManager.setFocusToItem(header.serverSelectButton);
+            
+            // Delay enabling of conversationView navigability
+            Qt.callLater(function() {
+                if (conversationView) {
+                    conversationView.navigable = true;
+                }
+            });
+        } else if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
+            // Fall back to voice button if server select button isn't available
             FocusManager.setFocusToItem(voiceInputArea.voiceButton);
-
+        }
     }
     // Reset the action timestamp whenever user interacts or state changes
     onIsProcessingChanged: {
@@ -443,6 +464,8 @@ PageBase {
         statusText: voiceAssistantPage.statusText
         isConnected: bridge && bridge.ready ? bridge.isConnected : false
         showStatusText: false // Hide status text in header
+        
+        // Update WiFi status initially and whenever bridge is ready
         Component.onCompleted: {
             // Add high contrast border for visibility
             var headerRect = findChild(header, "headerBackground");
@@ -450,35 +473,61 @@ PageBase {
                 headerRect.border.width = 1;
                 headerRect.border.color = ThemeManager.borderColor;
             }
+            
+            // Ensure WiFi status is updated
+            if (bridge && bridge.ready) {
+                updateWifiStatus();
+            }
         }
+        
         onServerSelectClicked: {
             previousFocusedItem = FocusManager.currentFocusItems[FocusManager.currentFocusIndex];
-            confirmServerChangeDialog.open();
+            // Show server list dialog instead of confirmation
+            serverListDialog.open();
         }
     }
 
-    AppDialog {
-        id: confirmServerChangeDialog
-
-        dialogTitle: "Change Server"
-        message: "Are you sure you want to change servers? Current conversation will be lost."
-        standardButtonTypes: DialogButtonBox.Yes | DialogButtonBox.No
-        yesButtonText: "Proceed"
-        noButtonText: "Cancel"
-        acceptButtonColor: ThemeManager.backgroundColor
-        onAccepted: {
-            if (bridge && bridge.ready)
-                bridge.disconnectFromServer();
-
-            voiceAssistantPage.selectNewServer();
+    // Server list dialog
+    ServerListDialog {
+        id: serverListDialog
+        
+        // Ensure dialog is drawn above all other UI elements
+        z: 1000
+        
+        Component.onCompleted: {
+            // Keep a reference to the dialog in the FocusManager
+            FocusManager.serverListDialog = this;
         }
-        onRejected: {
+        
+        onServerSelected: function(serverPath, serverName) {
+            if (bridge && bridge.ready) {
+                // Set the selected server and connect to it
+                bridge.setServerPath(serverPath);
+                
+                // This returns an error message if connection fails, or empty string on success
+                var connectionResult = bridge.connectToServer();
+                if (connectionResult) {
+                    // Connection failed, show error message
+                    console.error("Connection failed: " + connectionResult);
+                    messageToast.showMessage("Connection failed: " + connectionResult, 5000);
+                } else {
+                    // Connection successful, update server name
+                    _serverName = serverName;
+                    
+                    // Get conversation if available
+                    if (conversationView) {
+                        conversationView.updateModel(bridge.get_conversation());
+                    }
+                }
+            }
+            
+            // Restore focus after dialog closes
             restoreFocusTimer.start();
         }
-        onClosed: {
-            if (!visible && !accepted)
-                restoreFocusTimer.start();
-
+        
+        onDialogClosed: {
+            // Restore focus after dialog closes
+            restoreFocusTimer.start();
         }
     }
 
@@ -634,8 +683,12 @@ PageBase {
         anchors.margins: 8
         isListening: voiceAssistantPage.isListening
         isProcessing: voiceAssistantPage.isProcessing
-        isConnected: voiceAssistantPage.isServerConnected
-        showStatusHint: true // Always show status hint in voice area
+        isConnected: voiceAssistantPage.isServerConnected && serverName && serverName.length > 0 && serverName !== "No Server"
+        showStatusHint: true // Use a simple boolean value for now as getConfigBoolValue isn't available
+        // Set WiFi properties
+        wifiConnected: header.wifiConnected
+        ipAddress: header.ipAddress
+        
         // Connect to our new state changed signal
         onStateChanged: function(newState) {
             console.log("VoiceInputArea state changed to: " + newState);
@@ -682,16 +735,43 @@ PageBase {
         onVoiceReleased: function() {
             if (bridge && bridge.ready && bridge.isConnected && isListening)
                 bridge.stopAndTranscribe();
-
-        }
-        onSettingsClicked: {
-            if (mainWindow && typeof mainWindow.pushSettingsPage === "function")
-                mainWindow.pushSettingsPage();
-
         }
         onResetClicked: {
             // Show confirmation dialog
             restartConfirmDialog.open();
+        }
+        onWifiClicked: {
+            // Show WiFi status in a toast message instead of dialog
+            if (bridge && bridge.ready) {
+                var ipAddr = bridge.getWifiIpAddress();
+                var macAddr = bridge.getWifiMacAddress ? bridge.getWifiMacAddress() : "";
+                var signalStr = bridge.getWifiSignalStrength ? bridge.getWifiSignalStrength() : "";
+                
+                var wifiConnected = ipAddr && ipAddr !== "No network IP found" && !ipAddr.includes("Error");
+                
+                var statusMsg = wifiConnected ? 
+                    "WiFi: Connected\nIP: " + ipAddr : 
+                    "WiFi: Disconnected";
+                    
+                if (wifiConnected && macAddr) {
+                    statusMsg += "\nMAC: " + macAddr;
+                }
+                
+                if (wifiConnected && signalStr) {
+                    statusMsg += "\nSignal: " + signalStr;
+                }
+                
+                messageToast.showMessage(statusMsg, 5000);
+            } else {
+                messageToast.showMessage("Error: Bridge not ready", 3000);
+            }
+        }
+        onDarkModeClicked: {
+            // Toggle dark mode
+            ThemeManager.toggleTheme();
+            if (bridge && bridge.ready) {
+                bridge.setConfigValue("display", "dark_mode", ThemeManager.darkMode.toString());
+            }
         }
     }
 

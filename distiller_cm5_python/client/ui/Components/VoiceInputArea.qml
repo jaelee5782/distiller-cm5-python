@@ -14,22 +14,27 @@ Rectangle {
     property bool isProcessing: false
     property bool isConnected: true // Add new property for connection status
     property string transcribedText: ""
-    property bool showStatusHint: true // New property to control visibility of status hint
+    property bool showStatusHint: true // Enable status hint by default
     // State management - define possible states
     property string appState: "idle"
     // Possible values: "idle", "listening", "processing", "thinking", "executing_tool", "error"
     property string stateHint: getStateHint()
     // Expose button as property
-    property alias settingsButton: settingsButton
     property alias voiceButton: voiceButton
     property alias resetButton: resetButton
+    property alias wifiButton: wifiButton
+    property alias darkModeButton: darkModeButton
+    // WiFi status properties
+    property bool wifiConnected: false
+    property string ipAddress: ""
 
     // Signals
     signal voiceToggled(bool listening)
     signal voicePressed()
     signal voiceReleased()
-    signal settingsClicked()
     signal resetClicked() // New signal for reset button
+    signal wifiClicked() // New signal for WiFi button
+    signal darkModeClicked() // New signal for dark mode button
 
     // Get appropriate hint text for current state
     function getStateHint() {
@@ -144,7 +149,7 @@ Rectangle {
         }
     }
 
-    // Hint text that's always visible
+    // Hint text that shows when microphone is in focus
     Text {
         id: staticHintText
 
@@ -158,9 +163,8 @@ Rectangle {
         horizontalAlignment: Text.AlignHCenter
         opacity: 0.9
         z: 20 // Make sure it appears above everything
-        // Hide static hint when any button has focus - prevents conflict with button hints
-        // Also hide if showStatusHint is false
-        visible: showStatusHint && !(resetButton.isActiveItem || settingsButton.isActiveItem)
+        // Visibility is controlled by the voiceButton's onIsActiveItemChanged handler
+        visible: false
 
         // Add a background for e-ink contrast
         Rectangle {
@@ -170,7 +174,7 @@ Rectangle {
             color: ThemeManager.backgroundColor
             border.width: ThemeManager.borderWidth
             border.color: ThemeManager.borderColor
-            radius: 3
+            radius: ThemeManager.borderRadius / 2
             visible: true // Always show background for better visibility
         }
 
@@ -226,7 +230,7 @@ Rectangle {
             spacing: ThemeManager.spacingLarge
 
             // 1st button: Voice/Mic button in the center position
-            RoundButton {
+            AppButton {
                 // This allows the binding to checked: voiceInputArea.isListening to work
                 // We don't force the checked state here to let the binding handle it
 
@@ -234,109 +238,113 @@ Rectangle {
 
                 property bool navigable: isConnected // Only navigable when connected
                 property bool isActiveItem: false
+                property bool checked: voiceInputArea.isListening
 
                 // Activate when Enter is pressed via FocusManager
                 function activate() {
                     // Only allow activation when connected
                     if (!isConnected)
-                        return ;
+                        return;
 
-                    // Toggle the checked state
-                    var newState = !checked;
-                    // Log what's happening
-                    console.log("VoiceButton.activate() called, current state: " + checked + ", new state: " + newState);
-                    // This will force the checked state directly
-                    // instead of relying on the binding which may get confused
-                    checked = newState;
-                    // Trigger the voice toggle with the new state
-                    voiceInputArea.voiceToggled(newState);
+                    // When activating with Enter key
+                    if (!isListening) {
+                        // Start listening
+                        console.log("VoiceButton.activate(): Starting listening");
+                        voiceInputArea.voicePressed();
+                        setAppState("listening");
+                    } else {
+                        // Stop listening
+                        console.log("VoiceButton.activate(): Stopping listening");
+                        voiceInputArea.voiceReleased();
+                        setAppState("processing");
+                    }
                 }
 
                 width: ThemeManager.buttonHeight
                 height: ThemeManager.buttonHeight
-                flat: true
-                checkable: true
-                checked: voiceInputArea.isListening
+                isFlat: true
                 enabled: isConnected // Disable button when not connected
+                
                 onClicked: {
                     // Only allow interaction when connected
                     if (!isConnected)
-                        return ;
+                        return;
 
-                    // This is called for mouse clicks, not keyboard
-                    // Keep consistent with the activate method
+                    // Toggle listening state
                     console.log("VoiceButton.onClicked(), current state: " + checked);
-                    // Toggle state - invert current state
-                    var newState = !checked;
-                    // Trigger the voice toggle with the new state
-                    voiceInputArea.voiceToggled(newState);
+                    
+                    if (!isListening) {
+                        // Start listening
+                        voiceInputArea.voicePressed();
+                        setAppState("listening");
+                    } else {
+                        // Stop listening
+                        voiceInputArea.voiceReleased();
+                        setAppState("processing");
+                    }
                 }
-                onPressed: {
-                    // Only allow interaction when connected
-                    if (!isConnected)
-                        return ;
-
-                    voiceInputArea.voicePressed();
-                    // Start listening when button is pressed
-                    setAppState("listening");
-                }
-                onReleased: {
-                    voiceInputArea.voiceReleased();
-                    // Go to processing state when button is released
-                    setAppState("processing");
-                }
-                // Add direct key handling for Enter/Return
+                
+                // Handle key press/release for Enter/Return
                 Keys.onPressed: function(event) {
                     if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                         event.accepted = true;
-                        activate();
+                        if (!isListening) {
+                            // Start listening
+                            voiceInputArea.voicePressed();
+                            setAppState("listening");
+                        }
+                    }
+                }
+                
+                Keys.onReleased: function(event) {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                        if (isListening) {
+                            // Stop listening
+                            voiceInputArea.voiceReleased();
+                            setAppState("processing");
+                        }
                     }
                 }
 
-                background: Rectangle {
-                    color: {
-                        // Use the new state system for determining color
-                        switch (voiceInputArea.appState) {
-                        case "listening":
-                            return ThemeManager.subtleColor;
-                        case "processing":
-                        case "thinking":
-                        case "executing_tool":
-                            return ThemeManager.buttonColor;
-                        case "error":
-                            return ThemeManager.backgroundColor; // Use background color for error (black/white only)
-                        default:
-                            return "transparent";
-                        }
+                backgroundColor: {
+                    // Use the new state system for determining color
+                    switch (voiceInputArea.appState) {
+                    case "listening":
+                        return ThemeManager.subtleColor;
+                    case "processing":
+                    case "thinking":
+                    case "executing_tool":
+                        return ThemeManager.buttonColor;
+                    case "error":
+                        return ThemeManager.backgroundColor; // Use background color for error (black/white only)
+                    default:
+                        return "transparent";
                     }
-                    antialiasing: true
-                    border.width: buttonRow.borderWidth
-                    border.color: voiceInputArea.appState === "error" ? ThemeManager.borderColor : (voiceButton.checked ? ThemeManager.borderColor : "transparent")
+                }
+                buttonRadius: width / 2
 
-                    // Clear border for focus state (e-ink optimized)
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: voiceButton.isActiveItem ? 0 : -buttonRow.borderWidth
-                        color: "transparent"
-                        radius: width / 2
-                        antialiasing: true
-                        opacity: voiceButton.isActiveItem ? 1 : 0
-
-                        border {
-                            width: voiceButton.isActiveItem ? buttonRow.borderWidth : 0
-                            color: ThemeManager.accentColor
-                        }
-
+                // For visual feedback for focus state
+                onIsActiveItemChanged: {
+                    // Only update hint visibility if showStatusHint is enabled
+                    if (isActiveItem && showStatusHint) {
+                        // Show hint when mic button is active and connected
+                        staticHintText.visible = isConnected;
+                    } else if (!isActiveItem) {
+                        // Hide hint when mic button loses focus
+                        staticHintText.visible = false;
                     }
-
                 }
 
-                contentItem: Item {
+                // Voice icon content needs custom handling
+                Rectangle {
+                    // Clear custom styling from AppButton
+                    parent: voiceButton
                     anchors.fill: parent
-
-                    // High contrast highlight for e-ink
+                    color: "transparent"
+                    
+                    // High contrast highlight for e-ink when focused
                     Rectangle {
-                        visible: voiceButton.isActiveItem || voiceButton.hovered || voiceButton.pressed
+                        visible: voiceButton.isActiveItem || voiceButton.pressed
                         anchors.fill: parent
                         radius: width / 2
                         color: voiceButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
@@ -345,18 +353,13 @@ Rectangle {
                         opacity: voiceButton.isActiveItem ? 0.3 : 0.1
                         antialiasing: true
                     }
-
+                    
                     Text {
-                        // Idle
-
                         id: micIcon
-
                         text: {
-                            // Disconnected/disabled icon
-
                             // If not connected, show "disabled" icon
                             if (!isConnected)
-                                return "";
+                                return "󱙱"; // Disabled microphone icon
 
                             // Use the new state system for determining icon
                             switch (voiceInputArea.appState) {
@@ -373,12 +376,12 @@ Rectangle {
                                 return "󰍭";
                             }
                         }
+                        anchors.centerIn: parent
                         font.pixelSize: parent.width * 0.45 // Slightly smaller for cleaner look
                         color: isConnected ? ThemeManager.textColor : ThemeManager.secondaryTextColor // Dimmed when not connected
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
-                        anchors.centerIn: parent
-                        opacity: isConnected ? 1 : 0.7 // Slightly dimmed when not connected
+                        opacity: isConnected ? 1 : 0.5 // More dimmed when not connected
                     }
 
                     // Simple indicator for active states
@@ -394,13 +397,11 @@ Rectangle {
                         opacity: 0.7
                         antialiasing: true
                     }
-
                 }
-
             }
 
             // 2nd button: Reset button
-            RoundButton {
+            AppButton {
                 id: resetButton
 
                 property bool navigable: true
@@ -409,7 +410,8 @@ Rectangle {
                 objectName: "resetButton"
                 width: ThemeManager.buttonHeight
                 height: ThemeManager.buttonHeight
-                flat: true
+                isFlat: true
+                buttonRadius: width / 2
                 onClicked: voiceInputArea.resetClicked()
 
                 // Hint text that appears when button has focus
@@ -437,37 +439,18 @@ Rectangle {
                         font.family: FontManager.primaryFontFamily
                         color: ThemeManager.textColor
                     }
-
                 }
 
-                background: Rectangle {
-                    color: "transparent"
-                    antialiasing: true
-
-                    // Clear border for focus state (e-ink optimized)
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: resetButton.isActiveItem ? 0 : -buttonRow.borderWidth
-                        color: "transparent"
-                        radius: width / 2
-                        antialiasing: true
-                        opacity: resetButton.isActiveItem ? 1 : 0
-
-                        border {
-                            width: resetButton.isActiveItem ? buttonRow.borderWidth : 0
-                            color: ThemeManager.accentColor
-                        }
-
-                    }
-
-                }
-
-                contentItem: Item {
+                // Reset icon content needs custom handling
+                Rectangle {
+                    // Clear custom styling from AppButton
+                    parent: resetButton
                     anchors.fill: parent
-
-                    // High contrast highlight for e-ink
+                    color: "transparent"
+                    
+                    // High contrast highlight for e-ink when focused
                     Rectangle {
-                        visible: resetButton.isActiveItem || resetButton.hovered || resetButton.pressed
+                        visible: resetButton.isActiveItem || resetButton.pressed
                         anchors.fill: parent
                         radius: width / 2
                         color: resetButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
@@ -487,34 +470,38 @@ Rectangle {
                         anchors.centerIn: parent
                         opacity: 1 // Always full opacity for better e-ink visibility
                     }
-
                 }
-
             }
-
-            // 3rd button: Settings button
-            RoundButton {
-                id: settingsButton
-
+            
+            // 3rd button: WiFi status button
+            AppButton {
+                id: wifiButton
+                
                 property bool navigable: true
                 property bool isActiveItem: false
-
-                objectName: "settingsButton"
+                
                 width: ThemeManager.buttonHeight
                 height: ThemeManager.buttonHeight
-                flat: true
-                onClicked: voiceInputArea.settingsClicked()
-
-                // Add hint for settings button
+                isFlat: true
+                buttonRadius: width / 2
+                onClicked: {
+                    // Refresh WiFi info when clicked
+                    if (bridge && bridge.ready) {
+                        bridge.getWifiIpAddress(); // This forces a refresh
+                    }
+                    voiceInputArea.wifiClicked();
+                }
+                
+                // Hint text that appears when button has focus
                 Rectangle {
-                    id: settingsButtonHint
+                    id: wifiButtonHint
 
-                    visible: settingsButton.isActiveItem
+                    visible: wifiButton.isActiveItem
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.bottom: parent.top
                     anchors.bottomMargin: 8
-                    height: settingsHintText.contentHeight + 10
-                    width: settingsHintText.contentWidth + 16
+                    height: wifiHintText.contentHeight + 10
+                    width: wifiHintText.contentWidth + 16
                     color: ThemeManager.backgroundColor
                     border.width: ThemeManager.borderWidth
                     border.color: ThemeManager.borderColor
@@ -522,67 +509,95 @@ Rectangle {
                     z: 100
 
                     Text {
-                        id: settingsHintText
+                        id: wifiHintText
 
                         anchors.centerIn: parent
-                        text: "Settings"
+                        text: "WiFi Status"
                         font.pixelSize: FontManager.fontSizeSmall
                         font.family: FontManager.primaryFontFamily
                         color: ThemeManager.textColor
                     }
-
                 }
-
-                background: Rectangle {
-                    color: "transparent"
-                    antialiasing: true
-
-                    // Clear border for focus state (e-ink optimized)
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.margins: settingsButton.isActiveItem ? 0 : -buttonRow.borderWidth
-                        color: "transparent"
-                        radius: width / 2
-                        antialiasing: true
-                        opacity: settingsButton.isActiveItem ? 1 : 0
-
-                        border {
-                            width: settingsButton.isActiveItem ? buttonRow.borderWidth : 0
-                            color: ThemeManager.accentColor
-                        }
-
-                    }
-
-                }
-
-                contentItem: Item {
+                
+                // WiFi icon content needs custom handling
+                Rectangle {
+                    // Clear custom styling from AppButton
+                    parent: wifiButton
                     anchors.fill: parent
-
-                    // High contrast highlight for e-ink
+                    color: "transparent"
+                    
+                    // High contrast highlight for e-ink when focused
                     Rectangle {
-                        visible: settingsButton.isActiveItem || settingsButton.hovered || settingsButton.pressed
+                        visible: wifiButton.isActiveItem || wifiButton.pressed
                         anchors.fill: parent
                         radius: width / 2
-                        color: settingsButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
+                        color: wifiButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
                         border.width: ThemeManager.borderWidth
                         border.color: ThemeManager.borderColor
-                        opacity: settingsButton.isActiveItem ? 0.3 : 0.1
+                        opacity: wifiButton.isActiveItem ? 0.3 : 0.1
                         antialiasing: true
                     }
-
+                    
                     Text {
-                        text: "⚙" // Gear icon as text
-                        font.pixelSize: parent.width * 0.45 // Slightly smaller for cleaner look
+                        text: "󰤨" // WiFi icon
+                        font.pixelSize: parent.width * 0.3
                         font.family: FontManager.primaryFontFamily
                         color: ThemeManager.textColor
-                        horizontalAlignment: Text.AlignHCenter
+                        width: parent.width
+                        height: parent.height
+                        horizontalAlignment: Text.AlignHCenter - ThemeManager.spacingNormal
                         verticalAlignment: Text.AlignVCenter
                         anchors.centerIn: parent
-                        opacity: 1 // Always full opacity for better e-ink visibility
+                        opacity: 1
                     }
-
                 }
-
+            }
+            
+            // 4th button: Dark mode button
+            AppButton {
+                id: darkModeButton
+                
+                property bool navigable: true
+                property bool isActiveItem: false
+                
+                width: ThemeManager.buttonHeight
+                height: ThemeManager.buttonHeight
+                isFlat: true
+                buttonRadius: width / 2
+                onClicked: voiceInputArea.darkModeClicked()
+                
+                // Dark mode icon content needs custom handling
+                Rectangle {
+                    // Clear custom styling from AppButton
+                    parent: darkModeButton
+                    anchors.fill: parent
+                    color: "transparent"
+                    
+                    // High contrast highlight for e-ink when focused
+                    Rectangle {
+                        visible: darkModeButton.isActiveItem || darkModeButton.pressed
+                        anchors.fill: parent
+                        radius: width / 2
+                        color: darkModeButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
+                        border.width: ThemeManager.borderWidth
+                        border.color: ThemeManager.borderColor
+                        opacity: darkModeButton.isActiveItem ? 0.3 : 0.1
+                        antialiasing: true
+                    }
+                    
+                    Text {
+                        text: ThemeManager.darkMode ? "󰖨" : "" // Dark mode icon
+                        font.pixelSize: parent.width * 0.3
+                        font.family: FontManager.primaryFontFamily
+                        color: ThemeManager.textColor
+                        width: parent.width
+                        height: parent.height
+                        horizontalAlignment: Text.AlignHCenter - ThemeManager.spacingNormal
+                        verticalAlignment: Text.AlignVCenter
+                        anchors.centerIn: parent
+                        opacity: 1
+                    }
+                }
             }
 
         }
@@ -593,7 +608,5 @@ Rectangle {
         NumberAnimation {
             duration: 100
         }
-
     }
-
 }
