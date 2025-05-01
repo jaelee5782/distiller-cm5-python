@@ -59,21 +59,9 @@ Rectangle {
             fontSize: FontManager.fontSizeSmall
             navigable: true
             isFlat: true
-            buttonRadius: ThemeManager.borderRadius
             onClicked: header.serverSelectClicked()
             
-            // Add a visual indicator of connection status
-            Rectangle {
-                id: connectionIndicator
-                width: 8
-                height: 8
-                radius: width / 2
-                anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: 4
-                color: isConnected ? ThemeManager.accentColor : ThemeManager.borderColor
-                visible: true
-            }
+            // Connection indicator removed as requested
         }
 
         Item {
