@@ -75,7 +75,7 @@ Item {
 
         anchors.fill: parent
         color: ThemeManager.transparentColor
-        border.width: parent.visualFocus ? 2 : 0 // Increased border width
+        border.width: parent.visualFocus ? ThemeManager.borderWidth * 2 : 0 // Increased border width
         border.color: ThemeManager.accentColor
         radius: parent.width
         visible: parent.visualFocus

@@ -61,7 +61,7 @@ QtObject {
     // Sizes and metrics
     readonly property real borderRadius: 6
     // Border radius for rectangles
-    readonly property real borderWidth: 1
+    readonly property real borderWidth: 2
     // Border width
     readonly property real animationDuration: 0
     // No animations for e-ink

@@ -165,9 +165,9 @@ Rectangle {
         height: parent.height
         anchors.centerIn: parent
         color: ThemeManager.backgroundColor
-        border.width: ThemeManager.borderWidth
-        border.color: ThemeManager.borderColor
-        radius: ThemeManager.borderRadius
+        // border.width: ThemeManager.borderWidth
+        // border.color: ThemeManager.borderColor
+        // radius: ThemeManager.borderRadius
         
         // Dialog header
         Rectangle {
@@ -231,14 +231,14 @@ Rectangle {
             }
             
             // Add a shadow effect
-            Rectangle {
-                anchors.top: parent.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: 1
-                color: ThemeManager.borderColor
-                opacity: 0.5
-            }
+            // Rectangle {
+            //     anchors.top: parent.bottom
+            //     anchors.left: parent.left
+            //     anchors.right: parent.right
+            //     height: 1
+            //     color: ThemeManager.borderColor
+            //     opacity: 0.5
+            // }
         }
         
         // Loading indicator
@@ -276,7 +276,8 @@ Rectangle {
             delegate: NavigableItem {
                 id: serverItem
                 width: serverList.width
-                height: 70  
+                // get height based on the number of servers
+                height: Math.min(100, serverList.height / availableServers.length)
                 navigable: true
                 
                 onClicked: {
@@ -296,6 +297,7 @@ Rectangle {
                     color: parent.isActiveItem ? ThemeManager.accentColor : ThemeManager.transparentColor
                     border.width: ThemeManager.borderWidth
                     border.color: ThemeManager.borderColor
+                    radius: ThemeManager.borderRadius
                     
                     RowLayout {
                         anchors.fill: parent
