@@ -370,10 +370,10 @@ Rectangle {
                         visible: voiceButton.isActiveItem || voiceButton.pressed
                         anchors.fill: parent
                         radius: width / 2
-                        color: voiceButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
+                        color: voiceButton.isActiveItem ? ThemeManager.accentColor : "transparent"
                         border.width: ThemeManager.borderWidth
                         border.color: ThemeManager.borderColor
-                        opacity: voiceButton.isActiveItem ? 0.3 : 0.1
+                        opacity: voiceButton.isActiveItem ? 1.0 : 0.1
                         antialiasing: true
                     }
                     
@@ -401,19 +401,22 @@ Rectangle {
                         }
                         anchors.centerIn: parent
                         font.pixelSize: parent.width * 0.45 // Slightly smaller for cleaner look
-                        // Dimmed when disabled (not connected or processing)
-                        color: (isConnected && 
-                              voiceInputArea.appState !== "processing" && 
-                              voiceInputArea.appState !== "thinking" && 
-                              voiceInputArea.appState !== "executing_tool") ? 
-                              ThemeManager.textColor : ThemeManager.secondaryTextColor
+                        // Color based on connection state and focus state
+                        color: voiceButton.isActiveItem ? 
+                               ThemeManager.textOnAccentColor : 
+                               ((isConnected && 
+                               voiceInputArea.appState !== "processing" && 
+                               voiceInputArea.appState !== "thinking" && 
+                               voiceInputArea.appState !== "executing_tool") ? 
+                               ThemeManager.textColor : ThemeManager.secondaryTextColor)
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         // More dimmed when disabled
-                        opacity: (isConnected && 
-                                 voiceInputArea.appState !== "processing" && 
-                                 voiceInputArea.appState !== "thinking" && 
-                                 voiceInputArea.appState !== "executing_tool") ? 1 : 0.5
+                        opacity: voiceButton.isActiveItem ? 1.0 :
+                                ((isConnected && 
+                                voiceInputArea.appState !== "processing" && 
+                                voiceInputArea.appState !== "thinking" && 
+                                voiceInputArea.appState !== "executing_tool") ? 1 : 0.5)
                     }
 
                     // Simple indicator for active states
@@ -485,10 +488,10 @@ Rectangle {
                         visible: resetButton.isActiveItem || resetButton.pressed
                         anchors.fill: parent
                         radius: width / 2
-                        color: resetButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
+                        color: resetButton.isActiveItem ? ThemeManager.accentColor : "transparent"
                         border.width: ThemeManager.borderWidth
                         border.color: ThemeManager.borderColor
-                        opacity: resetButton.isActiveItem ? 0.3 : 0.1
+                        opacity: resetButton.isActiveItem ? 1.0 : 0.1
                         antialiasing: true
                     }
 
@@ -496,7 +499,7 @@ Rectangle {
                         text: "↻" // Reset icon as text
                         font.pixelSize: parent.width * 0.5
                         font.family: FontManager.primaryFontFamily
-                        color: ThemeManager.textColor
+                        color: resetButton.isActiveItem ? ThemeManager.textOnAccentColor : ThemeManager.textColor
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         anchors.centerIn: parent
@@ -563,21 +566,22 @@ Rectangle {
                         visible: wifiButton.isActiveItem || wifiButton.pressed
                         anchors.fill: parent
                         radius: width / 2
-                        color: wifiButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
+                        color: wifiButton.isActiveItem ? ThemeManager.accentColor : "transparent"
                         border.width: ThemeManager.borderWidth
                         border.color: ThemeManager.borderColor
-                        opacity: wifiButton.isActiveItem ? 0.3 : 0.1
+                        opacity: wifiButton.isActiveItem ? 1.0 : 0.1
                         antialiasing: true
                     }
                     
                     Text {
-                        text: "󰤨" // WiFi icon
+                        text: "" // WiFi icon
                         font.pixelSize: parent.width * 0.3
                         font.family: FontManager.primaryFontFamily
-                        color: ThemeManager.textColor
+                        color: wifiButton.isActiveItem ? ThemeManager.textOnAccentColor : ThemeManager.textColor
                         width: parent.width
                         height: parent.height
-                        horizontalAlignment: Text.AlignHCenter - ThemeManager.spacingNormal
+                        rightPadding: 6
+                        horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         anchors.centerIn: parent
                         opacity: 1
@@ -610,10 +614,10 @@ Rectangle {
                         visible: darkModeButton.isActiveItem || darkModeButton.pressed
                         anchors.fill: parent
                         radius: width / 2
-                        color: darkModeButton.isActiveItem ? ThemeManager.subtleColor : "transparent"
+                        color: darkModeButton.isActiveItem ? ThemeManager.accentColor : "transparent"
                         border.width: ThemeManager.borderWidth
                         border.color: ThemeManager.borderColor
-                        opacity: darkModeButton.isActiveItem ? 0.3 : 0.1
+                        opacity: darkModeButton.isActiveItem ? 1.0 : 0.1
                         antialiasing: true
                     }
                     
@@ -621,10 +625,11 @@ Rectangle {
                         text: ThemeManager.darkMode ? "󰖨" : "" // Dark mode icon
                         font.pixelSize: parent.width * 0.3
                         font.family: FontManager.primaryFontFamily
-                        color: ThemeManager.textColor
+                        color: darkModeButton.isActiveItem ? ThemeManager.textOnAccentColor : ThemeManager.textColor
+                        rightPadding: ThemeManager.darkMode ? 3 : 0
                         width: parent.width
                         height: parent.height
-                        horizontalAlignment: Text.AlignHCenter - ThemeManager.spacingNormal
+                        horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         anchors.centerIn: parent
                         opacity: 1
