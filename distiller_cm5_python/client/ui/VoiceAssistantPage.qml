@@ -44,6 +44,10 @@ PageBase {
         if (header && header.serverSelectButton && header.serverSelectButton.navigable)
             focusableItems.push(header.serverSelectButton);
         
+        // Add conversation view for keyboard scrolling
+        if (conversationView && conversationView.navigable)
+            focusableItems.push(conversationView);
+
         // Add voice input area buttons only if we have a server connection
         if (voiceInputArea) {
             // Add the voice button if server is connected
@@ -64,10 +68,6 @@ PageBase {
                 focusableItems.push(voiceInputArea.darkModeButton);
         }
         
-        // Add conversation view for keyboard scrolling (lowest priority)
-        if (conversationView && conversationView.navigable)
-            focusableItems.push(conversationView);
-
         // Initialize focus manager with proper activation handling
         FocusManager.initializeFocusItems(focusableItems, conversationView);
     }
