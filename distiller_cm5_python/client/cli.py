@@ -13,7 +13,6 @@ from colorama import Fore, Style, init as colorama_init
 from distiller_cm5_python.client.mid_layer.mcp_client import MCPClient
 from distiller_cm5_python.client.ui.events.event_types import EventType, StatusType, MessageSchema
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
-from distiller_cm5_python.utils.logger import setup_logging # Import setup_logging
 from distiller_cm5_python.utils.config import (STREAMING_ENABLED, SERVER_URL, PROVIDER_TYPE,
                           MODEL_NAME, TIMEOUT, LOGGING_LEVEL, MCP_SERVER_SCRIPT_PATH, API_KEY)
 from distiller_cm5_python.utils.distiller_exception import UserVisibleError, LogOnlyError

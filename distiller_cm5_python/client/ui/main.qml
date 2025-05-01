@@ -52,6 +52,9 @@ ApplicationWindow {
             anchors.fill: parent
             focus: true
             Keys.onPressed: function(event) {
+                // Log the currently focused item
+                console.log("Key Pressed:", event.key, " | Current Focus:", FocusManager.currentItem ? FocusManager.currentItem.objectName : "None", " | Scroll Mode:", FocusManager.scrollModeActive);
+                
                 // Only handle navigation keys - UP, DOWN, and ENTER
                 if (event.key === Qt.Key_Down) {
                     event.accepted = true;

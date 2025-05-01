@@ -7,17 +7,13 @@ import logging
 import sys
 from typing import Any
 import nest_asyncio
-from ..utils.logger import setup_logging
 from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 import mcp.server.stdio
 
 # --- Setup Logging ---
-# Configure logging using the centralized setup
-# MCP servers log INFO level to stderr
-setup_logging(log_level=logging.INFO, stream=sys.stderr)
-# Get logger for this module after setup
+import logging
 logger = logging.getLogger(__name__)
 # --- Logging is now configured ---
 

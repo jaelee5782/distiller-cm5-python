@@ -9,7 +9,6 @@ import sys # Import sys
 from distiller_cm5_python.client.ui.display_config import config
 from distiller_cm5_python.client.ui.AppInfoManager import AppInfoManager
 from distiller_cm5_python.client.ui.bridge.MCPClientBridge import MCPClientBridge
-from distiller_cm5_python.utils.logger import setup_logging # Import setup_logging
 from distiller_cm5_python.utils.config import LOGGING_LEVEL # Import LOGGING_LEVEL
 from distiller_cm5_sdk.whisper import Whisper # Assuming whisper.py is in this path
 from qasync import QEventLoop
@@ -18,21 +17,27 @@ import os
 import signal
 from concurrent.futures import ThreadPoolExecutor
 import atexit
+import threading # Add threading import
+import errno # Add errno import
+import select # Add standard select import
+
+# Try importing evdev
+try:
+    import evdev
+    from evdev import InputDevice, categorize, ecodes, util
+    EVDEV_AVAILABLE = True
+except ImportError:
+    EVDEV_AVAILABLE = False
+    print("WARNING: python-evdev library not found. Hardware button input will not work.")
+    print("Install it using: pip install python-evdev")
 
 # --- Setup Logging EARLY ---
-# Convert log level string from config to logging constant
-log_level_int = getattr(logging, LOGGING_LEVEL.upper(), logging.INFO)
-# Configure logging using the centralized setup, sending to stderr
-setup_logging(log_level=log_level_int, stream=sys.stderr)
-# Get logger for this module after setup
 logger = logging.getLogger(__name__)
-# --- Logging is now configured ---
-logger.info(f"Logging configured to level: {LOGGING_LEVEL}")
+
 
 if config["display"]["eink_enabled"]:
     from distiller_cm5_python.client.ui.bridge.EInkRenderer import EInkRenderer
     from distiller_cm5_python.client.ui.bridge.EInkRendererBridge import EInkRendererBridge
-    from distiller_cm5_sdk.hardware.sam import SAM, ButtonType
     # Remove evdev import
     # import evdev
 
@@ -50,19 +55,6 @@ class App(QObject): # Inherit from QObject to support signals/slots
         """Initialize the Qt application and QML engine."""
         # Register a global exit handler at process exit
         atexit.register(self._emergency_exit_handler)
-
-        # --- SAM Initialization ---
-        self.sam = None
-        if config["display"]["eink_enabled"]:
-            try:
-                self.sam = SAM()
-            except RuntimeError as e:
-                logger.error(f"Failed to initialize SAM SDK: {e}. Button input may not work.")
-                self.sam = None # Ensure sam is None if init fails
-            except Exception as e:
-                 logger.error(f"Unexpected error initializing SAM SDK: {e}", exc_info=True)
-                 self.sam = None # Ensure sam is None if init fails
-        # --- End SAM Initialization ---
 
         # Set platform to offscreen before creating QApplication if E-Ink is enabled
         # TODO: Make this conditional based on configuration
@@ -122,6 +114,12 @@ class App(QObject): # Inherit from QObject to support signals/slots
         # Add main_window attribute initialization
         self.main_window = None
 
+        # --- Input Device Monitoring ---
+        self._input_device_path = "/dev/input/event1" # TODO: Make configurable?
+        self._input_thread = None
+        self._stop_input_thread = threading.Event()
+        # --- End Input Device Monitoring ---
+
     async def initialize(self):
         """Initialize the application."""
         # Register the bridge object with QML
@@ -139,16 +137,6 @@ class App(QObject): # Inherit from QObject to support signals/slots
         
         logger.info("Bridge initialized successfully")
         
-        # --- Connect SAM (Moved callback registration lower) ---
-        if self.sam:
-            logger.info("Connecting to SAM module...")
-            if not self.sam.connect():
-                 logger.error("Failed to connect to SAM module.")
-                 self.sam = None # Set to None if connection fails
-            else:
-                 logger.info("SAM connected.") # Log connection, register callbacks later
-        # --- End SAM Connection ---
-
         # Now register the initialized bridge with QML
         root_context.setContextProperty("bridge", self.bridge)
         root_context.setContextProperty("AppInfo", self.app_info)
@@ -198,81 +186,27 @@ class App(QObject): # Inherit from QObject to support signals/slots
              self.main_window = root_objects[0] # Assign main_window HERE
              logger.info(f"QML loaded successfully. Main window: {self.main_window}")
 
-        # --- Register SAM Callbacks (Now that main_window should exist) ---
-        if self.sam:
-            logger.info("Registering SAM button callbacks...")
-            # Register button press handlers
-            self.sam.register_button_callback(ButtonType.UP, self._handle_sam_button_up)
-            self.sam.register_button_callback(ButtonType.DOWN, self._handle_sam_button_down)
-            self.sam.register_button_callback(ButtonType.SELECT, self._handle_sam_button_select)
-            # You can register release callbacks if needed:
-            # self.sam.register_button_release_callback(...)
-        # --- End SAM Callback Registration ---
-
-
         if config.get("display").get("eink_enabled"):
             # Apply fixed size constraints to the root window after loading
             self._apply_window_constraints()
             # E-Ink Initialization Call
             self._init_eink_renderer()
             self._eink_initialized = True
-
-            # Remove evdev input monitoring start
-            # Start monitoring input device
-            # root_objects = self.engine.rootObjects()
-            # if root_objects:
-            #     main_window = root_objects[0]
-            #     input_device_path = '/dev/input/event5' # TODO: Make this configurable?
-            #     logger.info(f"Starting input device monitor for {input_device_path}...")
-            #     self._input_monitor_task = self.loop.create_task(self.monitor_input_device(input_device_path, main_window))\
-            # else:
-            #     logger.error("Cannot start input monitor: No root QML object found.")
+            
+            # --- Start Input Device Monitor ---
+            # Add a small delay to allow QML/FocusManager to potentially settle
+            await asyncio.sleep(0.2) # Wait 200ms
+            logger.info("Proceeding to start input monitor after short delay.")
+            
+            if EVDEV_AVAILABLE and self.main_window:
+                self._start_input_monitor()
+            elif not EVDEV_AVAILABLE:
+                logger.warning("evdev library not available, cannot monitor input device.")
+            elif not self.main_window:
+                logger.error("Cannot start input monitor: Main window not available.")
+            # --- End Input Device Monitor ---
 
         logger.info("Application initialized successfully")
-
-    # --- SAM Button Handlers ---
-    def _post_key_event(self, qt_key: Qt.Key):
-        """Helper method to post key press and release events."""
-        if not self.main_window:
-            logger.warning(f"Cannot post key event {qt_key}: Main window not available.")
-            return
-            
-        press_event = QKeyEvent(QKeyEvent.Type.KeyPress, qt_key, Qt.KeyboardModifier.NoModifier)
-        # release_event = QKeyEvent(QKeyEvent.Type.KeyRelease, qt_key, Qt.KeyboardModifier.NoModifier) # Commented out
-        QApplication.postEvent(self.main_window, press_event)
-        # QApplication.postEvent(self.main_window, release_event) # Commented out
-        logger.debug(f"Posted {qt_key} Press event via SAM to {self.main_window}") # Updated log message
-
-    def _handle_sam_button_up(self):
-        """Handle SAM UP button press."""
-        logger.debug("SAM Button UP detected")
-        self._post_key_event(Qt.Key.Key_Up)
-
-    def _handle_sam_button_down(self):
-        """Handle SAM DOWN button press."""
-        logger.debug("SAM Button DOWN detected")
-        self._post_key_event(Qt.Key.Key_Down)
-
-    def _handle_sam_button_select(self):
-        """Handle SAM SELECT button press."""
-        logger.debug("SAM Button SELECT detected")
-        self._post_key_event(Qt.Key.Key_Enter)
-    # --- End SAM Button Handlers ---
-
-    # Remove the evdev monitor_input_device method
-    # async def monitor_input_device(self, device_path, target_widget):
-    # ... (rest of the method removed) ...
-
-        # --- Whisper Cleanup ---
-        if hasattr(self, "whisper") and self.whisper:
-            self.whisper.cleanup()
-            logger.info("Whisper resources cleaned up.")
-        # --- End Whisper Cleanup ---
-
-        # Clean up asyncio loop resources if necessary
-        # Example: await self.loop.shutdown_asyncgens()
-
-        logger.info("Resource cleanup complete")
 
     async def run(self):
         """Run the application with async event loop."""
@@ -353,31 +287,12 @@ class App(QObject): # Inherit from QObject to support signals/slots
         
         # Let the bridge know about the shutdown first
         try:
-             # Disconnect SAM first (before other cleanup)
-            if self.sam:
-                logger.info("Disconnecting SAM module during shutdown...")
-                self.sam.disconnect()
-                logger.info("SAM module disconnected.")
-                self.sam = None
-                
             if self.bridge:
                 self.bridge.shutdown()
 
             # E-Ink Cleanup
             if config.get("display").get("eink_enabled"):
                 self._cleanup_eink()
-
-            # Remove evdev task cancellation
-            # Cancel the input monitoring task if running
-            # if self._input_monitor_task and not self._input_monitor_task.done():
-            # ... (removed evdev cancellation code) ...
-            # self._input_monitor_task = None
-
-            # --- Whisper Cleanup ---
-            if hasattr(self, "whisper") and self.whisper:
-                self.whisper.cleanup()
-                logger.info("Whisper resources cleaned up.")
-            # --- End Whisper Cleanup ---
 
         except Exception as e:
             logger.error(f"Error during bridge shutdown notification: {e}", exc_info=True)
@@ -397,13 +312,10 @@ class App(QObject): # Inherit from QObject to support signals/slots
         logger.info("Performing application cleanup")
         
         try:
-            # Disconnect SAM (if not already done in _initiate_shutdown)
-            if self.sam:
-                logger.info("Disconnecting SAM module in cleanup...")
-                self.sam.disconnect()
-                logger.info("SAM module disconnected.")
-                self.sam = None
-
+            # --- Stop Input Monitor ---
+            self._stop_input_monitor()
+            # --- End Stop Input Monitor ---
+            
             # Clean up the bridge
             if self.bridge:
                 try:
@@ -467,10 +379,6 @@ class App(QObject): # Inherit from QObject to support signals/slots
         logger.warning("Shutdown timeout reached, forcing application to exit")
         # Try to do minimal cleanup
         try:
-             # Disconnect SAM one last time
-            if self.sam:
-                self.sam.disconnect()
-                self.sam = None
             self.executor.shutdown(wait=False)
         except Exception:
             pass
@@ -557,7 +465,7 @@ class App(QObject): # Inherit from QObject to support signals/slots
     # E-Ink Methods
     def _init_eink_renderer(self):
         """Initialize the E-Ink renderer."""
-        logger.info(f"config: {config}")
+        # logger.info(f"config: {config}")
 
         if not config.get("display").get("eink_enabled"):
             logger.warning("E-Ink display mode disabled in configuration")
@@ -758,6 +666,133 @@ class App(QObject): # Inherit from QObject to support signals/slots
             self._transcription_task = None # Clear task handle
 
     # --- End Whisper Slots ---
+
+    # --- Input Device Monitoring Thread ---
+    def _start_input_monitor(self):
+        """Starts the input device monitoring thread."""
+        if not EVDEV_AVAILABLE:
+            logger.error("Cannot start input monitor: evdev library not available.")
+            return
+        if self._input_thread and self._input_thread.is_alive():
+            logger.warning("Input monitor thread already running.")
+            return
+            
+        self._stop_input_thread.clear()
+        self._input_thread = threading.Thread(
+            target=self._monitor_input_device,
+            args=(self._input_device_path, self.main_window),
+            daemon=True # Allow app to exit even if this thread is stuck
+        )
+        self._input_thread.start()
+        logger.info(f"Started input device monitor thread for {self._input_device_path}")
+
+    def _monitor_input_device(self, device_path, target_window):
+        """Monitors the specified input device and posts key events to the target window."""
+        dev = None
+        try:
+            logger.info(f"Attempting to open input device: {device_path}")
+            dev = InputDevice(device_path)
+            # dev.grab() # Grab the device to prevent events going elsewhere
+            logger.info(f"Successfully opened and grabbed input device: {dev.name}")
+            
+            key_map = {
+                ecodes.KEY_UP: Qt.Key.Key_Up,
+                ecodes.KEY_DOWN: Qt.Key.Key_Down,
+                ecodes.KEY_ENTER: Qt.Key.Key_Enter, # Or Qt.Key_Return if needed
+            }
+
+            logger.info("Starting event read loop...")
+            while not self._stop_input_thread.is_set():
+                # Use blocking read with a timeout to allow checking the stop flag
+                # Use standard select module on the device's file descriptor
+                try:
+                    r, w, x = select.select([dev.fd], [], [], 0.1) # 100ms timeout
+                except select.error as e:
+                    # Handle interrupted system call, e.g., by signals
+                    if e.args[0] == errno.EINTR:
+                        continue
+                    else:
+                        logger.error(f"Select error on input device {device_path}: {e}", exc_info=True)
+                        break # Exit loop on other select errors
+                
+                if not r: # Timeout occurred, check stop flag and continue
+                    continue
+                    
+                # Check if the file descriptor is the one we are waiting for
+                if dev.fd in r:
+                    try:
+                        for event in dev.read(): # Read available events
+                            if event.type == ecodes.EV_KEY:
+                                # Only process key down events (value=1) for simplicity
+                                # Or handle both press (1) and release (0) if needed
+                                if event.value == 1: # Key press
+                                    qt_key = key_map.get(event.code)
+                                    if qt_key and target_window:
+                                        logger.debug(f"Input Event: Code={event.code}, Mapped Qt Key={qt_key}")
+                                        press_event = QKeyEvent(
+                                            QKeyEvent.Type.KeyPress, 
+                                            qt_key, 
+                                            Qt.KeyboardModifier.NoModifier
+                                        )
+                                        QApplication.postEvent(target_window, press_event)
+                                        logger.debug(f"Posted KeyPress {qt_key} to {target_window}")
+                                        # If you need release events too:
+                                        # release_event = QKeyEvent(
+                                        #     QKeyEvent.Type.KeyRelease, 
+                                        #     qt_key, 
+                                        #     Qt.KeyboardModifier.NoModifier
+                                        # )
+                                        # QApplication.postEvent(target_window, release_event)
+                                        # logger.debug(f"Posted KeyRelease {qt_key} to {target_window}")
+                    except BlockingIOError:
+                        # This can happen if select() returns but read() has no data yet
+                        continue 
+                    except OSError as e:
+                        if e.errno == errno.ENODEV:
+                            logger.error(f"Input device {device_path} disconnected. Stopping monitor.")
+                            break # Exit the loop if device disconnects
+                        else:
+                            logger.error(f"Error reading from input device {device_path}: {e}", exc_info=True)
+                            # Optionally add a delay before retrying
+                            self._stop_input_thread.wait(1.0)
+                    except Exception as e:
+                         logger.error(f"Unexpected error in input monitor loop: {e}", exc_info=True)
+                         # Add a delay before retrying to avoid tight loops on errors
+                         self._stop_input_thread.wait(1.0)
+                     
+        except FileNotFoundError:
+            logger.error(f"Input device not found: {device_path}")
+        except PermissionError:
+            logger.error(f"Permission denied for input device: {device_path}. Ensure user is in 'input' group.")
+        except Exception as e:
+            logger.error(f"Failed to initialize or monitor input device {device_path}: {e}", exc_info=True)
+        finally:
+            if dev:
+                try:
+                    dev.ungrab() # Release the device
+                    dev.close()
+                    logger.info(f"Ungrabbed and closed input device: {device_path}")
+                except Exception as e:
+                    logger.error(f"Error closing input device {device_path}: {e}")
+            logger.info("Input device monitor thread finished.")
+    # --- End Input Device Monitoring Thread ---
+
+    def _stop_input_monitor(self):
+        """Signals the input monitoring thread to stop and waits for it."""
+        if self._input_thread and self._input_thread.is_alive():
+            logger.info("Stopping input device monitor thread...")
+            self._stop_input_thread.set()
+            try:
+                # Wait for the thread to finish, with a timeout
+                self._input_thread.join(timeout=1.0)
+                if self._input_thread.is_alive():
+                    logger.warning("Input monitor thread did not stop gracefully within timeout.")
+                else:
+                    logger.info("Input monitor thread stopped.")
+            except Exception as e:
+                logger.error(f"Error stopping input monitor thread: {e}", exc_info=True)
+        self._input_thread = None
+        self._stop_input_thread.clear() # Reset event for potential restarts
 
 
 if __name__ == "__main__":

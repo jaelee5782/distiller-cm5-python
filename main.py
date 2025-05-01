@@ -24,6 +24,10 @@ from distiller_cm5_python.client.llm_infra.llama_manager import LlamaCppServerMa
 from distiller_cm5_python.utils.config import PROVIDER_TYPE, SERVER_URL, MODEL_NAME
 
 # Get logger instance for this module
+from distiller_cm5_python.utils.logger import setup_logging
+
+# Configure logging
+setup_logging()
 logger = logging.getLogger(__name__)
 
 async def main():

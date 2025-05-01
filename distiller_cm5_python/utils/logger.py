@@ -36,25 +36,26 @@ def setup_logging(log_level: int = LOGGING_LEVEL, stream: IO = sys.stdout):
     # Optionally quiet overly verbose libraries
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
+    logging.getLogger("qasync").setLevel(logging.WARNING)
     
     return root_logger
 
-# Create a default logger instance that can be imported by other modules
-# This maintains backward compatibility with code that expects to import logger directly
-logger = logging.getLogger('distiller_cm5_python')
-logger.setLevel(LOGGING_LEVEL)
-
-# Ensure the logger has at least one handler if not already configured
-if not logger.handlers:
-    # Create a formatter
-    formatter = logging.Formatter(DEFAULT_LOG_FORMAT)
-    
-    # Setup stream handler
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(formatter)
-    
-    # Add our handler
-    logger.addHandler(stream_handler)
+# # Create a default logger instance that can be imported by other modules
+# # This maintains backward compatibility with code that expects to import logger directly
+# logger = logging.getLogger('distiller_cm5_python')
+# logger.setLevel(LOGGING_LEVEL)
+# 
+# # Ensure the logger has at least one handler if not already configured
+# if not logger.handlers:
+#     # Create a formatter
+#     formatter = logging.Formatter(DEFAULT_LOG_FORMAT)
+#     
+#     # Setup stream handler
+#     stream_handler = logging.StreamHandler(sys.stdout)
+#     stream_handler.setFormatter(formatter)
+#     
+#     # Add our handler
+#     logger.addHandler(stream_handler)
 
 # Example usage in other modules:
 # from distiller_cm5_python.utils.logger import logger

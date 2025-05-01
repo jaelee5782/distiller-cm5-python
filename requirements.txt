@@ -16,3 +16,4 @@ faster_whisper
 evdev
 spidev
 lgpio
+numba
