@@ -189,6 +189,7 @@ Rectangle {
                 fontSize: FontManager.fontSizeMedium
                 navigable: true
                 isFlat: true
+                buttonRadius: width / 2
                 z: 10 // Ensure it's above other content
                 onClicked: {
                     if (bridge && bridge.ready) {
@@ -224,6 +225,7 @@ Rectangle {
                 fontSize: FontManager.fontSizeMedium
                 navigable: true
                 isFlat: true
+                buttonRadius: width / 2
                 z: 10 // Ensure it's above other content
                 onClicked: serverListDialog.close()
             }
