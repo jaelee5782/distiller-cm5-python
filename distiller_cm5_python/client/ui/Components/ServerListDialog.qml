@@ -281,8 +281,14 @@ Rectangle {
                 navigable: true
                 
                 onClicked: {
+                    // Emit signal first, then close dialog
+                    // This ensures proper signal handling before UI changes
                     serverListDialog.serverSelected(modelData.path, modelData.name);
-                    serverListDialog.close();
+                    
+                    // Close the dialog with a slight delay to allow signal processing
+                    Qt.callLater(function() {
+                        serverListDialog.close();
+                    });
                 }
                 
                 // Ensure the item scrolls into view when it receives focus
