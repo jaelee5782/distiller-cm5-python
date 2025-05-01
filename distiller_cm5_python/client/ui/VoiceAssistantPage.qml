@@ -769,7 +769,6 @@ PageBase {
         onVoicePressed: function() {
             if (bridge && bridge.ready && bridge.isConnected && !isProcessing)
                 bridge.startRecording();
-
         }
         onVoiceReleased: function() {
             if (bridge && bridge.ready && bridge.isConnected && isListening)

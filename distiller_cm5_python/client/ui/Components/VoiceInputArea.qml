@@ -242,8 +242,10 @@ Rectangle {
 
                 // Activate when Enter is pressed via FocusManager
                 function activate() {
-                    // Only allow activation when connected
-                    if (!isConnected)
+                    // Only allow activation when connected and not processing
+                    if (!isConnected || voiceInputArea.appState === "processing" || 
+                        voiceInputArea.appState === "thinking" || 
+                        voiceInputArea.appState === "executing_tool")
                         return;
 
                     // When activating with Enter key
@@ -263,11 +265,17 @@ Rectangle {
                 width: ThemeManager.buttonHeight
                 height: ThemeManager.buttonHeight
                 isFlat: true
-                enabled: isConnected // Disable button when not connected
+                // Disable button when not connected or when processing/thinking/executing
+                enabled: isConnected && 
+                         voiceInputArea.appState !== "processing" && 
+                         voiceInputArea.appState !== "thinking" && 
+                         voiceInputArea.appState !== "executing_tool"
                 
                 onClicked: {
-                    // Only allow interaction when connected
-                    if (!isConnected)
+                    // Only allow interaction when connected and not processing
+                    if (!isConnected || voiceInputArea.appState === "processing" || 
+                        voiceInputArea.appState === "thinking" || 
+                        voiceInputArea.appState === "executing_tool")
                         return;
 
                     // Toggle listening state
@@ -286,6 +294,14 @@ Rectangle {
                 
                 // Handle key press/release for Enter/Return
                 Keys.onPressed: function(event) {
+                    // Check if we're processing before handling key
+                    if (!isConnected || voiceInputArea.appState === "processing" || 
+                        voiceInputArea.appState === "thinking" || 
+                        voiceInputArea.appState === "executing_tool") {
+                        event.accepted = true;
+                        return;
+                    }
+                        
                     if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                         event.accepted = true;
                         if (!isListening) {
@@ -297,6 +313,13 @@ Rectangle {
                 }
                 
                 Keys.onReleased: function(event) {
+                    // Check if we're processing before handling key
+                    if (!isConnected || (voiceInputArea.appState !== "listening" && 
+                        voiceInputArea.appState !== "idle")) {
+                        event.accepted = true;
+                        return;
+                    }
+                    
                     if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                         if (isListening) {
                             // Stop listening
@@ -378,10 +401,19 @@ Rectangle {
                         }
                         anchors.centerIn: parent
                         font.pixelSize: parent.width * 0.45 // Slightly smaller for cleaner look
-                        color: isConnected ? ThemeManager.textColor : ThemeManager.secondaryTextColor // Dimmed when not connected
+                        // Dimmed when disabled (not connected or processing)
+                        color: (isConnected && 
+                              voiceInputArea.appState !== "processing" && 
+                              voiceInputArea.appState !== "thinking" && 
+                              voiceInputArea.appState !== "executing_tool") ? 
+                              ThemeManager.textColor : ThemeManager.secondaryTextColor
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
-                        opacity: isConnected ? 1 : 0.5 // More dimmed when not connected
+                        // More dimmed when disabled
+                        opacity: (isConnected && 
+                                 voiceInputArea.appState !== "processing" && 
+                                 voiceInputArea.appState !== "thinking" && 
+                                 voiceInputArea.appState !== "executing_tool") ? 1 : 0.5
                     }
 
                     // Simple indicator for active states
