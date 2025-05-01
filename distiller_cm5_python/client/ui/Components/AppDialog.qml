@@ -32,12 +32,10 @@ Dialog {
         for (var i = 0; i < buttons.length; i++) {
             if (buttons[i] && buttons[i].visible)
                 focusableItems.push(buttons[i]);
-
         }
         // Register with FocusManager but don't set initial focus
         if (focusableItems.length > 0)
             FocusManager.initializeFocusItems(focusableItems);
-
     }
 
     // Dialog setup
@@ -53,37 +51,35 @@ Dialog {
         // Store previous focus state
         previousFocusItems = FocusManager.currentFocusItems.slice();
         previousFocusIndex = FocusManager.currentFocusIndex;
-        
+
         Qt.callLater(collectFocusableItems);
     }
     onClosed: {
         if (FocusManager) {
             // Restore previous focus state
-            if (previousFocusItems.length > 0 && previousFocusIndex >= 0 && 
-                previousFocusIndex < previousFocusItems.length) {
+            if (previousFocusItems.length > 0 && previousFocusIndex >= 0 && previousFocusIndex < previousFocusItems.length) {
                 // Use a timer to ensure dialog closing is complete
-                Qt.callLater(function() {
+                Qt.callLater(function () {
                     // First reset focus manager state
                     FocusManager.currentFocusItems = previousFocusItems;
                     FocusManager.currentFocusIndex = previousFocusIndex;
-                    
+
                     // Then set focus to the previous item
-                    if (previousFocusItems[previousFocusIndex] && 
-                        previousFocusItems[previousFocusIndex].navigable) {
+                    if (previousFocusItems[previousFocusIndex] && previousFocusItems[previousFocusIndex].navigable) {
                         FocusManager.setFocusToItem(previousFocusItems[previousFocusIndex]);
-                    }
+                    } else
                     // In case direct setting fails, find the nearest page's collectFocusItems function
-                    else if (parent && parent.collectFocusItems) {
+                    if (parent && parent.collectFocusItems) {
                         parent.collectFocusItems();
                     }
                 });
             } else {
                 // If no previous focus state, just clear the focus
                 FocusManager.initializeFocusItems([]);
-                
+
                 // Find the nearest page's collectFocusItems function
                 if (parent && parent.collectFocusItems) {
-                    Qt.callLater(function() {
+                    Qt.callLater(function () {
                         parent.collectFocusItems();
                     });
                 }
@@ -118,7 +114,6 @@ Dialog {
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideRight
         }
-
     }
 
     // Dialog content
@@ -139,7 +134,6 @@ Dialog {
             horizontalAlignment: Text.AlignHCenter
             visible: message !== ""
         }
-
     }
 
     // Dialog footer with buttons
@@ -188,7 +182,7 @@ Dialog {
                 width: buttonRow.buttonWidth
                 height: ThemeManager.buttonHeight
                 backgroundColor: isActiveItem ? focusButtonColor : acceptButtonColor
-                textColor: isActiveItem && !ThemeManager.darkMode ? ThemeManager.textColor : ThemeManager.backgroundColor
+                textColor: ThemeManager.darkMode ? (isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor) : (isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor)
                 onClicked: {
                     root.accept();
                     root.close();
@@ -206,7 +200,7 @@ Dialog {
                 width: buttonRow.buttonWidth
                 height: ThemeManager.buttonHeight
                 backgroundColor: isActiveItem ? focusButtonColor : acceptButtonColor
-                textColor: ThemeManager.darkMode ? ThemeManager.backgroundColor : (isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor)
+                textColor: isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor
                 onClicked: {
                     root.accept();
                     root.close();
@@ -224,7 +218,7 @@ Dialog {
                 width: buttonRow.buttonWidth
                 height: ThemeManager.buttonHeight
                 backgroundColor: isActiveItem ? focusButtonColor : defaultButtonColor
-                textColor: ThemeManager.textColor
+                textColor: isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor
                 onClicked: {
                     root.reject();
                     root.close();
@@ -242,15 +236,12 @@ Dialog {
                 width: buttonRow.buttonWidth
                 height: ThemeManager.buttonHeight
                 backgroundColor: isActiveItem ? focusButtonColor : defaultButtonColor
-                textColor: ThemeManager.darkMode ? ThemeManager.backgroundColor : (isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor)
+                textColor: isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor
                 onClicked: {
                     root.reject();
                     root.close();
                 }
             }
-
         }
-
     }
-
 }
