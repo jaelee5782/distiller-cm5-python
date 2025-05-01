@@ -20,6 +20,9 @@ Dialog {
     property color defaultButtonColor: ThemeManager.buttonColor
     property color acceptButtonColor: ThemeManager.accentColor
     property color focusButtonColor: ThemeManager.darkMode ? ThemeManager.darkAccentColor : ThemeManager.lightAccentColor
+    // Store previous focus state
+    property var previousFocusItems: []
+    property int previousFocusIndex: -1
 
     // Collect all buttons for navigation
     function collectFocusableItems() {
@@ -47,12 +50,45 @@ Dialog {
     closePolicy: Popup.CloseOnEscape
     // Clean up focus when dialog closes
     onOpened: {
+        // Store previous focus state
+        previousFocusItems = FocusManager.currentFocusItems.slice();
+        previousFocusIndex = FocusManager.currentFocusIndex;
+        
         Qt.callLater(collectFocusableItems);
     }
     onClosed: {
-        if (FocusManager)
-            FocusManager.initializeFocusItems([]);
-
+        if (FocusManager) {
+            // Restore previous focus state
+            if (previousFocusItems.length > 0 && previousFocusIndex >= 0 && 
+                previousFocusIndex < previousFocusItems.length) {
+                // Use a timer to ensure dialog closing is complete
+                Qt.callLater(function() {
+                    // First reset focus manager state
+                    FocusManager.currentFocusItems = previousFocusItems;
+                    FocusManager.currentFocusIndex = previousFocusIndex;
+                    
+                    // Then set focus to the previous item
+                    if (previousFocusItems[previousFocusIndex] && 
+                        previousFocusItems[previousFocusIndex].navigable) {
+                        FocusManager.setFocusToItem(previousFocusItems[previousFocusIndex]);
+                    }
+                    // In case direct setting fails, find the nearest page's collectFocusItems function
+                    else if (parent && parent.collectFocusItems) {
+                        parent.collectFocusItems();
+                    }
+                });
+            } else {
+                // If no previous focus state, just clear the focus
+                FocusManager.initializeFocusItems([]);
+                
+                // Find the nearest page's collectFocusItems function
+                if (parent && parent.collectFocusItems) {
+                    Qt.callLater(function() {
+                        parent.collectFocusItems();
+                    });
+                }
+            }
+        }
     }
 
     // Dialog background

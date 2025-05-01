@@ -121,8 +121,25 @@ PageBase {
         FocusManager.currentFocusItems = [];
         FocusManager.currentFocusIndex = -1;
         FocusManager.lockFocus = false;
-        // Set a brief delay to ensure all UI elements are ready
+        
+        // Immediately collect focus items to ensure they're available
+        collectFocusItems();
+        
+        // Then start the timer to ensure UI elements are ready
         focusResetTimer.start();
+        
+        // Force a check immediately after resetting focus
+        Qt.callLater(function() {
+            if (FocusManager.currentFocusItems.length === 0) {
+                console.log("No focus items available after reset, forcing recollection");
+                collectFocusItems();
+                if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
+                    FocusManager.setFocusToItem(voiceInputArea.voiceButton);
+                } else if (focusableItems.length > 0) {
+                    FocusManager.setFocusToItem(focusableItems[0]);
+                }
+            }
+        });
     }
 
     // Function to restart the application
@@ -144,6 +161,28 @@ PageBase {
         } else {
             // Fallback if bridge is not available
             messageToast.showMessage("Unable to restart - bridge not ready", 3000);
+        }
+    }
+
+    // Safety check to ensure focus is restored properly after dialogs
+    Timer {
+        id: focusSafetyCheckTimer
+        interval: 500
+        repeat: true
+        running: true
+        onTriggered: {
+            // If there are no focusable items, recollect them
+            if (FocusManager.currentFocusItems.length === 0 || 
+                FocusManager.currentFocusIndex < 0 || 
+                FocusManager.currentFocusIndex >= FocusManager.currentFocusItems.length) {
+                console.log("Focus safety check: Restoring focus items");
+                collectFocusItems();
+                if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
+                    FocusManager.setFocusToItem(voiceInputArea.voiceButton);
+                } else if (focusableItems.length > 0) {
+                    FocusManager.setFocusToItem(focusableItems[0]);
+                }
+            }
         }
     }
 
