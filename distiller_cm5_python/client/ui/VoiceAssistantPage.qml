@@ -55,9 +55,8 @@ PageBase {
                 focusableItems.push(voiceInputArea.voiceButton);
 
             // Then add the reset button
-            let resetButton = findChild(voiceInputArea, "resetButton");
-            if (resetButton && resetButton.navigable)
-                focusableItems.push(resetButton);
+            if (voiceInputArea.resetButton && voiceInputArea.resetButton.navigable)
+                focusableItems.push(voiceInputArea.resetButton);
                 
             // Add WiFi button
             if (voiceInputArea.wifiButton && voiceInputArea.wifiButton.navigable)
