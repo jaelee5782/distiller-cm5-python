@@ -3,7 +3,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-*/cache/*
+**/cache/*
 
 chat_history_*.json
 llm_server/models/*
