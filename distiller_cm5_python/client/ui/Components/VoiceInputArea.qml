@@ -23,7 +23,6 @@ Rectangle {
     property alias voiceButton: voiceButton
     property alias resetButton: resetButton
     property alias wifiButton: wifiButton
-    property alias darkModeButton: darkModeButton
     // WiFi status properties
     property bool wifiConnected: false
     property string ipAddress: ""
@@ -34,7 +33,6 @@ Rectangle {
     signal voiceReleased()
     signal resetClicked() // New signal for reset button
     signal wifiClicked() // New signal for WiFi button
-    signal darkModeClicked() // New signal for dark mode button
 
     // Get appropriate hint text for current state
     function getStateHint() {
@@ -588,57 +586,7 @@ Rectangle {
                     }
                 }
             }
-            
-            // 4th button: Dark mode button
-            AppButton {
-                id: darkModeButton
-                
-                property bool navigable: true
-                property bool isActiveItem: false
-                
-                width: ThemeManager.buttonHeight
-                height: ThemeManager.buttonHeight
-                isFlat: true
-                buttonRadius: width / 2
-                onClicked: voiceInputArea.darkModeClicked()
-                
-                // Dark mode icon content needs custom handling
-                Rectangle {
-                    // Clear custom styling from AppButton
-                    parent: darkModeButton
-                    anchors.fill: parent
-                    color: "transparent"
-                    
-                    // High contrast highlight for e-ink when focused
-                    Rectangle {
-                        visible: darkModeButton.isActiveItem || darkModeButton.pressed
-                        anchors.fill: parent
-                        radius: width / 2
-                        color: darkModeButton.isActiveItem ? ThemeManager.accentColor : "transparent"
-                        border.width: ThemeManager.borderWidth
-                        border.color: ThemeManager.borderColor
-                        opacity: darkModeButton.isActiveItem ? 1.0 : 0.1
-                        antialiasing: true
-                    }
-                    
-                    Text {
-                        text: ThemeManager.darkMode ? "󰖨" : "" // Dark mode icon
-                        font.pixelSize: parent.width * 0.3
-                        font.family: FontManager.primaryFontFamily
-                        color: darkModeButton.isActiveItem ? ThemeManager.textOnAccentColor : ThemeManager.textColor
-                        rightPadding: ThemeManager.darkMode ? 3 : 0
-                        width: parent.width
-                        height: parent.height
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        anchors.centerIn: parent
-                        opacity: 1
-                    }
-                }
-            }
-
         }
-
     }
 
     Behavior on height {

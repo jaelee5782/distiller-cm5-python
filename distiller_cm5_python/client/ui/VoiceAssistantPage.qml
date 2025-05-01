@@ -41,8 +41,14 @@ PageBase {
         focusableItems = [];
         
         // Add server select button first (highest priority)
-        if (header && header.serverSelectButton && header.serverSelectButton.navigable)
-            focusableItems.push(header.serverSelectButton);
+        if (header) {
+            if (header.serverSelectButton && header.serverSelectButton.navigable)
+                focusableItems.push(header.serverSelectButton);
+
+            if (header.darkModeButton && header.darkModeButton.navigable)
+                focusableItems.push(header.darkModeButton);
+        }
+
         
         // Add conversation view for keyboard scrolling
         if (conversationView && conversationView.navigable)
@@ -60,11 +66,7 @@ PageBase {
                 
             // Add WiFi button
             if (voiceInputArea.wifiButton && voiceInputArea.wifiButton.navigable)
-                focusableItems.push(voiceInputArea.wifiButton);
-                
-            // Add dark mode button
-            if (voiceInputArea.darkModeButton && voiceInputArea.darkModeButton.navigable)
-                focusableItems.push(voiceInputArea.darkModeButton);
+                focusableItems.push(voiceInputArea.wifiButton);        
         }
         
         // Initialize focus manager with proper activation handling
@@ -801,13 +803,6 @@ PageBase {
                 messageToast.showMessage(statusMsg, 5000);
             } else {
                 messageToast.showMessage("Error: Bridge not ready", 3000);
-            }
-        }
-        onDarkModeClicked: {
-            // Toggle dark mode
-            ThemeManager.toggleTheme();
-            if (bridge && bridge.ready) {
-                bridge.setConfigValue("display", "dark_mode", ThemeManager.darkMode.toString());
             }
         }
     }
