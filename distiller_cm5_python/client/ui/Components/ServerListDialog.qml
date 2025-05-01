@@ -180,8 +180,8 @@ Rectangle {
             // Refresh button - now positioned at top-left corner
             AppButton {
                 id: refreshButton
-                width: 40
-                height: 40
+                width: ThemeManager.buttonHeight
+                height: ThemeManager.buttonHeight
                 anchors.left: parent.left
                 anchors.top: parent.top
                 anchors.margins: ThemeManager.spacingSmall
@@ -216,8 +216,8 @@ Rectangle {
             // Close button - positioned at top-right corner
             AppButton {
                 id: closeButton
-                width: 40
-                height: 40
+                width: ThemeManager.buttonHeight
+                height: ThemeManager.buttonHeight
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.margins: ThemeManager.spacingSmall
