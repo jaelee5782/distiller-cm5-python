@@ -567,6 +567,18 @@ class LLMClient:
             logger.error(error_msg, exc_info=True)
             return {"message": { "content": f"Error: {error_msg}", "role": "assistant", "tool_calls": [] }}
 
+
+    def _emit_success(self, dispatcher: EventDispatcher, id: str, event_type: EventType, content: str):
+        dispatcher.dispatch(
+            MessageSchema(
+                id=id,
+                type=event_type,
+                content=content,
+                status=StatusType.SUCCESS
+            )
+        )
+
+
     async def get_chat_completion_streaming_response(
         self,
         messages: List[Dict[str, Any]],
@@ -597,9 +609,7 @@ class LLMClient:
         tool_accumulator = _ToolCallAccumulator(dispatcher) # Pass dispatcher here
         current_content_event_id = str(uuid.uuid4()) # ID for the current continuous message/action content
         current_content_type = EventType.MESSAGE # Start expecting message content
-        assistant_message_id = str(uuid.uuid4())  # Unique ID for the logical assistant message stream
-        response_message_completed = False
-
+        
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(endpoint, json=payload, headers=headers, timeout=self.timeout) as response:
@@ -640,31 +650,28 @@ class LLMClient:
                                         # Detect potential inline tool call markers (fallback)
                                         # Switch content type if marker found and not already ACTION
                                         if "<tool_call>" in delta_content and current_content_type != EventType.ACTION:
+                                            # cut the last one 
+                                            self._emit_success(dispatcher, current_content_event_id, current_content_type, full_response_content)
+                                            # finish and dispatch the last one 
                                             logger.info("Detected '<tool_call>' tag in content stream. Switching to ACTION type.")
                                             current_content_event_id = str(uuid.uuid4()) # New ID for this action segment
                                             current_content_type = EventType.ACTION
 
                                         # Dispatch content chunk
                                         if dispatcher:
-                                            if current_content_type == EventType.MESSAGE:
-                                                dispatcher.dispatch(MessageSchema.message_chunk(delta_content, current_content_event_id))
-                                            else: # EventType.ACTION (for inline tool call text)
-                                                action_message = MessageSchema(
+                                            dispatcher.dispatch(
+                                                MessageSchema(
                                                     id=current_content_event_id,
-                                                    type=EventType.ACTION,
+                                                    type=current_content_type,
                                                     content=delta_content,
                                                     status=StatusType.IN_PROGRESS
                                                 )
-                                                dispatcher.dispatch(action_message)
+                                            )
 
                                     # -- Handle Tool Call Delta --
                                     if "tool_calls" in delta and delta["tool_calls"]:
                                         # Ensure we switch back to MESSAGE type after tool calls start
                                         # in case content follows later
-                                        if current_content_type != EventType.MESSAGE:
-                                            current_content_event_id = str(uuid.uuid4()) # New ID for potential subsequent content
-                                            current_content_type = EventType.MESSAGE
-
                                         for tool_call_chunk in delta["tool_calls"]:
                                             index = tool_call_chunk.get("index")
                                             tool_accumulator.add_chunk(index, tool_call_chunk)
@@ -688,6 +695,10 @@ class LLMClient:
                             # Decide if we should continue or break on parsing error?
                             # For now, let's continue processing subsequent lines if possible.
 
+                    # dispatch the last one 
+                    if current_content_type == EventType.MESSAGE:
+                        self._emit_success(dispatcher, current_content_event_id, current_content_type, full_response_content)
+                        
                     # --- Stream Finished ---
                     end_time_req = time.time()
                     logger.info(f"LLMClient.get_chat_completion_streaming_response ===== STREAMING COMPLETED ({end_time_req - start_time_req:.2f}s) =====")
@@ -718,14 +729,6 @@ class LLMClient:
 
 
             logger.info(f"LLMClient.get_chat_completion_streaming_response: Processed result. Content length: {len(full_response_content)}, Tool calls: {len(final_tool_calls)}")
-
-            # Dispatch final complete message event
-            if dispatcher:
-                # Send even if content is empty, but only if not already completed
-                if not response_message_completed:
-                    logger.debug(f"Dispatching final message_complete event (ID: {assistant_message_id})")
-                    dispatcher.dispatch(MessageSchema.message_complete(assistant_message_id, full_response_content))
-                    response_message_completed = True
 
             return {
                 "message": {

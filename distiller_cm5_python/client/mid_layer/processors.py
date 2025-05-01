@@ -375,9 +375,22 @@ class ToolProcessor:
         Returns:
             A string representation of the result
         """
-        # Handle different result types
-        if isinstance(result, list):
-            # Handle list of content (common MCP server response format)
+        # Check if result has a 'content' attribute that is a list (common MCP format)
+        if hasattr(result, 'content') and isinstance(result.content, list):
+            result_text = []
+            for item in result.content:
+                # Handle TextContent objects or dicts with 'text' key
+                if hasattr(item, 'text'):
+                    result_text.append(item.text)
+                elif isinstance(item, dict) and "text" in item:
+                    result_text.append(item["text"])
+                else:
+                     # Fallback for other item types within the content list
+                    result_text.append(str(item))
+            return "\n".join(result_text)
+
+        # Handle if the result itself is a list
+        elif isinstance(result, list):
             result_text = []
             for item in result:
                 if isinstance(item, dict):

@@ -65,7 +65,7 @@ class MCPClientBridge(BridgeCore):
         self.network_utils = NetworkUtils()
 
         # Initialize event dispatcher
-        self.dispatcher = EventDispatcher()
+        self.dispatcher = EventDispatcher(debug=logger.getEffectiveLevel() == logging.DEBUG)
 
         # Initialize MCP client with dispatcher first
         self.mcp_client = MCPClient(dispatcher=self.dispatcher)

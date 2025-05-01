@@ -336,18 +336,16 @@ class MCPClient:
                         )
                     else:
                         # Non-streaming
-                        resp = await self.llm_provider.get_chat_completion_response(messages, self.available_tools)
-                        content = resp.get("message", {}).get("content", "")
-                        
-                        # Create and dispatch message with new schema
-                        msg_event = MessageEvent(
-                            type=EventType.MESSAGE,
-                            content=content,
-                            status=StatusType.IN_PROGRESS,
-                            role="assistant"
+                        response = await self.llm_provider.get_chat_completion_response(messages, self.available_tools)
+                        self.dispatcher.dispatch(
+                            MessageEvent(
+                                type=EventType.MESSAGE,
+                                content=response.get("message", {}).get("content", ""),
+                                status=StatusType.SUCCESS,
+                                role="assistant"
+                            )
                         )
-                        self.dispatcher.dispatch(msg_event)
-                        response = resp
+                        
                 except LogOnlyError as e:
                     # Create proper error message in case of streaming failure
                     error_event = MessageEvent(
@@ -377,6 +375,7 @@ class MCPClient:
 
                 # Add message to processor
                 self.message_processor.add_message("assistant", response.get("message", {}).get("content", ""))
+                # done with message processing
                 
                 # Extract tool calls
                 tool_calls = (response or {}).get("message", {}).get("tool_calls", [])
@@ -386,7 +385,7 @@ class MCPClient:
                 # Create and dispatch info event for tool execution
                 tool_info_event = StatusEvent(
                     type=EventType.INFO,
-                    content=f"Executing tools iter {current_iteration}",
+                    content=f"Executing tools ...",
                     status=StatusType.IN_PROGRESS,
                     component="tools",
                     data={"count": len(tool_calls)}
@@ -399,7 +398,7 @@ class MCPClient:
                 # Create and dispatch completion event for tool execution
                 tool_complete_event = StatusEvent( 
                     type=EventType.INFO,
-                    content=f"Executed tools iter {current_iteration}",
+                    content=f"Executed tools, processing response ...",
                     status=StatusType.SUCCESS,
                     component="tools"
                 )

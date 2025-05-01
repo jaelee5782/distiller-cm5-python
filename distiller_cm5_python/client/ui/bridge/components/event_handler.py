@@ -91,7 +91,7 @@ class BridgeEventHandler:
                 return
         except Exception as e:
             logger.error(f"Error handling event: {e}", exc_info=True)
-
+        
     def _handle_message_schema(self, event: MessageSchema) -> None:
         """
         Handle events in the MessageSchema format.
@@ -115,7 +115,7 @@ class BridgeEventHandler:
         conversation_manager = getattr(self.signals, 'conversation_manager', None)
         
         # Handle different event types
-        if event.type == EventType.MESSAGE:
+        if event.type == EventType.MESSAGE: # process message events from assistant text stream
             # Get status value, handling both enum and string cases
             status_value = event.status.value if hasattr(event.status, 'value') else event.status
             
@@ -132,31 +132,17 @@ class BridgeEventHandler:
                 # Emit the accumulated content to maintain proper message state in UI
                 accumulated_content = ''.join(self.message_chunks)
                 self.signals.messageReceived.emit(accumulated_content, str(event.id), "", status_value)
-                
+              
             elif status_value == StatusType.SUCCESS:
                 # Complete the message
-                if event.id == self.current_message_id and self.message_chunks:
-                    # Use accumulated chunks for complete message
+                if self.message_chunks:
                     complete_content = ''.join(self.message_chunks)
                     self.signals.messageReceived.emit(complete_content, str(event.id), timestamp_str, status_value)
-                    
                     # Add to conversation history
                     if conversation_manager:
                         message = {
                             "timestamp": self._get_formatted_timestamp(),
                             "content": complete_content,
-                            "type": "Message"
-                        }
-                        conversation_manager.add_message(message)
-                else:
-                    # Handle single complete message
-                    self.signals.messageReceived.emit(event.content, str(event.id), timestamp_str, status_value)
-                    
-                    # Add to conversation history
-                    if conversation_manager:
-                        message = {
-                            "timestamp": self._get_formatted_timestamp(),
-                            "content": event.content,
                             "type": "Message"
                         }
                         conversation_manager.add_message(message)
@@ -169,10 +155,9 @@ class BridgeEventHandler:
                 if self.is_connected:
                     self.status_manager.update_status(StatusManager.STATUS_IDLE)
                 
-        elif event.type == EventType.ACTION:
+        elif event.type == EventType.ACTION: # process action events from tool call stream
             # Handle action events with status tracking
             status_value = event.status.value if hasattr(event.status, 'value') else event.status
-            
             if status_value == StatusType.IN_PROGRESS:
                 self.status_manager.update_status(StatusManager.STATUS_EXECUTING_TOOL)
                 # Check if this is a new action stream
@@ -186,10 +171,10 @@ class BridgeEventHandler:
                 # Emit the accumulated content
                 accumulated_content = ''.join(self.message_chunks)
                 self.signals.actionReceived.emit(accumulated_content, str(event.id), "")
-                
+
             elif status_value == StatusType.SUCCESS:
                 # Complete the action
-                if event.id == self.current_message_id and self.message_chunks:
+                if self.message_chunks:
                     # Use accumulated chunks for complete action
                     complete_content = ''.join(self.message_chunks)
                     self.signals.actionReceived.emit(complete_content, str(event.id), timestamp_str)
@@ -202,18 +187,6 @@ class BridgeEventHandler:
                             "type": "Action"
                         }
                         conversation_manager.add_message(message)
-                else:
-                    # Handle single complete action
-                    self.signals.actionReceived.emit(event.content, str(event.id), timestamp_str)
-                    
-                    # Add to conversation history
-                    if conversation_manager:
-                        message = {
-                            "timestamp": self._get_formatted_timestamp(),
-                            "content": event.content,
-                            "type": "Action"
-                        }
-                        conversation_manager.add_message(message)
                 
                 # Reset tracking
                 self.current_message_id = None
@@ -222,27 +195,27 @@ class BridgeEventHandler:
                 # Update status when action is complete
                 if self.is_connected:
                     self.status_manager.update_status(StatusManager.STATUS_IDLE)
+
         elif event.type == EventType.INFO:
             logger.debug(f"Handling INFO event: content='{event.content}', id={event.id}")
-            self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
-            
-            # Update thinking status for specific info events
-            if event.content and "Thinking" in event.content:
-                logger.info(f"Setting status to THINKING due to info event: {event.content}")
+            if event.content:
+                self.signals.infoReceived.emit(event.content, str(event.id), timestamp_str)
+                # Add to conversation history
+                if conversation_manager:
+                    message = {
+                        "timestamp": self._get_formatted_timestamp(),
+                        "content": f"{event.content}",
+                        "type": "Info"
+                    }
+                    conversation_manager.add_message(message)
+                
+            status_value = event.status.value if hasattr(event.status, 'value') else event.status
+            if status_value == StatusType.IN_PROGRESS:
                 self.status_manager.update_status(StatusManager.STATUS_THINKING)
-            elif self.status_manager.status == StatusManager.STATUS_THINKING:
-                # Reset thinking state if we get a non-thinking info event
-                logger.info("Resetting THINKING status due to non-thinking info event")
-                self.status_manager.update_status(StatusManager.STATUS_IDLE)
-            
-            # Add to conversation history
-            if conversation_manager:
-                message = {
-                    "timestamp": self._get_formatted_timestamp(),
-                    "content": f"{event.content}",
-                    "type": "Info"
-                }
-                conversation_manager.add_message(message)
+            elif status_value == StatusType.SUCCESS:
+                # Update status when INFO event is complete
+                if self.is_connected:
+                    self.status_manager.update_status(StatusManager.STATUS_IDLE)
                 
         elif event.type == EventType.WARNING:
             self.signals.warningReceived.emit(event.content, str(event.id), timestamp_str)
