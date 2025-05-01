@@ -40,6 +40,9 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
+# Add the current directory to PYTHONPATH
+export PYTHONPATH="$PWD:$PYTHONPATH"
+
 # Run the main Python script
 echo "Running main.py..."
 python main.py "$@"
