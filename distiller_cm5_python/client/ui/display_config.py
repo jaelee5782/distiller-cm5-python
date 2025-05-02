@@ -7,11 +7,11 @@ config = {
         "eink_refresh_interval": 1500,
         "eink_enabled": True,
         "eink_buffer_size": 1,  # Reduced buffer size to save memory
-        "eink_threshold": 90,  # Threshold for black/white conversion (0-255)
+        "eink_threshold": 120,  # Threshold for black/white conversion (0-255)
         "eink_bw_conversion": {
             "method": 1,  # 1=Simple Threshold, 2=Adaptive Threshold
             "use_gamma": True,  # Apply gamma correction before thresholding
-            "gamma_value": 0.7,  # Gamma correction value (0.5-1.0, lower = darker)
+            "gamma_value": 0.9,  # Gamma correction value (0.5-1.0, lower = darker)
             "adaptive_block_size": 16,  # Block size for adaptive thresholding (must be odd)
             "adaptive_c": 5  # Constant subtracted from block mean/median (can be negative)
         },
