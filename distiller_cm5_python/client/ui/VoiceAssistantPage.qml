@@ -564,6 +564,17 @@ PageBase {
             // Restore focus after dialog closes
             restoreFocusTimer.start();
         }
+        
+        onDialogClosed: {
+            // Reinitialize focus items in the parent page when dialog closes
+            Qt.callLater(function() {
+                collectFocusItems();
+                // Restore focus to a default item
+                if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
+                    FocusManager.setFocusToItem(voiceInputArea.voiceButton);
+                }
+            });
+        }
     }
 
     ConversationView {

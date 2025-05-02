@@ -87,7 +87,13 @@ Rectangle {
     // Close the dialog
     function close() {
         visible = false;
+        // Notify parent about dialog closing so it can restore its focus items
         dialogClosed();
+        
+        // Force the parent to reinitialize its focus items
+        if (parent && typeof parent.collectFocusItems === "function") {
+            Qt.callLater(parent.collectFocusItems);
+        }
     }
     
     // Set focus to the first server item
