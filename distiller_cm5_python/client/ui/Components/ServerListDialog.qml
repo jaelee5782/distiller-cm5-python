@@ -256,6 +256,7 @@ Rectangle {
             anchors.right: parent.right
             anchors.bottom: footerArea.top
             anchors.margins: ThemeManager.spacingSmall
+            spacing: ThemeManager.spacingSmall
             model: availableServers
             clip: true
             visible: !isLoading
