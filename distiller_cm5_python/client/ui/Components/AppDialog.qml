@@ -179,7 +179,7 @@ Dialog {
                 width: buttonRow.buttonWidth
                 height: ThemeManager.buttonHeight
                 backgroundColor: isActiveItem ? focusButtonColor : acceptButtonColor
-                textColor: ThemeManager.darkMode ? (isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor) : (isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor)
+                textColor: isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor
                 onClicked: {
                     root.accept();
                     root.close();
