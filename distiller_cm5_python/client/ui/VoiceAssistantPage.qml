@@ -344,7 +344,11 @@ PageBase {
                 // Make sure voiceInputArea shows processing state as well
                 if (voiceInputArea.setAppState)
                     voiceInputArea.setAppState("processing");
-
+                // Force an immediate e-ink update
+                if (typeof AppController !== 'undefined' && AppController.triggerEinkUpdate) {
+                    console.log("QML: Forcing e-ink update for processing state");
+                    AppController.triggerEinkUpdate();
+                }
             }
         }
 
