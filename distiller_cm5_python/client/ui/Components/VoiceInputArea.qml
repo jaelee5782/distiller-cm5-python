@@ -194,7 +194,7 @@ Rectangle {
         color: ThemeManager.backgroundColor
         border.width: ThemeManager.borderWidth
         border.color: ThemeManager.borderColor
-        radius: 4
+        radius: ThemeManager.borderRadius
 
         Text {
             id: transcribedTextLabel
