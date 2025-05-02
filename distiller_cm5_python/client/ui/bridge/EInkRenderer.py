@@ -103,7 +103,7 @@ class EInkRenderer(QObject):
                 return
                 
             main_window = windows[0]
-            logger.debug(f"Window: {main_window.objectName() or 'unnamed'}, Size: {main_window.width()}x{main_window.height()}")
+            # logger.debug(f"Window: {main_window.objectName() or 'unnamed'}, Size: {main_window.width()}x{main_window.height()}")
             
             # Get the window size
             width = main_window.width()
@@ -115,10 +115,10 @@ class EInkRenderer(QObject):
             # Approach 1: For QQuickWindow (QML content)
             if isinstance(main_window, QQuickWindow):
                 try:
-                    logger.debug("Trying QQuickWindow grabbing approach")
+                    # logger.debug("Trying QQuickWindow grabbing approach")
                     # This method is available in PyQt6 and should work in offscreen mode
                     image = main_window.grabWindow()
-                    logger.debug("Successfully captured QQuickWindow content")
+                    # logger.debug("Successfully captured QQuickWindow content")
                 except Exception as e1:
                     logger.warning(f"QQuickWindow grabbing failed: {e1}")
             

@@ -37,30 +37,7 @@ async def list_prompts() -> list[types.Prompt]:
 
 def create_wifi_assistant_prompt() -> str:
     """Creates the WiFi assistant prompt content."""
-    return """
-Please help onboarding the user to the device. your goal is to help the user connect to the device via wifi and then ssh into it.
-Below is an example conversation flow:
-
-<START_OF_SAMPLE_CONVERSATION>
-user: Hi, I'm not sure what Wi-Fi networks are available. Can you help?  
-assistant: Sure! Let me check the available networks for you.  
-<tool_call>
-{"name": "get_wifi_networks", "arguments": {}}
-</tool_call>
-
-user: How do I SSH into you?  
-assistant: You may not be on the same network as me. Let's check your Wi-Fi status first.  
-<tool_call>
-{"name": "get_wifi_status", "arguments": {}}
-</tool_call>
-assistant: under the same network you can ssh via the ip address <ip_address> 
-
-user: how exactly do I do that?
-assistant: <tool_call>
-{"name": "show_ssh_instructions", "arguments": {"ip_address": "<ip_address>"}}
-</tool_call>
-<END_OF_SAMPLE_CONVERSATION>
-"""
+    return """Please help onboarding the user to the device. your goal is to help the user connect to the device via wifi and then ssh into it."""
 
 def create_messages(prompt_name: str, arguments: dict[str, str] | None = None) -> list[types.PromptMessage]:
     """Create messages based on the prompt name and arguments."""

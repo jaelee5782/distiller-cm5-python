@@ -163,6 +163,12 @@ class MCPClient:
 
             # enable cache restore if provider is llama-cpp
             if self.llm_provider.provider_type == "llama-cpp":
+                self.dispatcher.dispatch(StatusEvent(
+                    type=EventType.INFO,
+                    content="Connecting to server, restoring cache...",
+                    status=StatusType.IN_PROGRESS,
+                    component="cache"
+                ))
                 await self.llm_provider.restore_cache(self.message_processor.get_formatted_messages(), self.available_tools)
 
             # Set the connection status to True
@@ -171,6 +177,12 @@ class MCPClient:
 
         except Exception as e:
             logger.error(f"Failed to connect to server: {e}")
+            self.dispatcher.dispatch(StatusEvent(
+                type=EventType.ERROR,
+                content=f"Failed to connect to server: {e}",
+                status=StatusType.FAILED,
+                component="connection"
+            ))
             return False
 
     async def refresh_capabilities(self):

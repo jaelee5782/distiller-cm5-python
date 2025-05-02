@@ -120,6 +120,22 @@ class App(QObject): # Inherit from QObject to support signals/slots
         self._stop_input_thread = threading.Event()
         # --- End Input Device Monitoring ---
 
+    def _find_input_device_path(self, device_name: str) -> str | None:
+        """Find the event device path for a given device name."""
+        if not EVDEV_AVAILABLE:
+            logger.error("evdev library not available, cannot search for input devices.")
+            return None
+
+        devices = [evdev.InputDevice(path) for path in evdev.list_devices()]
+        for device in devices:
+            logger.debug(f"Checking device: {device.path}, Name: {device.name}")
+            if device.name == device_name:
+                logger.info(f"Found device '{device_name}' at path: {device.path}")
+                return device.path
+        
+        logger.warning(f"Could not find input device with name: '{device_name}'")
+        return None
+
     async def initialize(self):
         """Initialize the application."""
         # Register the bridge object with QML
@@ -669,22 +685,30 @@ class App(QObject): # Inherit from QObject to support signals/slots
 
     # --- Input Device Monitoring Thread ---
     def _start_input_monitor(self):
-        """Starts the input device monitoring thread."""
+        """Finds the input device and starts the monitoring thread."""
         if not EVDEV_AVAILABLE:
             logger.error("Cannot start input monitor: evdev library not available.")
             return
         if self._input_thread and self._input_thread.is_alive():
             logger.warning("Input monitor thread already running.")
             return
+
+        # Find the device path dynamically
+        target_device_name = "RP2040 Key Input" # Or make this configurable
+        device_path = self._find_input_device_path(target_device_name)
+
+        if not device_path:
+            logger.error(f"Failed to find input device '{target_device_name}'. Cannot start monitor.")
+            return
             
         self._stop_input_thread.clear()
         self._input_thread = threading.Thread(
             target=self._monitor_input_device,
-            args=(self._input_device_path, self.main_window),
+            args=(device_path, self.main_window), # Pass the found path
             daemon=True # Allow app to exit even if this thread is stuck
         )
         self._input_thread.start()
-        logger.info(f"Started input device monitor thread for {self._input_device_path}")
+        logger.info(f"Started input device monitor thread for {device_path}")
 
     def _monitor_input_device(self, device_path, target_window):
         """Monitors the specified input device and posts key events to the target window."""

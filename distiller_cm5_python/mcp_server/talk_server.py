@@ -7,19 +7,16 @@ import logging
 from typing import Any
 import nest_asyncio
 # Adjust import path assuming utils is one level up from mcp_server
-from ..utils.logger import setup_logging
 from mcp.server import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 import mcp.server.stdio
 from distiller_cm5_sdk.piper import Piper
 
-# Configure logging using the centralized setup
-# MCP servers log INFO level to stderr
-setup_logging(log_level=logging.INFO, stream=sys.stderr)
 
-# Get the logger for this module
-logger = logging.getLogger(__name__) # Use __name__ for the logger
+# --- Setup Logging ---
+import logging
+logger = logging.getLogger(__name__)
 
 # Enable nested event loops (needed for some environments)
 nest_asyncio.apply()
@@ -83,23 +80,12 @@ async def handle_list_tools() -> list[types.Tool]:
     return [
             types.Tool(
                 name="speak_text",
-                description="Stream speech using Piper TTS",
+                description="Stream speech using text to speech tool",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "text": {"type": "string", "description": "The text to convert to speech and play"},
                         "volume": {"type": "integer", "description": "Volume level (0-100), default is 50"}
-                    },
-                    "required": ["text"]
-                }
-            ),
-            types.Tool(
-                name="respond_text",
-                description="Respond text on the screen for user to see",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "text": {"type": "string", "description": "The text to respond with"}
                     },
                     "required": ["text"]
                 }
@@ -124,30 +110,22 @@ async def handle_call_tool(
     if not arguments:
         arguments = {}
     
-    if name == "respond_text":
-        text = arguments.get("text", "")
-        logger.info(f"Responding with text: {text}")  # Removed ANSI color codes
-        return [types.TextContent(
-            type="text",
-            text="Success"
-        )]
-    elif name == "speak_text":
+    if name == "speak_text":
         text = arguments.get("text", "")
         volume = arguments.get("volume", 50)
         _play_stream(text, volume)
 
         try:
-            
             return [types.TextContent(
                 type="text",
-                text=f"Speaking text using Piper TTS"
+                text=f"Speaking text using text to speech tool"
             )]
             
         except Exception as e:
             logger.error(f"Error using Piper TTS: {str(e)}")
             return [types.TextContent(
                 type="text",
-                text=f"Error using Piper TTS: {str(e)}"
+                text=f"Error using text to speech tool: {str(e)}"
             )]
     
     else:

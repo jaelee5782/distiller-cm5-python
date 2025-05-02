@@ -145,10 +145,10 @@ class ConnectionManager:
             # Connect to server with explicit timeout
             try:
                 connect_task = self._mcp_client.connect_to_server(self._selected_server_path)
-                connected = await asyncio.wait_for(connect_task, timeout=30.0)
+                connected = await asyncio.wait_for(connect_task, timeout=TIMEOUT)
             except asyncio.TimeoutError:
                 raise TimeoutError(
-                    f"Connection to {server_name} timed out after 30 seconds. Server may be busy or unavailable."
+                    f"Connection to {server_name} timed out after 90 seconds. Server may be busy or unavailable."
                 )
 
             if not connected:
