@@ -27,7 +27,7 @@ QtObject {
     property var normalFontTemplate: {
         "family": primaryFontFamily,
         "pixelSize": fontSizeNormal,
-        "weight": fontWeightBold
+        "weight": fontWeightNormal
     }
     // Pre-defined font objects that update when primaryFontFamily changes
     property font normal: Qt.font(normalFontTemplate)
@@ -39,7 +39,7 @@ QtObject {
     property font small: Qt.font({
         "family": primaryFontFamily,
         "pixelSize": fontSizeSmall,
-        "weight": fontWeightBold
+        "weight": fontWeightNormal
     })
     property font smallBold: Qt.font({
         "family": primaryFontFamily,
@@ -49,7 +49,7 @@ QtObject {
     property font medium: Qt.font({
         "family": primaryFontFamily,
         "pixelSize": fontSizeMedium,
-        "weight": fontWeightBold
+        "weight": fontWeightNormal
     })
     property font mediumBold: Qt.font({
         "family": primaryFontFamily,
@@ -59,7 +59,7 @@ QtObject {
     property font large: Qt.font({
         "family": primaryFontFamily,
         "pixelSize": fontSizeLarge,
-        "weight": fontWeightBold
+        "weight": fontWeightNormal
     })
     property font largeBold: Qt.font({
         "family": primaryFontFamily,
@@ -89,7 +89,7 @@ QtObject {
         small = Qt.font({
             "family": primaryFontFamily,
             "pixelSize": fontSizeSmall,
-            "weight": fontWeightBold
+            "weight": fontWeightNormal
         });
         smallBold = Qt.font({
             "family": primaryFontFamily,
@@ -99,7 +99,7 @@ QtObject {
         medium = Qt.font({
             "family": primaryFontFamily,
             "pixelSize": fontSizeMedium,
-            "weight": fontWeightBold
+            "weight": fontWeightNormal
         });
         mediumBold = Qt.font({
             "family": primaryFontFamily,
@@ -109,7 +109,7 @@ QtObject {
         large = Qt.font({
             "family": primaryFontFamily,
             "pixelSize": fontSizeLarge,
-            "weight": fontWeightBold
+            "weight": fontWeightNormal
         });
         largeBold = Qt.font({
             "family": primaryFontFamily,
