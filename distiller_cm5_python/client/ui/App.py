@@ -693,8 +693,16 @@ class App(QObject): # Inherit from QObject to support signals/slots
         finally:
             self._transcription_task = None # Clear task handle
 
-    # --- End Whisper Slots ---
-
+    # --- E-Ink Trigger Slot ---
+    @pyqtSlot()
+    def triggerEinkUpdate(self):
+        """Slot callable from QML to force an e-ink render update."""
+        if self.eink_renderer and self._eink_initialized:
+            logger.debug("QML triggered E-Ink update")
+            self.eink_renderer.force_render_update()
+        else:
+            logger.warning("Attempted to trigger E-Ink update, but renderer is not ready.")
+            
     # --- Input Device Monitoring Thread ---
     def _start_input_monitor(self):
         """Finds the input device and starts the monitoring thread."""

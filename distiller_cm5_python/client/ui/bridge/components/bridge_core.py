@@ -16,7 +16,7 @@ from distiller_cm5_python.client.ui.bridge.ServerDiscovery import ServerDiscover
 from distiller_cm5_python.client.ui.utils.NetworkUtils import NetworkUtils
 from distiller_cm5_python.client.mid_layer.mcp_client import MCPClient
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
-from distiller_cm5_python.utils.config import DEFAULT_CONFIG_PATH
+from distiller_cm5_python.utils.config import DEFAULT_CONFIG_PATH, API_KEY
 
 from .event_handler import BridgeEventHandler
 from .config_manager import ConfigManager
@@ -79,8 +79,8 @@ class BridgeCore(QObject):
         self.network_utils = NetworkUtils()
         self.dispatcher = EventDispatcher()
         
-        # Initialize the MCP client with dispatcher
-        self.mcp_client = MCPClient(dispatcher=self.dispatcher)
+        # Initialize the MCP client with dispatcher and API Key
+        self.mcp_client = MCPClient(dispatcher=self.dispatcher, api_key=API_KEY)
         
         # Initialize specialized components
         self.event_handler = BridgeEventHandler(

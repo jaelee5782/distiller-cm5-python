@@ -68,7 +68,7 @@ class MCPClientBridge(BridgeCore):
         self.dispatcher = EventDispatcher(debug=logger.getEffectiveLevel() == logging.DEBUG)
 
         # Initialize MCP client with dispatcher first
-        self.mcp_client = MCPClient(dispatcher=self.dispatcher)
+        self.mcp_client = MCPClient(dispatcher=self.dispatcher, api_key=API_KEY)
 
         # Initialize connection manager after MCP client
         # Import the ConnectionManager class here to avoid circular imports

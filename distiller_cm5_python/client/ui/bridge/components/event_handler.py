@@ -131,7 +131,8 @@ class BridgeEventHandler:
                 self.message_chunks.append(event.content)
                 # Emit the accumulated content to maintain proper message state in UI
                 accumulated_content = ''.join(self.message_chunks)
-                self.signals.messageReceived.emit(accumulated_content, str(event.id), "", status_value)
+                if accumulated_content: 
+                    self.signals.messageReceived.emit(accumulated_content, str(event.id), "", status_value)
               
             elif status_value == StatusType.SUCCESS:
                 # Complete the message

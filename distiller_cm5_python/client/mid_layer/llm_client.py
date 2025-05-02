@@ -192,7 +192,7 @@ class LLMClient:
         elif self.provider_type == "openrouter":
             # Check connection for OpenRouter (or compatible API)
             if not self._check_cloud_api_connection_sync(): # Use sync check during init
-                 logger.error(f"LLMClient.__init__: Could not connect to API at {self.server_url}")
+                #  logger.error(f"LLMClient.__init__: Could not connect to API at {self.server_url}")
                  raise UserVisibleError(f"Could not connect to API at {self.server_url}. Check URL and API key.")
         else:
              logger.error(f"LLMClient.__init__: Unsupported provider type specified: '{self.provider_type}'. Use 'llama-cpp' or 'openrouter'.")

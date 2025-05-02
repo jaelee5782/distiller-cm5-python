@@ -91,6 +91,15 @@ class EInkRenderer(QObject):
         # Trigger a capture immediately
         QTimer.singleShot(0, self._capture_frame)
     
+    def force_render_update(self):
+        """Forces an immediate capture and render cycle, bypassing the timer."""
+        if not self._rendering_active:
+            logger.warning("Renderer not active, cannot force update.")
+            return
+        logger.debug("Forcing immediate render update...")
+        # Use QTimer.singleShot to queue the capture on the event loop immediately
+        QTimer.singleShot(0, self._capture_frame)
+    
     def _capture_frame(self):
         """Capture the current screen content"""
         error_count = getattr(self, '_error_count', 0)
