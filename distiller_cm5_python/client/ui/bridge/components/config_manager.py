@@ -51,7 +51,7 @@ class ConfigManager:
         
         Args:
             section: The configuration section
-            key: The key within the section
+            key: The key within the section - can also contain dot notation for nested keys
             
         Returns:
             The string representation of the configuration value
@@ -77,8 +77,31 @@ class ConfigManager:
         elif section == "llama_cpp" and key == "start_wait_time":
             value = config.get(section, key, default=30)
         else:
-            # Regular configuration paths
-            value = config.get(section, key)
+            # Check if key contains a dot notation for nested access
+            if "." in key:
+                # Split the key at dots to handle nested structures
+                key_parts = key.split(".")
+                # Use the first part as the top-level key
+                top_level_key = key_parts[0]
+                # Get the top-level section value
+                section_value = config.get(section, top_level_key)
+                
+                if isinstance(section_value, dict):
+                    # Traverse the remaining parts
+                    current = section_value
+                    for part in key_parts[1:]:
+                        if isinstance(current, dict) and part in current:
+                            current = current[part]
+                        else:
+                            current = None
+                            break
+                    value = current
+                else:
+                    # If the top-level value isn't a dict, we can't traverse further
+                    value = None
+            else:
+                # Regular configuration paths without nesting
+                value = config.get(section, key)
 
         # Format the value for QML
         if value is None:
@@ -93,7 +116,7 @@ class ConfigManager:
             result = self._current_log_level
         else:
             result = str(value)
-
+            
         # Cache the result
         self._config_cache[cache_key] = result
         return result

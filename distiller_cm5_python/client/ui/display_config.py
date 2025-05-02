@@ -5,7 +5,7 @@ config = {
         "eink_dithering_method": 2,  # 1=Floyd-Steinberg, 2=Ordered
         "eink_full_refresh_interval": 15,
         "eink_refresh_interval": 1500,
-        "eink_enabled": False,
+        "eink_enabled": True,
         "eink_buffer_size": 1,  # Reduced buffer size to save memory
         "eink_threshold": 90,  # Threshold for black/white conversion (0-255)
         "eink_bw_conversion": {
@@ -19,7 +19,7 @@ config = {
         "width": 240,
         "height": 416,
         "font": {
-            "primary_font": "fonts/Monorama-Medium.ttf",  # Default font for UI elements
+            "primary_font": "fonts/IosevkaTermSlabNerdFont-Bold.ttf",  # Default font for UI elements
             "font_size_small": 12,
             "font_size_normal": 14,
             "font_size_medium": 16,

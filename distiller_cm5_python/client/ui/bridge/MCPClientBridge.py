@@ -395,3 +395,22 @@ class MCPClientBridge(BridgeCore):
     def _on_connection_changed(self, value):
         """Handle connection state changes from the connection manager"""
         self.is_connected = value  # This will emit the signal
+
+    @pyqtSlot(result=str)
+    def getPrimaryFontPath(self):
+        """Get the primary font path directly from display_config.py."""
+        try:
+            # Import here to avoid circular imports
+            from distiller_cm5_python.client.ui.display_config import config as display_config
+            
+            if "display" in display_config and "font" in display_config["display"]:
+                font_config = display_config["display"]["font"]
+                
+                if "primary_font" in font_config:
+                    return font_config["primary_font"]
+            
+            # Default fallback if anything is missing
+            return "fonts/MonoramaNerdFont-Medium.ttf"
+        except Exception as e:
+            logger.error(f"Error getting primary font path: {e}")
+            return "fonts/MonoramaNerdFont-Medium.ttf"  # Default fallback
