@@ -179,9 +179,9 @@ ListView {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: ThemeManager.spacingNormal
-        height: scrollModeText.height + ThemeManager.spacingSmall * 2
-        width: scrollModeText.width + ThemeManager.spacingNormal * 2
-        color: ThemeManager.backgroundColor
+        height: scrollModeText.height + ThemeManager.spacingLarge
+        width: scrollModeText.width + ThemeManager.spacingLarge
+        color: ThemeManager.textColor
         border.width: ThemeManager.borderWidth
         border.color: ThemeManager.borderColor
         radius: ThemeManager.borderRadius
@@ -193,8 +193,8 @@ ListView {
 
             anchors.centerIn: parent
             text: "Press Enter to enable scroll mode"
-            color: ThemeManager.textColor
-            font.pixelSize: FontManager.fontSizeSmall
+            color: ThemeManager.backgroundColor
+            font: FontManager.small
         }
 
     }
@@ -208,7 +208,7 @@ ListView {
         anchors.bottomMargin: ThemeManager.spacingNormal
         height: activeScrollModeText.height + ThemeManager.spacingSmall * 2
         width: activeScrollModeText.width + ThemeManager.spacingNormal * 2
-        color: ThemeManager.backgroundColor
+        color: ThemeManager.textColor
         border.width: ThemeManager.borderWidth
         border.color: ThemeManager.highlightColor
         radius: ThemeManager.borderRadius
@@ -226,8 +226,8 @@ ListView {
 
             anchors.centerIn: parent
             text: "Use ↑/↓ to scroll, Enter to exit"
-            color: ThemeManager.textColor
-            font.pixelSize: FontManager.fontSizeSmall
+            color: ThemeManager.backgroundColor
+            font: FontManager.small
         }
 
     }

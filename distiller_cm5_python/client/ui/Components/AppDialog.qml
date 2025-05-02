@@ -90,9 +90,6 @@ Dialog {
     // Dialog background
     background: Rectangle {
         color: ThemeManager.backgroundColor
-        border.color: ThemeManager.borderColor
-        border.width: ThemeManager.borderWidth
-        radius: ThemeManager.borderRadius
     }
 
     // Dialog header
@@ -182,7 +179,7 @@ Dialog {
                 width: buttonRow.buttonWidth
                 height: ThemeManager.buttonHeight
                 backgroundColor: isActiveItem ? focusButtonColor : acceptButtonColor
-                textColor: ThemeManager.darkMode ? (isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor) : (isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor)
+                textColor: isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor
                 onClicked: {
                     root.accept();
                     root.close();

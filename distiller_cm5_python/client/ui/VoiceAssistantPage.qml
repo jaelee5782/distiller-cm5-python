@@ -531,14 +531,6 @@ PageBase {
     ServerListDialog {
         id: serverListDialog
         
-        // Ensure dialog is drawn above all other UI elements
-        z: 1000
-        
-        Component.onCompleted: {
-            // Keep a reference to the dialog in the FocusManager
-            FocusManager.serverListDialog = this;
-        }
-        
         onServerSelected: function(serverPath, serverName) {
             if (bridge && bridge.ready) {
                 // Set the selected server and connect to it
@@ -558,6 +550,14 @@ PageBase {
                     if (conversationView) {
                         conversationView.updateModel(bridge.get_conversation());
                     }
+                    
+                    // Move focus to voice button after successful server selection
+                    if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
+                        // Short delay to ensure UI is updated first
+                        Qt.callLater(function() {
+                            FocusManager.setFocusToItem(voiceInputArea.voiceButton);
+                        });
+                    }
                 }
             }
             
@@ -566,8 +566,14 @@ PageBase {
         }
         
         onDialogClosed: {
-            // Restore focus after dialog closes
-            restoreFocusTimer.start();
+            // Reinitialize focus items in the parent page when dialog closes
+            Qt.callLater(function() {
+                collectFocusItems();
+                // Restore focus to a default item
+                if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
+                    FocusManager.setFocusToItem(voiceInputArea.voiceButton);
+                }
+            });
         }
     }
 
@@ -838,10 +844,12 @@ PageBase {
         running: false
         onTriggered: {
             collectFocusItems();
-            if (previousFocusedItem && previousFocusedItem.navigable) {
-                FocusManager.setFocusToItem(previousFocusedItem);
-            } else if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
+            // Always prioritize the voice button after server selection if connected
+            if (isServerConnected && voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
                 FocusManager.setFocusToItem(voiceInputArea.voiceButton);
+                console.log("Focus set to voice button after server selection");
+            } else if (previousFocusedItem && previousFocusedItem.navigable) {
+                FocusManager.setFocusToItem(previousFocusedItem);
             } else if (focusableItems.length > 0) {
                 for (var i = 0; i < focusableItems.length; i++) {
                     if (focusableItems[i] !== header.serverSelectButton) {

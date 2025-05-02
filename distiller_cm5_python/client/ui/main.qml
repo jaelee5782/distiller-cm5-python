@@ -133,7 +133,22 @@ ApplicationWindow {
     FontLoader {
         id: configuredFont
 
-        source: configPrimaryFont || "fonts/Monorama-Medium.ttf"
+        // Get font path directly from display_config.py via a bridge property
+        property string fontPath: {
+            if (bridge && bridge.ready) {
+                var path = bridge.getPrimaryFontPath();
+                
+                // Check if path is relative and convert if needed
+                if (path && !path.startsWith("/") && !path.startsWith("file:///") && !path.startsWith("qrc:///")) {
+                    return path;
+                }
+                return path;
+            }
+            return "fonts/MonoramaNerdFont-Medium.ttf";
+        }
+        
+        source: fontPath
+        
         onStatusChanged: {
             if (status == FontLoader.Ready)
                 console.log("Font loaded successfully:", source);

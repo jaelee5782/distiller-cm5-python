@@ -147,35 +147,37 @@ Rectangle {
         }
     }
 
-    // Hint text that shows when microphone is in focus
+    // Hint text that shows when any button is in focus
     Text {
         id: staticHintText
 
         anchors.top: parent.top
         anchors.topMargin: 10
         anchors.horizontalCenter: parent.horizontalCenter
-        text: voiceInputArea.stateHint
+        text: {
+            // Dynamic text based on which button has focus
+            if (voiceButton.isActiveItem) {
+                return voiceInputArea.stateHint;
+            } else if (resetButton.isActiveItem) {
+                return "Reset App";
+            } else if (wifiButton.isActiveItem) {
+                return "WiFi Status";
+            } else {
+                return "";
+            }
+        }
         font.pixelSize: FontManager.fontSizeSmall
         font.family: FontManager.primaryFontFamily
         color: ThemeManager.secondaryTextColor
         horizontalAlignment: Text.AlignHCenter
         opacity: 0.9
         z: 20 // Make sure it appears above everything
-        // Visibility is controlled by the voiceButton's onIsActiveItemChanged handler
-        visible: false
-
-        // Add a background for e-ink contrast
-        Rectangle {
-            z: -1
-            anchors.fill: parent
-            anchors.margins: -6
-            color: ThemeManager.backgroundColor
-            border.width: ThemeManager.borderWidth
-            border.color: ThemeManager.borderColor
-            radius: ThemeManager.borderRadius / 2
-            visible: true // Always show background for better visibility
-        }
-
+        // Show hint text when any button is active and showStatusHint is enabled
+        visible: showStatusHint && (
+            (voiceButton.isActiveItem && isConnected) || 
+            resetButton.isActiveItem || 
+            wifiButton.isActiveItem
+        )
     }
 
     // Transcribed text display
@@ -192,7 +194,7 @@ Rectangle {
         color: ThemeManager.backgroundColor
         border.width: ThemeManager.borderWidth
         border.color: ThemeManager.borderColor
-        radius: 4
+        radius: ThemeManager.borderRadius
 
         Text {
             id: transcribedTextLabel
@@ -344,18 +346,6 @@ Rectangle {
                 }
                 buttonRadius: width / 2
 
-                // For visual feedback for focus state
-                onIsActiveItemChanged: {
-                    // Only update hint visibility if showStatusHint is enabled
-                    if (isActiveItem && showStatusHint) {
-                        // Show hint when mic button is active and connected
-                        staticHintText.visible = isConnected;
-                    } else if (!isActiveItem) {
-                        // Hide hint when mic button loses focus
-                        staticHintText.visible = false;
-                    }
-                }
-
                 // Voice icon content needs custom handling
                 Rectangle {
                     // Clear custom styling from AppButton
@@ -447,33 +437,6 @@ Rectangle {
                 buttonRadius: width / 2
                 onClicked: voiceInputArea.resetClicked()
 
-                // Hint text that appears when button has focus
-                Rectangle {
-                    id: resetButtonHint
-
-                    visible: resetButton.isActiveItem
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.top
-                    anchors.bottomMargin: 8
-                    height: resetHintText.contentHeight + 10
-                    width: resetHintText.contentWidth + 16
-                    color: ThemeManager.backgroundColor
-                    border.width: ThemeManager.borderWidth
-                    border.color: ThemeManager.borderColor
-                    radius: 4
-                    z: 100
-
-                    Text {
-                        id: resetHintText
-
-                        anchors.centerIn: parent
-                        text: "Reset App"
-                        font.pixelSize: FontManager.fontSizeSmall
-                        font.family: FontManager.primaryFontFamily
-                        color: ThemeManager.textColor
-                    }
-                }
-
                 // Reset icon content needs custom handling
                 Rectangle {
                     // Clear custom styling from AppButton
@@ -523,33 +486,6 @@ Rectangle {
                         bridge.getWifiIpAddress(); // This forces a refresh
                     }
                     voiceInputArea.wifiClicked();
-                }
-                
-                // Hint text that appears when button has focus
-                Rectangle {
-                    id: wifiButtonHint
-
-                    visible: wifiButton.isActiveItem
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    anchors.bottom: parent.top
-                    anchors.bottomMargin: 8
-                    height: wifiHintText.contentHeight + 10
-                    width: wifiHintText.contentWidth + 16
-                    color: ThemeManager.backgroundColor
-                    border.width: ThemeManager.borderWidth
-                    border.color: ThemeManager.borderColor
-                    radius: 4
-                    z: 100
-
-                    Text {
-                        id: wifiHintText
-
-                        anchors.centerIn: parent
-                        text: "WiFi Status"
-                        font.pixelSize: FontManager.fontSizeSmall
-                        font.family: FontManager.primaryFontFamily
-                        color: ThemeManager.textColor
-                    }
                 }
                 
                 // WiFi icon content needs custom handling

@@ -1,5 +1,5 @@
-import QtQuick 2.15
 pragma Singleton
+import QtQuick 2.15
 
 QtObject {
     // Large headers
@@ -7,19 +7,19 @@ QtObject {
     id: fontManager
 
     // Font family - property is readwrite so it can be updated when a custom font is loaded
-    property string primaryFontFamily: "JetBrainsMono Nerd Font"
-    
+    property string primaryFontFamily: "Monorama Nerd Font Medium"
+
     // Font sizes from configuration if available, otherwise fallback to defaults
-    readonly property real fontSizeSmall: configFontSizeSmall || 12
+    readonly property real fontSizeSmall: 12
     // Small text
-    readonly property real fontSizeNormal: configFontSizeNormal || 14
+    readonly property real fontSizeNormal: 14
     // Normal text
-    readonly property real fontSizeMedium: configFontSizeMedium || 16
+    readonly property real fontSizeMedium: 16
     // Medium text
-    readonly property real fontSizeLarge: configFontSizeLarge || 18
+    readonly property real fontSizeLarge: 18
     // Section headers
-    readonly property real fontSizeXLarge: configFontSizeXLarge || 20
-    
+    readonly property real fontSizeXLarge: 20
+
     // Font weights
     readonly property int fontWeightNormal: Font.Normal
     readonly property int fontWeightBold: Font.Bold
@@ -27,7 +27,7 @@ QtObject {
     property var normalFontTemplate: {
         "family": primaryFontFamily,
         "pixelSize": fontSizeNormal,
-        "weight": fontWeightBold
+        "weight": fontWeightNormal
     }
     // Pre-defined font objects that update when primaryFontFamily changes
     property font normal: Qt.font(normalFontTemplate)
@@ -39,7 +39,7 @@ QtObject {
     property font small: Qt.font({
         "family": primaryFontFamily,
         "pixelSize": fontSizeSmall,
-        "weight": fontWeightBold
+        "weight": fontWeightNormal
     })
     property font smallBold: Qt.font({
         "family": primaryFontFamily,
@@ -49,7 +49,7 @@ QtObject {
     property font medium: Qt.font({
         "family": primaryFontFamily,
         "pixelSize": fontSizeMedium,
-        "weight": fontWeightBold
+        "weight": fontWeightNormal
     })
     property font mediumBold: Qt.font({
         "family": primaryFontFamily,
@@ -59,7 +59,7 @@ QtObject {
     property font large: Qt.font({
         "family": primaryFontFamily,
         "pixelSize": fontSizeLarge,
-        "weight": fontWeightBold
+        "weight": fontWeightNormal
     })
     property font largeBold: Qt.font({
         "family": primaryFontFamily,
@@ -89,7 +89,7 @@ QtObject {
         small = Qt.font({
             "family": primaryFontFamily,
             "pixelSize": fontSizeSmall,
-            "weight": fontWeightBold
+            "weight": fontWeightNormal
         });
         smallBold = Qt.font({
             "family": primaryFontFamily,
@@ -99,7 +99,7 @@ QtObject {
         medium = Qt.font({
             "family": primaryFontFamily,
             "pixelSize": fontSizeMedium,
-            "weight": fontWeightBold
+            "weight": fontWeightNormal
         });
         mediumBold = Qt.font({
             "family": primaryFontFamily,
@@ -109,7 +109,7 @@ QtObject {
         large = Qt.font({
             "family": primaryFontFamily,
             "pixelSize": fontSizeLarge,
-            "weight": fontWeightBold
+            "weight": fontWeightNormal
         });
         largeBold = Qt.font({
             "family": primaryFontFamily,

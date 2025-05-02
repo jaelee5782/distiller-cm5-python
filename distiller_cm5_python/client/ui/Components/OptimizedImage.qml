@@ -37,7 +37,7 @@ Image {
         color: "transparent"
         border.color: ThemeManager.borderColor
         border.width: ThemeManager.borderWidth
-        radius: 4
+        radius: ThemeManager.borderRadius
 
         // Loading indicator or error symbol
         Text {

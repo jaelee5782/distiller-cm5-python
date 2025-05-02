@@ -87,7 +87,13 @@ Rectangle {
     // Close the dialog
     function close() {
         visible = false;
+        // Notify parent about dialog closing so it can restore its focus items
         dialogClosed();
+        
+        // Force the parent to reinitialize its focus items
+        if (parent && typeof parent.collectFocusItems === "function") {
+            Qt.callLater(parent.collectFocusItems);
+        }
     }
     
     // Set focus to the first server item
@@ -177,14 +183,14 @@ Rectangle {
             color: ThemeManager.headerColor
             radius: ThemeManager.borderRadius
             
-            // Refresh button - now positioned at top-left corner
+            // Refresh button - positioned at left and vertically centered
             AppButton {
                 id: refreshButton
                 width: ThemeManager.buttonHeight
                 height: ThemeManager.buttonHeight
                 anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.margins: ThemeManager.spacingSmall
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: ThemeManager.spacingSmall
                 text: "↻"
                 fontSize: FontManager.fontSizeMedium
                 navigable: true
@@ -213,14 +219,14 @@ Rectangle {
                 elide: Text.ElideRight
             }
             
-            // Close button - positioned at top-right corner
+            // Close button - positioned at right and vertically centered
             AppButton {
                 id: closeButton
                 width: ThemeManager.buttonHeight
                 height: ThemeManager.buttonHeight
                 anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: ThemeManager.spacingSmall
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.rightMargin: ThemeManager.spacingSmall
                 text: "×"
                 fontSize: FontManager.fontSizeMedium
                 navigable: true
@@ -256,6 +262,7 @@ Rectangle {
             anchors.right: parent.right
             anchors.bottom: footerArea.top
             anchors.margins: ThemeManager.spacingSmall
+            spacing: ThemeManager.spacingSmall
             model: availableServers
             clip: true
             visible: !isLoading
@@ -281,8 +288,14 @@ Rectangle {
                 navigable: true
                 
                 onClicked: {
+                    // Emit signal first, then close dialog
+                    // This ensures proper signal handling before UI changes
                     serverListDialog.serverSelected(modelData.path, modelData.name);
-                    serverListDialog.close();
+                    
+                    // Close the dialog with a slight delay to allow signal processing
+                    Qt.callLater(function() {
+                        serverListDialog.close();
+                    });
                 }
                 
                 // Ensure the item scrolls into view when it receives focus
