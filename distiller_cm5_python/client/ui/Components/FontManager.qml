@@ -7,7 +7,7 @@ QtObject {
     id: fontManager
 
     // Font family - property is readwrite so it can be updated when a custom font is loaded
-    property string primaryFontFamily: "Monorama Medium"
+    property string primaryFontFamily: "Monorama Nerd Font Medium"
 
     // Font sizes from configuration if available, otherwise fallback to defaults
     readonly property real fontSizeSmall: 12
