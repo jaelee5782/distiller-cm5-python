@@ -202,13 +202,6 @@ def parse_arguments():
 async def main():
     args = parse_arguments()
 
-    # --- Setup Logging ---
-    # Convert log level string to logging constant
-    log_level_int = getattr(logging, args.log_level.upper(), logging.INFO)
-    # Configure logging using the centralized setup, sending to stderr
-    setup_logging(log_level=log_level_int, stream=sys.stderr)
-    # --- Logging is now configured ---
-
     # Log the effective level
     logger.info(f"Log level set to: {args.log_level}") # This logger is now configured
 
