@@ -9,6 +9,7 @@ NavigableItem {
     property string text: ""
     property color backgroundColor: getBackgroundColor()
     property color textColor: root.visualFocus ? ThemeManager.focusTextColor : ThemeManager.textColor
+    property color borderColor: "black"
     property int fontSize: FontManager.fontSizeNormal
     property int buttonRadius: ThemeManager.borderRadius
     // Define standalone pressed property for visual states
@@ -41,15 +42,15 @@ NavigableItem {
 
         function getBorderColor() {
             if (root.visualFocus)
-                return ThemeManager.accentColor;
+                return "black";
 
-            return isFlat ? "transparent" : ThemeManager.borderColor;
+            return isFlat ? (root.pressed ? "black" : "transparent") : "black";
         }
 
         anchors.fill: parent
         color: root.backgroundColor
         border.color: getBorderColor()
-        border.width: root.visualFocus ? 2 : (isFlat ? 0 : ThemeManager.borderWidth)
+        border.width: root.visualFocus ? 2 : (isFlat ? (root.pressed ? 1 : 0) : 1)
         radius: buttonRadius
     }
 

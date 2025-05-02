@@ -29,7 +29,7 @@ Rectangle {
     signal serverSelectClicked
     signal darkModeClicked
 
-    color: ThemeManager.headerColor
+    color: "transparent"
     Component.onCompleted: {
         updateWifiStatus();
     }
@@ -60,10 +60,19 @@ Rectangle {
             text: isConnected && serverName && serverName !== "NO SERVER" ? serverName : "SELECT SERVER"
             fontSize: FontManager.fontSizeSmall
             navigable: true
-            isFlat: true
+            isFlat: false
             onClicked: header.serverSelectClicked()
-
-            // Connection indicator removed as requested
+            
+            // Add custom styling to ensure black border
+            Rectangle {
+                parent: serverSelectBtn
+                anchors.fill: parent
+                color: "transparent"
+                border.width: 1
+                border.color: "black" 
+                radius: ThemeManager.borderRadius
+                z: -1 // Behind the text
+            }
         }
 
         Item {
@@ -89,13 +98,13 @@ Rectangle {
 
                 // High contrast highlight for e-ink when focused
                 Rectangle {
-                    visible: darkModeBtn.visualFocus || darkModeBtn.pressed
+                    visible: darkModeBtn.visualFocus || darkModeBtn.pressed || true // Always visible
                     anchors.fill: parent
                     radius: width / 2
                     color: darkModeBtn.visualFocus ? ThemeManager.accentColor : "transparent"
-                    border.width: ThemeManager.borderWidth
-                    border.color: ThemeManager.borderColor
-                    opacity: darkModeBtn.visualFocus ? 1.0 : 0.1
+                    border.width: 1
+                    border.color: "black"
+                    opacity: darkModeBtn.visualFocus ? 1.0 : 1.0
                     antialiasing: true
                 }
 

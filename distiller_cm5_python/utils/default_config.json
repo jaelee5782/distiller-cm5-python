@@ -43,6 +43,6 @@
     "server_script_path": "distiller_cm5_python/mcp_server/wifi_server.py"
   },
   "display": {
-    "dark_mode": "true"
+    "dark_mode": "false"
   }
 }

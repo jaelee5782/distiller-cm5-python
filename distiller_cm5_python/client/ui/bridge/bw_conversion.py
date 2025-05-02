@@ -59,7 +59,7 @@ def simple_threshold(pixels, threshold):
     Returns:
         Binary numpy array (values 0 or 1)
     """
-    return (pixels >= threshold).astype(np.uint8)
+    return (pixels <= threshold).astype(np.uint8)
 
 
 # Adaptive thresholding cannot be fully optimized with Numba due to complex operations

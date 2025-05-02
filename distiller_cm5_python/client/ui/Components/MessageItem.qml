@@ -20,7 +20,7 @@ Rectangle {
     width: parent.width
     height: messageLayout.implicitHeight + ThemeManager.spacingNormal
     radius: ThemeManager.borderRadius
-    color: ThemeManager.backgroundColor
+    color: Qt.rgba(ThemeManager.backgroundColor.r, ThemeManager.backgroundColor.g, ThemeManager.backgroundColor.b, 0.6) // Semi-transparent background
     border.color: ThemeManager.borderColor
     border.width: ThemeManager.borderWidth
     // Don't show the message if it's empty or only contains timestamp brackets
@@ -33,7 +33,7 @@ Rectangle {
 
         anchors.fill: parent
         radius: parent.radius
-        color: isLastMessage && isResponding ? ThemeManager.highlightColor : parent.color
+        color: isLastMessage && isResponding ? ThemeManager.highlightColor : "transparent"
         visible: isLastMessage && isResponding
         z: -1 // Behind text content
     }

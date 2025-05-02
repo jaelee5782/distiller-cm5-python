@@ -7,7 +7,8 @@ config = {
         "eink_refresh_interval": 1500,
         "eink_enabled": True,
         "eink_buffer_size": 1,  # Reduced buffer size to save memory
-        "eink_threshold": 120,  # Threshold for black/white conversion (0-255)
+        "eink_threshold": 150,  # Threshold for black/white conversion (0-255)
+        "eink_save_capture": True,  # Save screen captures for debugging
         "eink_bw_conversion": {
             "method": 1,  # 1=Simple Threshold, 2=Adaptive Threshold
             "use_gamma": True,  # Apply gamma correction before thresholding
@@ -15,11 +16,11 @@ config = {
             "adaptive_block_size": 16,  # Block size for adaptive thresholding (must be odd)
             "adaptive_c": 5  # Constant subtracted from block mean/median (can be negative)
         },
-        "dark_mode": False,
+        "dark_mode": True,  # Set dark mode as default
         "width": 240,
         "height": 416,
         "font": {
-            "primary_font": "fonts/IosevkaTermSlabNerdFont-Bold.ttf",  # Default font for UI elements
+            "primary_font": "fonts/MonoramaNerdFont-Medium.ttf",  # Default font for UI elements
             "font_size_small": 12,
             "font_size_normal": 14,
             "font_size_medium": 16,

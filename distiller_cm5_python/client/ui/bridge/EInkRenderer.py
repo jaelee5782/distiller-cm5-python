@@ -6,6 +6,7 @@ from threading import Lock
 import logging
 import numpy as np
 import time
+import os
 from ..display_config import config
 from .bw_conversion import convert_to_bw
 
@@ -51,6 +52,10 @@ class EInkRenderer(QObject):
         self._max_interval = 3000  # Max interval: 3 seconds
         self._min_interval = 500   # Min interval: 0.5 seconds
         self._adaptive_capture = True
+        
+        # Debug capture settings
+        self._save_capture = config["display"].get("eink_save_capture", False)
+        self._capture_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "debug_capture.png")
         
     def start(self):
         """Start the screen capture process"""
@@ -164,8 +169,14 @@ class EInkRenderer(QObject):
                 for x in range(text_x, text_x + 80):
                     image.setPixelColor(x, text_y, Qt.GlobalColor.black)
                     image.setPixelColor(x, text_y + 10, Qt.GlobalColor.black)
-                
-                logger.debug("Created fallback image with border")
+            
+            # Save the capture if enabled
+            if self._save_capture and image:
+                try:
+                    image.save(self._capture_path)
+                    logger.debug(f"Saved screen capture to {self._capture_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to save screen capture: {e}")
             
             # Convert to e-ink compatible format (assuming 1-bit black and white)
             eink_data = self._convert_to_eink_format(image)

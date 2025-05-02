@@ -189,7 +189,7 @@ ApplicationWindow {
         id: splashScreen
 
         anchors.fill: parent
-        color: ThemeManager.backgroundColor
+        color: "transparent"
         z: 1000
 
         // Create a container for better positioning
@@ -214,7 +214,7 @@ ApplicationWindow {
 
                     width: 154
                     height: 154
-                    color: ThemeManager.backgroundColor
+                    color: "transparent"
                     border.color: ThemeManager.borderColor
                     border.width: ThemeManager.borderWidth
                     radius: width / 2
@@ -300,8 +300,40 @@ ApplicationWindow {
         target: bridge
     }
 
-    // Background
-    background: Rectangle {
-        color: ThemeManager.backgroundColor
+    // Place the background image as the first child so it is always at the back
+    Image {
+        id: backgroundImage
+        source: "images/idle-frame.png"
+        anchors.fill: parent
+        fillMode: Image.Stretch
+        opacity: 0.5
+        z: -1
+        onStatusChanged: {
+            console.log("Background image status:", status, "source:", source)
+        }
+    }
+
+    // Add a semi-transparent overlay for header area
+    Rectangle {
+        id: headerAreaOverlay
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        height: 50  // Cover the header area
+        color: ThemeManager.darkMode ? "black" : "white"  // Use theme-based color
+        opacity: 1.0    // Fully opaque
+        z: -0.5  // Above background image but below content
+    }
+
+    // Add a semi-transparent overlay for button areas to improve visibility
+    Rectangle {
+        id: buttonAreaOverlay
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 80  // Cover the button area
+        color: ThemeManager.darkMode ? "black" : "white"  // Use theme-based color
+        opacity: 1.0    // Fully opaque
+        z: -0.5  // Above background image but below content
     }
 }

@@ -110,7 +110,7 @@ Rectangle {
     onAppStateChanged: {
         console.log("App state changed to: " + appState);
     }
-    color: ThemeManager.backgroundColor
+    color: "transparent" // Set to transparent to allow background image to show through
     height: transcribedText.trim().length > 0 ? 120 : 90 // Ensure enough height for hint text and buttons
     z: 10 // Ensure this is always on top
     // Watch for changes to legacy properties and update state accordingly (for backward compatibility)
@@ -191,7 +191,7 @@ Rectangle {
         anchors.topMargin: 10
         anchors.margins: 8
         height: transcribedTextLabel.contentHeight + 12
-        color: ThemeManager.backgroundColor
+        color: Qt.rgba(ThemeManager.backgroundColor.r, ThemeManager.backgroundColor.g, ThemeManager.backgroundColor.b, 0.7) // Semi-transparent background
         border.width: ThemeManager.borderWidth
         border.color: ThemeManager.borderColor
         radius: ThemeManager.borderRadius
@@ -359,9 +359,9 @@ Rectangle {
                         anchors.fill: parent
                         radius: width / 2
                         color: voiceButton.isActiveItem ? ThemeManager.accentColor : "transparent"
-                        border.width: ThemeManager.borderWidth
-                        border.color: ThemeManager.borderColor
-                        opacity: voiceButton.isActiveItem ? 1.0 : 0.1
+                        border.width: 1
+                        border.color: "black"
+                        opacity: voiceButton.isActiveItem ? 1.0 : 1.0
                         antialiasing: true
                     }
                     
@@ -415,8 +415,8 @@ Rectangle {
                         height: parent.height - 4
                         radius: width / 2
                         color: "transparent"
-                        border.width: ThemeManager.borderWidth
-                        border.color: voiceInputArea.appState === "listening" ? ThemeManager.accentColor : (voiceInputArea.appState === "processing" || voiceInputArea.appState === "thinking" || voiceInputArea.appState === "executing_tool") ? ThemeManager.buttonColor : "transparent"
+                        border.width: 1
+                        border.color: "black"
                         opacity: 0.7
                         antialiasing: true
                     }
@@ -446,13 +446,13 @@ Rectangle {
                     
                     // High contrast highlight for e-ink when focused
                     Rectangle {
-                        visible: resetButton.isActiveItem || resetButton.pressed
+                        visible: resetButton.isActiveItem || resetButton.pressed || true  // Always visible
                         anchors.fill: parent
                         radius: width / 2
                         color: resetButton.isActiveItem ? ThemeManager.accentColor : "transparent"
-                        border.width: ThemeManager.borderWidth
-                        border.color: ThemeManager.borderColor
-                        opacity: resetButton.isActiveItem ? 1.0 : 0.1
+                        border.width: 1
+                        border.color: "black"
+                        opacity: resetButton.isActiveItem ? 1.0 : 1.0
                         antialiasing: true
                     }
 
@@ -497,13 +497,13 @@ Rectangle {
                     
                     // High contrast highlight for e-ink when focused
                     Rectangle {
-                        visible: wifiButton.isActiveItem || wifiButton.pressed
+                        visible: wifiButton.isActiveItem || wifiButton.pressed || true  // Always visible
                         anchors.fill: parent
                         radius: width / 2
                         color: wifiButton.isActiveItem ? ThemeManager.accentColor : "transparent"
-                        border.width: ThemeManager.borderWidth
-                        border.color: ThemeManager.borderColor
-                        opacity: wifiButton.isActiveItem ? 1.0 : 0.1
+                        border.width: 1
+                        border.color: "black"
+                        opacity: wifiButton.isActiveItem ? 1.0 : 1.0
                         antialiasing: true
                     }
                     
