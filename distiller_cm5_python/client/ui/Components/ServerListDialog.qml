@@ -183,14 +183,14 @@ Rectangle {
             color: ThemeManager.headerColor
             radius: ThemeManager.borderRadius
             
-            // Refresh button - now positioned at top-left corner
+            // Refresh button - positioned at left and vertically centered
             AppButton {
                 id: refreshButton
                 width: ThemeManager.buttonHeight
                 height: ThemeManager.buttonHeight
                 anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.margins: ThemeManager.spacingSmall
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: ThemeManager.spacingSmall
                 text: "↻"
                 fontSize: FontManager.fontSizeMedium
                 navigable: true
@@ -219,14 +219,14 @@ Rectangle {
                 elide: Text.ElideRight
             }
             
-            // Close button - positioned at top-right corner
+            // Close button - positioned at right and vertically centered
             AppButton {
                 id: closeButton
                 width: ThemeManager.buttonHeight
                 height: ThemeManager.buttonHeight
                 anchors.right: parent.right
-                anchors.top: parent.top
-                anchors.margins: ThemeManager.spacingSmall
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.rightMargin: ThemeManager.spacingSmall
                 text: "×"
                 fontSize: FontManager.fontSizeMedium
                 navigable: true
