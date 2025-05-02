@@ -435,24 +435,7 @@ class App(QObject): # Inherit from QObject to support signals/slots
         rc.setContextProperty("configWidth", width)
         rc.setContextProperty("configHeight", height)
         
-        # Set font config properties
-        font_config = config.get("display").get("font", {})
-        primary_font = font_config.get("primary_font", "fonts/Monorama-Medium.ttf")
-        font_size_small = font_config.get("font_size_small", 12)
-        font_size_normal = font_config.get("font_size_normal", 14)
-        font_size_medium = font_config.get("font_size_medium", 16)
-        font_size_large = font_config.get("font_size_large", 18)
-        font_size_xlarge = font_config.get("font_size_xlarge", 20)
-        
-        rc.setContextProperty("configPrimaryFont", primary_font)
-        rc.setContextProperty("configFontSizeSmall", font_size_small)
-        rc.setContextProperty("configFontSizeNormal", font_size_normal)
-        rc.setContextProperty("configFontSizeMedium", font_size_medium)
-        rc.setContextProperty("configFontSizeLarge", font_size_large)
-        rc.setContextProperty("configFontSizeXLarge", font_size_xlarge)
-        
         logger.info(f"Set display dimensions from config: {width}x{height}")
-        logger.info(f"Set font configuration from config: primary font={primary_font}")
 
 
     def _apply_window_constraints(self):

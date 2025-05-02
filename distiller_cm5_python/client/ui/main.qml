@@ -133,7 +133,7 @@ ApplicationWindow {
     FontLoader {
         id: configuredFont
 
-        source: configPrimaryFont || "fonts/Monorama-Medium.ttf"
+        source: "fonts/Monorama-Medium.ttf"
         onStatusChanged: {
             if (status == FontLoader.Ready)
                 console.log("Font loaded successfully:", source);

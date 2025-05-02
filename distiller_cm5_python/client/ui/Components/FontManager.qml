@@ -1,5 +1,5 @@
-import QtQuick 2.15
 pragma Singleton
+import QtQuick 2.15
 
 QtObject {
     // Large headers
@@ -7,19 +7,19 @@ QtObject {
     id: fontManager
 
     // Font family - property is readwrite so it can be updated when a custom font is loaded
-    property string primaryFontFamily: "JetBrainsMono Nerd Font"
-    
+    property string primaryFontFamily: "Monorama Medium"
+
     // Font sizes from configuration if available, otherwise fallback to defaults
-    readonly property real fontSizeSmall: configFontSizeSmall || 12
+    readonly property real fontSizeSmall: 12
     // Small text
-    readonly property real fontSizeNormal: configFontSizeNormal || 14
+    readonly property real fontSizeNormal: 14
     // Normal text
-    readonly property real fontSizeMedium: configFontSizeMedium || 16
+    readonly property real fontSizeMedium: 16
     // Medium text
-    readonly property real fontSizeLarge: configFontSizeLarge || 18
+    readonly property real fontSizeLarge: 18
     // Section headers
-    readonly property real fontSizeXLarge: configFontSizeXLarge || 20
-    
+    readonly property real fontSizeXLarge: 20
+
     // Font weights
     readonly property int fontWeightNormal: Font.Normal
     readonly property int fontWeightBold: Font.Bold
