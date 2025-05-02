@@ -90,9 +90,6 @@ Dialog {
     // Dialog background
     background: Rectangle {
         color: ThemeManager.backgroundColor
-        border.color: ThemeManager.borderColor
-        border.width: ThemeManager.borderWidth
-        radius: ThemeManager.borderRadius
     }
 
     // Dialog header
