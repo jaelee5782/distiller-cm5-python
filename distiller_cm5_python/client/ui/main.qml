@@ -18,9 +18,13 @@ ApplicationWindow {
     
     // Update the FontManager primaryFontFamily when the app loads
     Component.onCompleted: {
-        // Use the loaded font in the components
-        if (jetBrainsMono.status == FontLoader.Ready)
-            FontManager.primaryFontFamily = jetBrainsMono.name;
+        // Use the configured font in the components
+        if (configuredFont.status == FontLoader.Ready) {
+            FontManager.primaryFontFamily = configuredFont.name;
+            console.log("Primary font set to:", configuredFont.name);
+        } else {
+            console.log("Using fallback font as primary font couldn't be loaded");
+        }
 
         // Set initial focus to key handler
         keyHandler.forceActiveFocus();
@@ -125,7 +129,20 @@ ApplicationWindow {
         target: bridge
     }
 
-    // Custom font
+    // Custom font from configuration
+    FontLoader {
+        id: configuredFont
+
+        source: configPrimaryFont || "fonts/Monorama-Medium.ttf"
+        onStatusChanged: {
+            if (status == FontLoader.Ready)
+                console.log("Font loaded successfully:", source);
+            else if (status == FontLoader.Error)
+                console.error("Failed to load font:", source);
+        }
+    }
+
+    // Keep the JetBrains font as a fallback
     FontLoader {
         id: jetBrainsMono
 
@@ -133,6 +150,8 @@ ApplicationWindow {
         onStatusChanged: {
             if (status == FontLoader.Ready)
                 console.log("JetBrains Mono font loaded successfully");
+            else if (status == FontLoader.Error)
+                console.error("Failed to load JetBrains Mono font");
         }
     }
 

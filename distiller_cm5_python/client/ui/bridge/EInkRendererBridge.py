@@ -33,6 +33,10 @@ class EInkRendererBridge(QObject):
         self._dithering_enabled = True
         self._dithering_method = DitheringMethod.FLOYD_STEINBERG
         
+        # Threshold configuration
+        self._threshold = config["display"].get("eink_threshold", 128)
+        self._threshold = max(0, min(255, self._threshold))  # Ensure it's in valid range
+        
         # Initialization
         self._init_timer = QTimer()
         self._init_timer.setSingleShot(True)
@@ -105,7 +109,11 @@ class EInkRendererBridge(QObject):
             logger.warning(f"Invalid dithering method {method}, defaulting to Floyd-Steinberg")
             self._dithering_method = DitheringMethod.FLOYD_STEINBERG
         
-        logger.info(f"Dithering {'enabled' if enabled else 'disabled'}, method: {self._dithering_method.name}")
+        # Get threshold value from config
+        self._threshold = config["display"].get("eink_threshold", 128)
+        self._threshold = max(0, min(255, self._threshold))  # Ensure it's in valid range
+        
+        logger.info(f"Dithering {'enabled' if enabled else 'disabled'}, method: {self._dithering_method.name}, threshold: {self._threshold}")
     
     @pyqtSlot(bytearray, int, int)
     def handle_frame(self, frame_data: bytearray, width: int, height: int):
@@ -216,11 +224,11 @@ try:
     from numba import jit
     
     @jit(nopython=True, cache=True)
-    def _numba_dump_1bit(pixels: np.ndarray) -> list:
+    def _numba_dump_1bit(pixels: np.ndarray, threshold: int = 128) -> list:
         """Convert an image to 1-bit representation."""
         # Threshold and convert to binary
         pixels = np.clip(pixels, 0, 255)
-        pixels_binary = (pixels > 128).astype(np.uint8)
+        pixels_binary = (pixels > threshold).astype(np.uint8)
         
         # Calculate the needed size for the result
         height, width = pixels.shape
@@ -243,7 +251,7 @@ try:
         return [int(x) for x in int_pixels]
 
     @jit(nopython=True, cache=True)
-    def _numba_floyd_steinberg(pixels: np.ndarray) -> np.ndarray:
+    def _numba_floyd_steinberg(pixels: np.ndarray, threshold: int = 128) -> np.ndarray:
         """Apply Floyd-Steinberg dithering to an image."""
         height, width = pixels.shape
         pixels = pixels.copy()  # Make a copy to avoid modifying the original
@@ -252,7 +260,7 @@ try:
         for y in range(height - 1):
             for x in range(1, width - 1):
                 old_pixel = pixels[y, x]
-                new_pixel = 0 if old_pixel < 128 else 255
+                new_pixel = 0 if old_pixel < threshold else 255
                 pixels[y, x] = new_pixel
                 quant_error = old_pixel - new_pixel
                 
@@ -266,7 +274,7 @@ try:
         y = height - 1
         for x in range(1, width - 1):
             old_pixel = pixels[y, x]
-            new_pixel = 0 if old_pixel < 128 else 255
+            new_pixel = 0 if old_pixel < threshold else 255
             pixels[y, x] = new_pixel
             quant_error = old_pixel - new_pixel
             pixels[y, x + 1] += quant_error * 7 / 16
@@ -274,9 +282,12 @@ try:
         return pixels
     
     @jit(nopython=True, cache=True)
-    def _numba_ordered_dithering(pixels: np.ndarray) -> np.ndarray:
+    def _numba_ordered_dithering(pixels: np.ndarray, threshold_base: int = 128) -> np.ndarray:
         """Apply ordered dithering to an image."""
-        # Define 8x8 Bayer matrix for ordered dithering
+        # Define 8x8 Bayer matrix for ordered dithering - scaled by threshold_base/128
+        # This adjusts the dithering pattern based on the threshold value
+        scale_factor = threshold_base / 128.0
+        
         bayer_matrix = np.array([
             [ 0, 48, 12, 60,  3, 51, 15, 63],
             [32, 16, 44, 28, 35, 19, 47, 31],
@@ -286,7 +297,7 @@ try:
             [34, 18, 46, 30, 33, 17, 45, 29],
             [10, 58,  6, 54,  9, 57,  5, 53],
             [42, 26, 38, 22, 41, 25, 37, 21]
-        ], dtype=np.float32) / 64.0 * 255
+        ], dtype=np.float32) / 64.0 * 255 * scale_factor
         
         height, width = pixels.shape
         result = np.zeros((height, width), dtype=np.uint8)
@@ -306,11 +317,11 @@ except ImportError:
     # Fallback to standard Python implementation
     logger.info("Numba not available, using standard e-ink conversion functions")
     
-    def _numba_dump_1bit(pixels: np.ndarray) -> list:
+    def _numba_dump_1bit(pixels: np.ndarray, threshold: int = 128) -> list:
         """Standard Python implementation of dump_1bit"""
         # Threshold and convert to binary
         pixels = np.clip(pixels, 0, 255)
-        pixels_binary = (pixels > 128).astype(np.uint8)
+        pixels_binary = (pixels > threshold).astype(np.uint8)
         
         # Calculate the needed size for the result
         height, width = pixels.shape
@@ -332,7 +343,7 @@ except ImportError:
                 
         return [int(x) for x in int_pixels]
     
-    def _numba_floyd_steinberg(pixels: np.ndarray) -> np.ndarray:
+    def _numba_floyd_steinberg(pixels: np.ndarray, threshold: int = 128) -> np.ndarray:
         """Standard Python implementation of Floyd-Steinberg dithering"""
         height, width = pixels.shape
         pixels = pixels.copy()  # Make a copy to avoid modifying the original
@@ -340,7 +351,7 @@ except ImportError:
         for y in range(height - 1):
             for x in range(1, width - 1):
                 old_pixel = pixels[y, x]
-                new_pixel = 0 if old_pixel < 128 else 255
+                new_pixel = 0 if old_pixel < threshold else 255
                 pixels[y, x] = new_pixel
                 quant_error = old_pixel - new_pixel
                 
@@ -353,16 +364,19 @@ except ImportError:
         y = height - 1
         for x in range(1, width - 1):
             old_pixel = pixels[y, x]
-            new_pixel = 0 if old_pixel < 128 else 255
+            new_pixel = 0 if old_pixel < threshold else 255
             pixels[y, x] = new_pixel
             quant_error = old_pixel - new_pixel
             pixels[y, x + 1] += quant_error * 7 / 16
             
         return pixels
     
-    def _numba_ordered_dithering(pixels: np.ndarray) -> np.ndarray:
+    def _numba_ordered_dithering(pixels: np.ndarray, threshold_base: int = 128) -> np.ndarray:
         """Standard Python implementation of ordered dithering"""
-        # Define 8x8 Bayer matrix for ordered dithering
+        # Define 8x8 Bayer matrix for ordered dithering - scaled by threshold_base/128
+        # This adjusts the dithering pattern based on the threshold value
+        scale_factor = threshold_base / 128.0
+        
         bayer_matrix = np.array([
             [ 0, 48, 12, 60,  3, 51, 15, 63],
             [32, 16, 44, 28, 35, 19, 47, 31],
@@ -372,7 +386,7 @@ except ImportError:
             [34, 18, 46, 30, 33, 17, 45, 29],
             [10, 58,  6, 54,  9, 57,  5, 53],
             [42, 26, 38, 22, 41, 25, 37, 21]
-        ]) / 64.0 * 255
+        ]) / 64.0 * 255 * scale_factor
         
         height, width = pixels.shape
         result = np.zeros((height, width), dtype=np.uint8)

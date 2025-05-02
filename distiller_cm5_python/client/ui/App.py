@@ -434,7 +434,25 @@ class App(QObject): # Inherit from QObject to support signals/slots
         rc = self.engine.rootContext()
         rc.setContextProperty("configWidth", width)
         rc.setContextProperty("configHeight", height)
+        
+        # Set font config properties
+        font_config = config.get("display").get("font", {})
+        primary_font = font_config.get("primary_font", "fonts/Monorama-Medium.ttf")
+        font_size_small = font_config.get("font_size_small", 12)
+        font_size_normal = font_config.get("font_size_normal", 14)
+        font_size_medium = font_config.get("font_size_medium", 16)
+        font_size_large = font_config.get("font_size_large", 18)
+        font_size_xlarge = font_config.get("font_size_xlarge", 20)
+        
+        rc.setContextProperty("configPrimaryFont", primary_font)
+        rc.setContextProperty("configFontSizeSmall", font_size_small)
+        rc.setContextProperty("configFontSizeNormal", font_size_normal)
+        rc.setContextProperty("configFontSizeMedium", font_size_medium)
+        rc.setContextProperty("configFontSizeLarge", font_size_large)
+        rc.setContextProperty("configFontSizeXLarge", font_size_xlarge)
+        
         logger.info(f"Set display dimensions from config: {width}x{height}")
+        logger.info(f"Set font configuration from config: primary font={primary_font}")
 
 
     def _apply_window_constraints(self):
@@ -502,6 +520,14 @@ class App(QObject): # Inherit from QObject to support signals/slots
         dithering_enabled = config.get("display").get("eink_dithering_enabled", True)
         dithering_method = config.get("display").get("eink_dithering_method", 1)  # 1=Floyd-Steinberg, 2=Ordered
         adaptive_capture = config.get("display").get("eink_adaptive_capture", True)  # Enable adaptive refresh
+        threshold = config.get("display").get("eink_threshold", 128)  # Threshold for black/white conversion
+        
+        # Get B&W conversion details
+        bw_config = config.get("display").get("eink_bw_conversion", {})
+        bw_method = bw_config.get("method", 1)
+        bw_method_name = "Simple Threshold" if bw_method == 1 else "Adaptive Threshold"
+        use_gamma = bw_config.get("use_gamma", False)
+        gamma_value = bw_config.get("gamma_value", 0.7) if use_gamma else None
 
         try:
             # First initialize the e-ink bridge that connects to the hardware
@@ -536,7 +562,10 @@ class App(QObject): # Inherit from QObject to support signals/slots
             self.eink_renderer.start()
             logger.info(f"E-Ink renderer initialized with {capture_interval}ms interval, "
                        f"buffer_size={buffer_size}, dithering={'enabled' if dithering_enabled else 'disabled'} "
-                       f"(method={dithering_method}), adaptive_capture={'enabled' if adaptive_capture else 'disabled'}")
+                       f"(method={dithering_method}), threshold={threshold}, "
+                       f"B&W method={bw_method_name}" + 
+                       (f" with gamma={gamma_value}" if use_gamma else "") +
+                       f", adaptive_capture={'enabled' if adaptive_capture else 'disabled'}")
 
             self._eink_initialized = True
             return True

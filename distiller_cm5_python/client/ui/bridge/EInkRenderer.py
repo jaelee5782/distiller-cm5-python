@@ -7,6 +7,7 @@ import logging
 import numpy as np
 import time
 from ..display_config import config
+from .bw_conversion import convert_to_bw
 
 logger = logging.getLogger(__name__)
 
@@ -251,13 +252,16 @@ class EInkRenderer(QObject):
         # Apply dithering if enabled
         if config["display"]["eink_dithering_enabled"]:
             logger.debug("Applying Floyd-Steinberg dithering")
-            pixels_dithered = self._apply_dithering(pixels_mirrored.flatten(), width, height)
+            pixels_dithered = self._apply_dithering(pixels_mirrored.flatten(), width, height, config["display"].get("eink_threshold", 128))
             pixels_dithered = np.array(pixels_dithered, dtype=np.uint8).reshape(height, width)
         else:
             pixels_dithered = pixels_mirrored
 
-        # Convert to 1-bit (bit 1 = WHITE, bit 0 = BLACK)
-        binary = (pixels_dithered >= 128).astype(np.uint8)
+        # Convert to 1-bit using the selected method
+        logger.debug("Applying BW conversion")
+        binary = convert_to_bw(pixels_dithered, config["display"])
+        
+        # Pack the binary image into a bytearray (8 pixels per byte)
         output = np.zeros(total_bytes, dtype=np.uint8)
 
         for y in range(height):
@@ -271,7 +275,7 @@ class EInkRenderer(QObject):
 
         return bytearray(output)
         
-    def _apply_dithering(self, image_data, width, height):
+    def _apply_dithering(self, image_data, width, height, threshold=128):
         """
         Apply Floyd-Steinberg dithering to the image data.
         
@@ -279,12 +283,23 @@ class EInkRenderer(QObject):
             image_data: 1D array of grayscale pixel values
             width: Image width
             height: Image height
+            threshold: Threshold for black/white conversion (0-255)
             
         Returns:
             1D array of dithered pixel values
         """
+        # If the BW conversion config specifies gamma correction, apply it before dithering
+        bw_config = config["display"].get("eink_bw_conversion", {})
+        use_gamma = bw_config.get("use_gamma", False)
+        gamma_value = bw_config.get("gamma_value", 0.7)
+        
         # Convert 1D array to 2D for easier processing
         pixels = np.array(image_data, dtype=np.float32).reshape(height, width)
+        
+        # Apply gamma correction if enabled
+        if use_gamma:
+            from .bw_conversion import apply_gamma_correction
+            pixels = apply_gamma_correction(pixels, gamma_value)
         
         # Make a copy to avoid modifying the original
         dithered = pixels.copy()
@@ -299,8 +314,8 @@ class EInkRenderer(QObject):
             for y in range(chunk_start, chunk_end):
                 for x in range(1, width - 1):
                     old_pixel = dithered[y, x]
-                    # Find nearest color (0 or 255)
-                    new_pixel = 0 if old_pixel < 128 else 255
+                    # Find nearest color using threshold
+                    new_pixel = 0 if old_pixel < threshold else 255
                     dithered[y, x] = new_pixel
                     
                     # Compute quantization error
@@ -315,7 +330,7 @@ class EInkRenderer(QObject):
         # Handle last row special case (no pixels below to distribute error to)
         for x in range(1, width - 1):
             old_pixel = dithered[height - 1, x]
-            new_pixel = 0 if old_pixel < 128 else 255
+            new_pixel = 0 if old_pixel < threshold else 255
             dithered[height - 1, x] = new_pixel
             
             # Can only distribute error horizontally
