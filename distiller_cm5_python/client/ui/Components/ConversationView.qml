@@ -183,8 +183,8 @@ ListView {
         width: scrollModeText.width + ThemeManager.spacingLarge
         color: ThemeManager.textColor
         border.width: ThemeManager.borderWidth
-        border.color: ThemeManager.borderColor
-        radius: ThemeManager.borderRadius
+        border.color: "white"
+        radius: 2
         visible: isActiveItem && !scrollModeActive && conversationView.contentHeight > conversationView.height
         z: 2
 

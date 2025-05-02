@@ -2,13 +2,13 @@ config = {
     "display": {
         "eink_adaptive_capture": True,  # Enable adaptive refresh rate
         "eink_dithering_enabled": False,
-        "eink_dithering_method": 2,  # 1=Floyd-Steinberg, 2=Ordered
+        "eink_dithering_method": 1,  # 1=Floyd-Steinberg, 2=Ordered
         "eink_full_refresh_interval": 15,
         "eink_refresh_interval": 1500,
         "eink_enabled": True,
         "eink_buffer_size": 1,  # Reduced buffer size to save memory
         "eink_threshold": 150,  # Threshold for black/white conversion (0-255)
-        "eink_save_capture": True,  # Save screen captures for debugging
+        "eink_save_capture": False,  # Save screen captures for debugging
         "eink_bw_conversion": {
             "method": 1,  # 1=Simple Threshold, 2=Adaptive Threshold
             "use_gamma": True,  # Apply gamma correction before thresholding
@@ -17,6 +17,7 @@ config = {
             "adaptive_c": 5  # Constant subtracted from block mean/median (can be negative)
         },
         "dark_mode": True,  # Set dark mode as default
+        "show_system_stats": True,  # Enable system monitor display
         "width": 240,
         "height": 416,
         "font": {

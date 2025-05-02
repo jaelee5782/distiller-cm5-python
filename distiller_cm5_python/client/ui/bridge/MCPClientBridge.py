@@ -414,3 +414,45 @@ class MCPClientBridge(BridgeCore):
         except Exception as e:
             logger.error(f"Error getting primary font path: {e}")
             return "fonts/MonoramaNerdFont-Medium.ttf"  # Default fallback
+
+    @pyqtSlot(result=bool)
+    def getShowSystemStats(self):
+        """Check if system stats display is enabled in config."""
+        try:
+            # Import here to avoid circular imports
+            from distiller_cm5_python.client.ui.display_config import config as display_config
+            
+            if "display" in display_config and "show_system_stats" in display_config["display"]:
+                return display_config["display"]["show_system_stats"]
+            
+            return True  # Default to enabled if missing
+        except Exception as e:
+            logger.error(f"Error checking system stats flag: {e}")
+            return True  # Default to enabled if error
+            
+    @pyqtSlot(result="QVariantMap")
+    def getSystemStats(self):
+        """Get system statistics (CPU, RAM, temperature, LLM)."""
+        try:
+            # Lazy import to avoid circular imports
+            from distiller_cm5_python.client.ui.system_monitor import system_monitor
+            
+            # Return formatted stats dictionary
+            return system_monitor.get_formatted_stats()
+        except Exception as e:
+            logger.error(f"Error getting system stats: {e}")
+            return {
+                "cpu": "N/A",
+                "ram": "N/A",
+                "temp": "N/A",
+                "llm": "Local"
+            }
+
+    @pyqtSlot(str)
+    def setLlmModel(self, model_name):
+        """Set the current LLM model name."""
+        try:
+            from distiller_cm5_python.client.ui.system_monitor import system_monitor
+            system_monitor.set_llm_model(model_name)
+        except Exception as e:
+            logger.error(f"Error setting LLM model: {e}")

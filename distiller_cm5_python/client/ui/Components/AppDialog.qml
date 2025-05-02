@@ -46,6 +46,7 @@ Dialog {
     height: contentColumn.implicitHeight + headerRect.height + footerRect.height + ThemeManager.spacingLarge * 2
     // Close on Escape key
     closePolicy: Popup.CloseOnEscape
+    
     // Clean up focus when dialog closes
     onOpened: {
         // Store previous focus state
@@ -90,6 +91,7 @@ Dialog {
     // Dialog background
     background: Rectangle {
         color: ThemeManager.backgroundColor
+        radius: 10 // Basic rounded corners
     }
 
     // Dialog header
@@ -99,6 +101,16 @@ Dialog {
         width: parent.width
         height: headerText.implicitHeight + ThemeManager.spacingNormal * 2
         color: ThemeManager.headerColor
+        // Rounded corners for top portion only
+        radius: 10
+        // Only round the top corners
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: parent.radius + 1
+            color: parent.color
+        }
 
         Text {
             id: headerText
@@ -140,6 +152,16 @@ Dialog {
         width: parent.width
         height: buttonRow.height + ThemeManager.spacingLarge * 2
         color: ThemeManager.backgroundColor
+        // Rounded corners for bottom portion only
+        radius: 10
+        // Only round the bottom corners
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: parent.radius + 1
+            color: parent.color
+        }
 
         // Simplified button row
         Row {

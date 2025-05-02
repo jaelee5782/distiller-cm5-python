@@ -45,8 +45,10 @@ PageBase {
             if (header.serverSelectButton && header.serverSelectButton.navigable)
                 focusableItems.push(header.serverSelectButton);
 
+            /* Dark mode button commented out
             if (header.darkModeButton && header.darkModeButton.navigable)
                 focusableItems.push(header.darkModeButton);
+            */
         }
 
         
@@ -597,7 +599,9 @@ PageBase {
         anchors.right: parent.right
         anchors.bottom: voiceInputArea.top
         anchors.bottomMargin: 4
-        anchors.margins: ThemeManager.spacingNormal
+        anchors.leftMargin: ThemeManager.spacingNormal
+        anchors.rightMargin: ThemeManager.spacingNormal
+        anchors.topMargin: 4
         Component.onCompleted: {
             if (bridge && bridge.ready)
                 updateModel(bridge.get_conversation());

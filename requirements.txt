@@ -8,7 +8,7 @@ mcp
 aiohttp
 colorama
 nest_asyncio
-psutil
+psutil>=5.9.0
 PyQt6
 qasync
 pyaudio

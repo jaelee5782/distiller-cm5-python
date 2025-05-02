@@ -110,9 +110,15 @@ Rectangle {
     onAppStateChanged: {
         console.log("App state changed to: " + appState);
     }
-    color: "transparent" // Set to transparent to allow background image to show through
-    height: transcribedText.trim().length > 0 ? 120 : 90 // Ensure enough height for hint text and buttons
+    color: ThemeManager.darkMode ? "black" : "white"  // Solid color instead of transparent
+    height: transcribedText.trim().length > 0 ? 100 : 70 // Reduced height by ~20%
     z: 10 // Ensure this is always on top
+    
+    // Add border around the entire component with rounded corners
+    border.width: 1
+    border.color: "black"
+    radius: 10  // Add rounded corners
+
     // Watch for changes to legacy properties and update state accordingly (for backward compatibility)
     onIsListeningChanged: {
         if (isListening && appState !== "listening")
@@ -152,7 +158,7 @@ Rectangle {
         id: staticHintText
 
         anchors.top: parent.top
-        anchors.topMargin: 10
+        anchors.topMargin: 8// Reduced top margin
         anchors.horizontalCenter: parent.horizontalCenter
         text: {
             // Dynamic text based on which button has focus
@@ -188,19 +194,19 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: staticHintText.bottom
-        anchors.topMargin: 10
-        anchors.margins: 8
-        height: transcribedTextLabel.contentHeight + 12
-        color: Qt.rgba(ThemeManager.backgroundColor.r, ThemeManager.backgroundColor.g, ThemeManager.backgroundColor.b, 0.7) // Semi-transparent background
-        border.width: ThemeManager.borderWidth
-        border.color: ThemeManager.borderColor
+        anchors.topMargin: 5 // Reduced top margin
+        anchors.margins: 6 // Reduced margins
+        height: transcribedTextLabel.contentHeight + 8 // Reduced height
+        color: ThemeManager.darkMode ? "black" : "white" // Solid color for E-Ink display
+        border.width: 1
+        border.color: "black" // Always black border for contrast
         radius: ThemeManager.borderRadius
 
         Text {
             id: transcribedTextLabel
 
             anchors.fill: parent
-            anchors.margins: 6
+            anchors.margins: 4 // Reduced margins
             text: transcribedText
             font.pixelSize: FontManager.fontSizeNormal
             font.family: FontManager.primaryFontFamily
@@ -209,7 +215,6 @@ Rectangle {
             elide: Text.ElideRight
             maximumLineCount: 1
         }
-
     }
 
     // Button layout
@@ -222,12 +227,12 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.margins: 8
+        anchors.margins: 5 // Reduced margins for tighter fit
         height: ThemeManager.buttonHeight
 
         Row {
             anchors.centerIn: parent
-            spacing: ThemeManager.spacingLarge
+            spacing: ThemeManager.spacingLarge * 0.8 // Slightly reduced spacing for tighter fit
 
             // 1st button: Voice/Mic button in the center position
             AppButton {
@@ -333,15 +338,15 @@ Rectangle {
                     // Use the new state system for determining color
                     switch (voiceInputArea.appState) {
                     case "listening":
-                        return ThemeManager.subtleColor;
+                        return "black"; // Solid black for better visibility
                     case "processing":
                     case "thinking":
                     case "executing_tool":
-                        return ThemeManager.buttonColor;
+                        return "black"; // Solid black for better visibility
                     case "error":
-                        return ThemeManager.backgroundColor; // Use background color for error (black/white only)
+                        return ThemeManager.darkMode ? "black" : "white"; // Solid color based on theme
                     default:
-                        return "transparent";
+                        return ThemeManager.darkMode ? "black" : "white"; // Solid color based on theme
                     }
                 }
                 buttonRadius: width / 2
@@ -351,17 +356,17 @@ Rectangle {
                     // Clear custom styling from AppButton
                     parent: voiceButton
                     anchors.fill: parent
-                    color: "transparent"
-                    
+                    color: ThemeManager.darkMode ? "black" : "white" // Solid color
+
                     // High contrast highlight for e-ink when focused
                     Rectangle {
                         visible: voiceButton.isActiveItem || voiceButton.pressed
                         anchors.fill: parent
                         radius: width / 2
-                        color: voiceButton.isActiveItem ? ThemeManager.accentColor : "transparent"
+                        color: voiceButton.isActiveItem ? "black" : (ThemeManager.darkMode ? "black" : "white")
                         border.width: 1
                         border.color: "black"
-                        opacity: voiceButton.isActiveItem ? 1.0 : 1.0
+                        opacity: 1.0
                         antialiasing: true
                     }
                     
@@ -414,10 +419,10 @@ Rectangle {
                         width: parent.width - 4
                         height: parent.height - 4
                         radius: width / 2
-                        color: "transparent"
+                        color: ThemeManager.darkMode ? "black" : "white" // Solid color
                         border.width: 1
                         border.color: "black"
-                        opacity: 0.7
+                        opacity: 1.0
                         antialiasing: true
                     }
                 }
@@ -442,17 +447,17 @@ Rectangle {
                     // Clear custom styling from AppButton
                     parent: resetButton
                     anchors.fill: parent
-                    color: "transparent"
-                    
+                    color: ThemeManager.darkMode ? "black" : "white" // Solid color
+
                     // High contrast highlight for e-ink when focused
                     Rectangle {
                         visible: resetButton.isActiveItem || resetButton.pressed || true  // Always visible
                         anchors.fill: parent
                         radius: width / 2
-                        color: resetButton.isActiveItem ? ThemeManager.accentColor : "transparent"
+                        color: resetButton.isActiveItem ? "black" : (ThemeManager.darkMode ? "black" : "white")
                         border.width: 1
                         border.color: "black"
-                        opacity: resetButton.isActiveItem ? 1.0 : 1.0
+                        opacity: 1.0
                         antialiasing: true
                     }
 
@@ -493,17 +498,17 @@ Rectangle {
                     // Clear custom styling from AppButton
                     parent: wifiButton
                     anchors.fill: parent
-                    color: "transparent"
-                    
+                    color: ThemeManager.darkMode ? "black" : "white" // Solid color
+
                     // High contrast highlight for e-ink when focused
                     Rectangle {
                         visible: wifiButton.isActiveItem || wifiButton.pressed || true  // Always visible
                         anchors.fill: parent
                         radius: width / 2
-                        color: wifiButton.isActiveItem ? ThemeManager.accentColor : "transparent"
+                        color: wifiButton.isActiveItem ? "black" : (ThemeManager.darkMode ? "black" : "white")
                         border.width: 1
                         border.color: "black"
-                        opacity: wifiButton.isActiveItem ? 1.0 : 1.0
+                        opacity: 1.0
                         antialiasing: true
                     }
                     

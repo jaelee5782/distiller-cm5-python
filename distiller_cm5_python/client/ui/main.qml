@@ -306,34 +306,42 @@ ApplicationWindow {
         source: "images/idle-frame.png"
         anchors.fill: parent
         fillMode: Image.Stretch
-        opacity: 0.5
+        opacity: 1.0  // Full opacity, no transparency
         z: -1
         onStatusChanged: {
             console.log("Background image status:", status, "source:", source)
         }
     }
 
-    // Add a semi-transparent overlay for header area
+    // Header area - solid black or white with border
     Rectangle {
         id: headerAreaOverlay
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: parent.top
         height: 50  // Cover the header area
-        color: ThemeManager.darkMode ? "black" : "white"  // Use theme-based color
-        opacity: 1.0    // Fully opaque
-        z: -0.5  // Above background image but below content
+        color: ThemeManager.darkMode ? "black" : "white"  // Solid color, no transparency
+        opacity: 1.0
+        z: -0.5
+        
+        // Add border around the entire rectangle
+        border.width: 1
+        border.color: "black"
     }
 
-    // Add a semi-transparent overlay for button areas to improve visibility
-    Rectangle {
-        id: buttonAreaOverlay
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: 80  // Cover the button area
-        color: ThemeManager.darkMode ? "black" : "white"  // Use theme-based color
-        opacity: 1.0    // Fully opaque
-        z: -0.5  // Above background image but below content
-    }
+    // // Button area - solid black or white with border
+    // Rectangle {
+    //     id: buttonAreaOverlay
+    //     anchors.left: parent.left
+    //     anchors.right: parent.right
+    //     anchors.bottom: parent.bottom
+    //     height: 80  // Cover the button area
+    //     color: ThemeManager.darkMode ? "black" : "white"  // Solid color, no transparency
+    //     opacity: 1.0
+    //     z: -0.5
+        
+    //     // Add border around the entire rectangle
+    //     border.width: 1
+    //     border.color: "black"
+    // }
 }

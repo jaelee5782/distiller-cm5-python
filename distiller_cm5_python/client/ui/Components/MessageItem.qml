@@ -20,11 +20,16 @@ Rectangle {
     width: parent.width
     height: messageLayout.implicitHeight + ThemeManager.spacingNormal
     radius: ThemeManager.borderRadius
-    color: Qt.rgba(ThemeManager.backgroundColor.r, ThemeManager.backgroundColor.g, ThemeManager.backgroundColor.b, 0.6) // Semi-transparent background
-    border.color: ThemeManager.borderColor
-    border.width: ThemeManager.borderWidth
+    // Use black background with white text for user messages, otherwise theme-based colors
+    color: (sender.toUpperCase() === "YOU") ? "black" : (ThemeManager.darkMode ? "black" : "white") 
+    border.color: "black" // Always black border for contrast
+    border.width: 1
     // Don't show the message if it's empty or only contains timestamp brackets
     visible: messageText !== "" && content.trim() !== ""
+    
+    // Property to determine text color based on sender
+    property color messageTextColor: (sender.toUpperCase() === "YOU") ? "white" : ThemeManager.textColor
+    property color messageSecondaryTextColor: (sender.toUpperCase() === "YOU") ? "white" : ThemeManager.secondaryTextColor
 
     // Subtle highlight effect for the latest message during response generation
     // Only applied to the actual message rectangle, not extending beyond it
@@ -33,7 +38,7 @@ Rectangle {
 
         anchors.fill: parent
         radius: parent.radius
-        color: isLastMessage && isResponding ? ThemeManager.highlightColor : "transparent"
+        color: isLastMessage && isResponding ? "black" : "transparent" // Solid black highlight instead of subtle color
         visible: isLastMessage && isResponding
         z: -1 // Behind text content
     }
@@ -50,7 +55,7 @@ Rectangle {
         Text {
             text: sender
             font: FontManager.small
-            color: ThemeManager.textColor
+            color: messageTextColor
             Layout.fillWidth: true
             visible: sender !== ""
         }
@@ -58,7 +63,7 @@ Rectangle {
         Text {
             text: content
             font: FontManager.normal
-            color: ThemeManager.textColor
+            color: messageTextColor
             wrapMode: Text.WordWrap
             lineHeight: 1.1
             Layout.fillWidth: true
@@ -71,7 +76,7 @@ Rectangle {
             // Display the message type at the bottom left
             Text {
                 text: messageType
-                color: ThemeManager.secondaryTextColor
+                color: messageSecondaryTextColor
                 horizontalAlignment: Text.AlignLeft
                 Layout.fillWidth: true
                 visible: messageType !== ""
@@ -103,21 +108,17 @@ Rectangle {
                         }
                     }
                 }
-
             }
 
             // Display timestamp at the bottom right
             Text {
                 text: timestamp
                 font: FontManager.small
-                color: ThemeManager.secondaryTextColor
+                color: messageSecondaryTextColor
                 horizontalAlignment: Text.AlignRight
                 Layout.fillWidth: true
                 visible: timestamp !== ""
             }
-
         }
-
     }
-
 }

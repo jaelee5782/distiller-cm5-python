@@ -19,7 +19,7 @@ NavigableItem {
         if (root.visualFocus)
             return ThemeManager.accentColor;
 
-        return isFlat ? "transparent" : ThemeManager.buttonColor;
+        return isFlat ? (ThemeManager.darkMode ? "black" : "white") : ThemeManager.buttonColor;
     }
 
     width: parent ? parent.width : implicitWidth
@@ -37,20 +37,21 @@ NavigableItem {
             if (root.visualFocus)
                 return ThemeManager.accentColor;
 
-            return isFlat ? "transparent" : ThemeManager.buttonColor;
+            return isFlat ? (ThemeManager.darkMode ? "black" : "white") : ThemeManager.buttonColor;
         }
 
         function getBorderColor() {
             if (root.visualFocus)
                 return "black";
 
-            return isFlat ? (root.pressed ? "black" : "transparent") : "black";
+            // Always use black border for visibility on E-Ink
+            return "black";
         }
 
         anchors.fill: parent
         color: root.backgroundColor
         border.color: getBorderColor()
-        border.width: root.visualFocus ? 2 : (isFlat ? (root.pressed ? 1 : 0) : 1)
+        border.width: root.visualFocus ? 2 : 1 // Always show border for better visibility on E-Ink
         radius: buttonRadius
     }
 
