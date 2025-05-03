@@ -113,7 +113,7 @@ Rectangle {
     }
     
     anchors.fill: parent
-    color: ThemeManager.subtleColor
+    color: ThemeManager.textColor
     visible: false
     z: 1000 // Set a very high z value to appear above all other content
     
@@ -172,7 +172,7 @@ Rectangle {
         anchors.centerIn: parent
         color: ThemeManager.backgroundColor
         // border.width: ThemeManager.borderWidth
-        // border.color: ThemeManager.borderColor
+        // border.color: ThemeManager.black
         // radius: ThemeManager.borderRadius
         
         // Dialog header
@@ -180,7 +180,7 @@ Rectangle {
             id: dialogHeader
             width: parent.width
             height: 60
-            color: ThemeManager.headerColor
+            color: ThemeManager.backgroundColor
             radius: ThemeManager.borderRadius
             
             // Refresh button - positioned at left and vertically centered
@@ -242,7 +242,7 @@ Rectangle {
             //     anchors.left: parent.left
             //     anchors.right: parent.right
             //     height: 1
-            //     color: ThemeManager.borderColor
+            //     color: ThemeManager.black
             //     opacity: 0.5
             // }
         }
@@ -307,9 +307,9 @@ Rectangle {
                 
                 Rectangle {
                     anchors.fill: parent
-                    color: parent.isActiveItem ? ThemeManager.accentColor : ThemeManager.transparentColor
+                    color: parent.isActiveItem ? ThemeManager.textColor : ThemeManager.transparentColor
                     border.width: ThemeManager.borderWidth
-                    border.color: ThemeManager.borderColor
+                    border.color: ThemeManager.black
                     radius: ThemeManager.borderRadius
                     
                     RowLayout {
@@ -329,7 +329,7 @@ Rectangle {
                                 font.pixelSize: FontManager.fontSizeNormal
                                 font.family: FontManager.primaryFontFamily
                                 color: serverItem.isActiveItem ? 
-                                    ThemeManager.textOnAccentColor : ThemeManager.textColor
+                                    ThemeManager.backgroundColor : ThemeManager.textColor
                                 elide: Text.ElideRight
                             }
                             
@@ -342,7 +342,7 @@ Rectangle {
                                 font.pixelSize: FontManager.fontSizeSmall
                                 font.family: FontManager.primaryFontFamily
                                 color: serverItem.isActiveItem ? 
-                                    ThemeManager.textOnAccentColor : ThemeManager.secondaryTextColor
+                                    ThemeManager.backgroundColor : ThemeManager.textColor
                                 elide: Text.ElideRight
                                 maximumLineCount: 2
                                 wrapMode: Text.WordWrap
@@ -368,8 +368,7 @@ Rectangle {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 height: 1
-                color: ThemeManager.borderColor
-                opacity: 0.5
+                color: ThemeManager.black
             }
         }
     }

@@ -184,100 +184,7 @@ ApplicationWindow {
         }
     }
 
-    // E-ink optimized splash screen without animations
-    Rectangle {
-        id: splashScreen
 
-        anchors.fill: parent
-        color: "transparent"
-        z: 1000
-
-        // Create a container for better positioning
-        Rectangle {
-            id: splashContainer
-
-            anchors.centerIn: parent
-            width: parent.width * 0.8
-            height: contentColumn.height
-            color: "transparent"
-
-            // Column layout for vertical alignment
-            Column {
-                id: contentColumn
-
-                width: parent.width
-                spacing: ThemeManager.spacingLarge
-
-                // Logo with reduced size and nested in a nicely bordered container
-                Rectangle {
-                    id: logoContainer
-
-                    width: 154
-                    height: 154
-                    color: "transparent"
-                    border.color: ThemeManager.borderColor
-                    border.width: ThemeManager.borderWidth
-                    radius: width / 2
-                    anchors.horizontalCenter: parent.horizontalCenter
-
-                    OptimizedImage {
-                        id: logoImage
-
-                        source: ThemeManager.darkMode ? "images/pamir_logo_white.png" : "images/pamir_logo.png"
-                        width: 150
-                        height: 150
-                        anchors.centerIn: parent
-                        fillMode: Image.PreserveAspectFit
-                        sourceSize.width: 300
-                        sourceSize.height: 300
-                        fadeInDuration: 0 // No fade in animation
-                    }
-                }
-
-                // Improved typography
-                Column {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: ThemeManager.spacingSmall
-
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: AppInfo.appName.split(" ")[0]
-                        color: ThemeManager.textColor
-                        font.pixelSize: FontManager.fontSizeXLarge
-                        font.bold: true
-                        font.family: FontManager.primaryFontFamily
-                    }
-
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: AppInfo.appName.split(" ").slice(1).join(" ")
-                        color: ThemeManager.secondaryTextColor
-                        font.pixelSize: FontManager.fontSizeMedium
-                        font.family: FontManager.primaryFontFamily
-                    }
-
-                    // Version information
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: AppInfo.shortVersionString
-                        color: ThemeManager.tertiaryTextColor
-                        font.pixelSize: FontManager.fontSizeSmall
-                        font.family: FontManager.primaryFontFamily
-                        topPadding: ThemeManager.paddingSmall
-                    }
-                }
-            }
-        }
-
-        // Show splash for fixed time without animation
-        Timer {
-            interval: 1000
-            running: true
-            onTriggered: {
-                splashScreen.visible = false;
-            }
-        }
-    }
 
     // Global toast message for application-wide errors
     MessageToast {
@@ -286,7 +193,7 @@ ApplicationWindow {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 100
-        z: 1001 // Above everything, including the splash screen
+        z: 1001 // Above everything
     }
 
     // Handle global bridge errors
@@ -301,7 +208,7 @@ ApplicationWindow {
     }
 
     // Place the background image as the first child so it is always at the back
-    Image {
+    OptimizedImage {
         id: backgroundImage
         source: "images/idle-frame.png"
         anchors.fill: parent
@@ -325,7 +232,7 @@ ApplicationWindow {
         z: -0.5
         
         // Add border around the entire rectangle
-        border.width: 1
+        border.width: ThemeManager.borderWidth
         border.color: "black"
     }
 
@@ -341,7 +248,7 @@ ApplicationWindow {
     //     z: -0.5
         
     //     // Add border around the entire rectangle
-    //     border.width: 1
+    //     border.width: ThemeManager.borderWidth
     //     border.color: "black"
     // }
 }

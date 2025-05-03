@@ -42,7 +42,7 @@ Rectangle {
     // Keep the signal to prevent errors
     signal darkModeClicked
 
-    color: ThemeManager.darkMode ? "black" : "white" // Solid color instead of transparent
+    color: ThemeManager.backgroundColor
     Component.onCompleted: {
         updateWifiStatus();
         updateSystemStats();
@@ -61,8 +61,7 @@ Rectangle {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 1
-        color: "black" // Black border for visibility
-        opacity: 1.0 // Fully opaque
+        color: ThemeManager.black 
     }
 
     // Layout for header components
@@ -76,8 +75,8 @@ Rectangle {
         // Server selection button
         AppButton {
             id: serverSelectBtn
-            Layout.preferredWidth: 140
-            Layout.preferredHeight: 40
+            Layout.preferredWidth: 160
+            Layout.preferredHeight: 44
             Layout.alignment: Qt.AlignVCenter
             navigable: true
             isFlat: false
@@ -88,9 +87,9 @@ Rectangle {
             Rectangle {
                 parent: serverSelectBtn
                 anchors.fill: parent
-                color: "transparent"
-                border.width: 1
-                border.color: "black" 
+                color: ThemeManager.transparentColor
+                border.width: ThemeManager.borderWidth
+                border.color: ThemeManager.black 
                 radius: ThemeManager.borderRadius
                 z: -1 // Behind the text
             }
@@ -111,7 +110,7 @@ Rectangle {
                     horizontalAlignment: Text.AlignLeft
                     text: isConnected && serverName && serverName !== "NO SERVER" ? serverName : "SELECT SERVER"
                     font: FontManager.small
-                    color: serverSelectBtn.visualFocus ? ThemeManager.focusTextColor : ThemeManager.textColor
+                    color: serverSelectBtn.visualFocus ? ThemeManager.backgroundColor : ThemeManager.textColor
                     elide: Text.ElideRight
                 }
 
@@ -124,7 +123,7 @@ Rectangle {
                     // visible: isConnected && serverName && serverName !== "NO SERVER"
                     font.pixelSize: FontManager.fontSizeSmall - 2
                     font.family: FontManager.primaryFontFamily
-                    color: serverSelectBtn.visualFocus ? ThemeManager.focusTextColor : ThemeManager.secondaryTextColor
+                    color: serverSelectBtn.visualFocus ? ThemeManager.backgroundColor : ThemeManager.textColor
                     elide: Text.ElideRight
                 }
             }
@@ -143,14 +142,15 @@ Rectangle {
         anchors.right: parent.right
         anchors.rightMargin: ThemeManager.spacingNormal * 2  // Double the normal spacing
         anchors.verticalCenter: parent.verticalCenter
-        color: "transparent"
+        Layout.alignment: Qt.AlignVCenter
+        color: ThemeManager.transparentColor
         visible: showSystemStats
         
         // Add border for visibility
         Rectangle {
             anchors.fill: parent
-            color: "transparent"
-            radius: 2
+            color: ThemeManager.transparentColor
+            radius: ThemeManager.borderRadius / 3
         }
         
         // Stats content
@@ -233,7 +233,7 @@ Rectangle {
                 anchors.fill: parent
                 radius: width / 2
                 color: darkModeBtn.visualFocus ? "black" : (ThemeManager.darkMode ? "black" : "white")
-                border.width: 1
+                border.width: ThemeManager.borderWidth
                 border.color: "black"
                 opacity: 1.0
                 antialiasing: true

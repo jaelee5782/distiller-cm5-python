@@ -29,10 +29,10 @@ Rectangle {
 
     // Signals
     signal voiceToggled(bool listening)
-    signal voicePressed()
-    signal voiceReleased()
-    signal resetClicked() // New signal for reset button
-    signal wifiClicked() // New signal for WiFi button
+    signal voicePressed
+    signal voiceReleased
+    signal resetClicked // New signal for reset button
+    signal wifiClicked // New signal for WiFi button
 
     // Get appropriate hint text for current state
     function getStateHint() {
@@ -67,9 +67,8 @@ Rectangle {
             stateHint = getStateHint();
             // Update legacy state properties for backward compatibility
             isListening = (newState === "listening");
-            isProcessing = (newState === "processing" || newState === "thinking" || 
-                           newState === "executing_tool" || newState === "restoring_cache");
-            
+            isProcessing = (newState === "processing" || newState === "thinking" || newState === "executing_tool" || newState === "restoring_cache");
+
             // If transitioning to idle, ensure button is enabled
             if (newState === "idle" && voiceButton) {
                 voiceButton.enabled = isConnected;
@@ -77,8 +76,7 @@ Rectangle {
             } else if (newState === "listening" && voiceButton) {
                 voiceButton.checked = true;
                 voiceButton.enabled = true;
-            } else if (newState === "processing" || newState === "thinking" || 
-                      newState === "executing_tool") {
+            } else if (newState === "processing" || newState === "thinking" || newState === "executing_tool") {
                 if (voiceButton) {
                     voiceButton.checked = false;
                     voiceButton.enabled = false;  // Disable during any processing state
@@ -98,7 +96,7 @@ Rectangle {
                     voiceButton.enabled = isConnected;
                 }
             }
-            
+
             // Signal app state change
             stateChanged(newState);
         }
@@ -139,14 +137,21 @@ Rectangle {
     onAppStateChanged: {
         console.log("App state changed to: " + appState);
     }
-    color: ThemeManager.darkMode ? "black" : "white"  // Solid color instead of transparent
-    height: transcribedText.trim().length > 0 ? 100 : 70 // Reduced height by ~20%
+    
+    // Set the main container properties
+    color: ThemeManager.backgroundColor
+    height: transcribedText.trim().length > 0 ? 100 : 70
     z: 10 // Ensure this is always on top
     
-    // Add border around the entire component with rounded corners
-    border.width: 1
-    border.color: "black"
-    radius: 10  // Add rounded corners
+    // Straight rectangle to fill the rest of the area without rounded bottom
+    Rectangle {
+        id: bottomFill
+        anchors.top: topMask.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        color: ThemeManager.backgroundColor
+    }
 
     // Watch for changes to legacy properties and update state accordingly (for backward compatibility)
     onIsListeningChanged: {
@@ -161,7 +166,7 @@ Rectangle {
         else if (!isProcessing && (appState === "processing" || appState === "thinking" || appState === "executing_tool"))
             setAppState("idle");
     }
-    onVoiceReleased: function() {
+    onVoiceReleased: function () {
         if (bridge && bridge.ready && bridge.isConnected && isListening) {
             // First set state to processing explicitly
             setAppState("processing");
@@ -203,16 +208,11 @@ Rectangle {
         }
         font.pixelSize: FontManager.fontSizeSmall
         font.family: FontManager.primaryFontFamily
-        color: ThemeManager.secondaryTextColor
+        color: ThemeManager.textColor
         horizontalAlignment: Text.AlignHCenter
-        opacity: 0.9
         z: 20 // Make sure it appears above everything
         // Show hint text when any button is active and showStatusHint is enabled
-        visible: showStatusHint && (
-            (voiceButton.isActiveItem && isConnected) || 
-            resetButton.isActiveItem || 
-            wifiButton.isActiveItem
-        )
+        visible: showStatusHint && ((voiceButton.isActiveItem && isConnected) || resetButton.isActiveItem || wifiButton.isActiveItem)
     }
 
     // Transcribed text display
@@ -226,10 +226,11 @@ Rectangle {
         anchors.topMargin: 5 // Reduced top margin
         anchors.margins: 6 // Reduced margins
         height: transcribedTextLabel.contentHeight + 8 // Reduced height
-        color: ThemeManager.darkMode ? "black" : "white" // Solid color for E-Ink display
-        border.width: 1
-        border.color: "black" // Always black border for contrast
+        color: ThemeManager.backgroundColor
+        border.width: ThemeManager.borderWidth
+        border.color: ThemeManager.black // Always black border for contrast
         radius: ThemeManager.borderRadius
+        z: 20 // Above the background rectangles
 
         Text {
             id: transcribedTextLabel
@@ -258,6 +259,7 @@ Rectangle {
         anchors.bottom: parent.bottom
         anchors.margins: 5 // Reduced margins for tighter fit
         height: ThemeManager.buttonHeight
+        z: 20 // Above background rectangles
 
         Row {
             anchors.centerIn: parent
@@ -277,9 +279,7 @@ Rectangle {
                 // Activate when Enter is pressed via FocusManager
                 function activate() {
                     // Only allow activation when connected and not processing
-                    if (!isConnected || voiceInputArea.appState === "processing" || 
-                        voiceInputArea.appState === "thinking" || 
-                        voiceInputArea.appState === "executing_tool")
+                    if (!isConnected || voiceInputArea.appState === "processing" || voiceInputArea.appState === "thinking" || voiceInputArea.appState === "executing_tool")
                         return;
 
                     // When activating with Enter key
@@ -300,24 +300,16 @@ Rectangle {
                 height: ThemeManager.buttonHeight
                 isFlat: true
                 // Disable button when not connected or when processing/thinking/executing/restoring cache
-                enabled: isConnected && 
-                         voiceInputArea.appState !== "processing" && 
-                         voiceInputArea.appState !== "thinking" && 
-                         voiceInputArea.appState !== "executing_tool" &&
-                         voiceInputArea.appState !== "restoring_cache"
-                
+                enabled: isConnected && voiceInputArea.appState !== "processing" && voiceInputArea.appState !== "thinking" && voiceInputArea.appState !== "executing_tool" && voiceInputArea.appState !== "restoring_cache"
+
                 onClicked: {
                     // Only allow interaction when connected and not in any processing state
-                    if (!isConnected || 
-                        voiceInputArea.appState === "processing" || 
-                        voiceInputArea.appState === "thinking" || 
-                        voiceInputArea.appState === "executing_tool" ||
-                        voiceInputArea.appState === "restoring_cache")
+                    if (!isConnected || voiceInputArea.appState === "processing" || voiceInputArea.appState === "thinking" || voiceInputArea.appState === "executing_tool" || voiceInputArea.appState === "restoring_cache")
                         return;
 
                     // Toggle listening state
                     console.log("VoiceButton.onClicked(), current state: " + checked);
-                    
+
                     if (!isListening) {
                         // Start listening
                         voiceInputArea.voicePressed();
@@ -328,17 +320,15 @@ Rectangle {
                         setAppState("processing");
                     }
                 }
-                
+
                 // Handle key press/release for Enter/Return
-                Keys.onPressed: function(event) {
+                Keys.onPressed: function (event) {
                     // Check if we're processing before handling key
-                    if (!isConnected || voiceInputArea.appState === "processing" || 
-                        voiceInputArea.appState === "thinking" || 
-                        voiceInputArea.appState === "executing_tool") {
+                    if (!isConnected || voiceInputArea.appState === "processing" || voiceInputArea.appState === "thinking" || voiceInputArea.appState === "executing_tool") {
                         event.accepted = true;
                         return;
                     }
-                        
+
                     if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                         event.accepted = true;
                         if (!isListening) {
@@ -348,15 +338,14 @@ Rectangle {
                         }
                     }
                 }
-                
-                Keys.onReleased: function(event) {
+
+                Keys.onReleased: function (event) {
                     // Check if we're processing before handling key
-                    if (!isConnected || (voiceInputArea.appState !== "listening" && 
-                        voiceInputArea.appState !== "idle")) {
+                    if (!isConnected || (voiceInputArea.appState !== "listening" && voiceInputArea.appState !== "idle")) {
                         event.accepted = true;
                         return;
                     }
-                    
+
                     if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                         if (isListening) {
                             // Stop listening
@@ -366,21 +355,7 @@ Rectangle {
                     }
                 }
 
-                backgroundColor: {
-                    // Use the new state system for determining color
-                    switch (voiceInputArea.appState) {
-                    case "listening":
-                        return "black"; // Solid black for better visibility
-                    case "processing":
-                    case "thinking":
-                    case "executing_tool":
-                        return "black"; // Solid black for better visibility
-                    case "error":
-                        return ThemeManager.darkMode ? "black" : "white"; // Solid color based on theme
-                    default:
-                        return ThemeManager.darkMode ? "black" : "white"; // Solid color based on theme
-                    }
-                }
+                backgroundColor: ThemeManager.backgroundColor // Solid color based on theme
                 buttonRadius: width / 2
 
                 // Voice icon content needs custom handling
@@ -388,20 +363,19 @@ Rectangle {
                     // Clear custom styling from AppButton
                     parent: voiceButton
                     anchors.fill: parent
-                    color: ThemeManager.darkMode ? "black" : "white" // Solid color
+                    color: ThemeManager.backgroundColor
 
                     // High contrast highlight for e-ink when focused
                     Rectangle {
-                        visible: voiceButton.isActiveItem || voiceButton.pressed
+                        visible: voiceButton.isActiveItem || voiceButton.pressed || true  // Always visible
                         anchors.fill: parent
                         radius: width / 2
-                        color: voiceButton.isActiveItem ? "black" : (ThemeManager.darkMode ? "black" : "white")
-                        border.width: 1
-                        border.color: "black"
-                        opacity: 1.0
+                        color: voiceButton.isActiveItem ? ThemeManager.textColor : ThemeManager.backgroundColor
+                        border.width: ThemeManager.borderWidth
+                        border.color: ThemeManager.black
                         antialiasing: true
                     }
-                    
+
                     Text {
                         id: micIcon
                         text: {
@@ -426,40 +400,14 @@ Rectangle {
                                 return "󰍮";
                             }
                         }
+                        rightPadding: (!isConnected || voiceInputArea.appState === "restoring_cache") ? 4 : 0
+
                         anchors.centerIn: parent
                         font.pixelSize: parent.width * 0.45 // Slightly smaller for cleaner look
                         // Color based on connection state and focus state
-                        color: voiceButton.isActiveItem ? 
-                               ThemeManager.textOnAccentColor : 
-                               ((isConnected && 
-                               voiceInputArea.appState !== "processing" && 
-                               voiceInputArea.appState !== "thinking" && 
-                               voiceInputArea.appState !== "executing_tool" &&
-                               voiceInputArea.appState !== "restoring_cache") ? 
-                               ThemeManager.textColor : ThemeManager.secondaryTextColor)
+                        color: voiceButton.isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
-                        // More dimmed when disabled
-                        opacity: voiceButton.isActiveItem ? 1.0 :
-                                ((isConnected && 
-                                voiceInputArea.appState !== "processing" && 
-                                voiceInputArea.appState !== "thinking" && 
-                                voiceInputArea.appState !== "executing_tool" &&
-                                voiceInputArea.appState !== "restoring_cache") ? 1 : 0.5)
-                    }
-
-                    // Simple indicator for active states
-                    Rectangle {
-                        visible: voiceInputArea.appState !== "idle" && voiceInputArea.appState !== "error"
-                        anchors.centerIn: parent
-                        width: parent.width - 4
-                        height: parent.height - 4
-                        radius: width / 2
-                        color: ThemeManager.darkMode ? "black" : "white" // Solid color
-                        border.width: 1
-                        border.color: "black"
-                        opacity: 1.0
-                        antialiasing: true
                     }
                 }
             }
@@ -483,17 +431,16 @@ Rectangle {
                     // Clear custom styling from AppButton
                     parent: resetButton
                     anchors.fill: parent
-                    color: ThemeManager.darkMode ? "black" : "white" // Solid color
+                    color: ThemeManager.backgroundColor
 
                     // High contrast highlight for e-ink when focused
                     Rectangle {
                         visible: resetButton.isActiveItem || resetButton.pressed || true  // Always visible
                         anchors.fill: parent
                         radius: width / 2
-                        color: resetButton.isActiveItem ? "black" : (ThemeManager.darkMode ? "black" : "white")
-                        border.width: 1
-                        border.color: "black"
-                        opacity: 1.0
+                        color: resetButton.isActiveItem ? ThemeManager.textColor : ThemeManager.backgroundColor
+                        border.width: ThemeManager.borderWidth
+                        border.color: ThemeManager.black
                         antialiasing: true
                     }
 
@@ -501,22 +448,21 @@ Rectangle {
                         text: "↻" // Reset icon as text
                         font.pixelSize: parent.width * 0.5
                         font.family: FontManager.primaryFontFamily
-                        color: resetButton.isActiveItem ? ThemeManager.textOnAccentColor : ThemeManager.textColor
+                        color: resetButton.isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         anchors.centerIn: parent
-                        opacity: 1 // Always full opacity for better e-ink visibility
                     }
                 }
             }
-            
+
             // 3rd button: WiFi status button
             AppButton {
                 id: wifiButton
-                
+
                 property bool navigable: true
                 property bool isActiveItem: false
-                
+
                 width: ThemeManager.buttonHeight
                 height: ThemeManager.buttonHeight
                 isFlat: true
@@ -528,38 +474,36 @@ Rectangle {
                     }
                     voiceInputArea.wifiClicked();
                 }
-                
+
                 // WiFi icon content needs custom handling
                 Rectangle {
                     // Clear custom styling from AppButton
                     parent: wifiButton
                     anchors.fill: parent
-                    color: ThemeManager.darkMode ? "black" : "white" // Solid color
+                    color: ThemeManager.backgroundColor
 
                     // High contrast highlight for e-ink when focused
                     Rectangle {
                         visible: wifiButton.isActiveItem || wifiButton.pressed || true  // Always visible
                         anchors.fill: parent
                         radius: width / 2
-                        color: wifiButton.isActiveItem ? "black" : (ThemeManager.darkMode ? "black" : "white")
-                        border.width: 1
-                        border.color: "black"
-                        opacity: 1.0
+                        color: wifiButton.isActiveItem ? ThemeManager.textColor : ThemeManager.backgroundColor
+                        border.width: ThemeManager.borderWidth
+                        border.color: ThemeManager.black
                         antialiasing: true
                     }
-                    
+
                     Text {
                         text: "" // WiFi icon
                         font.pixelSize: parent.width * 0.3
                         font.family: FontManager.primaryFontFamily
-                        color: wifiButton.isActiveItem ? ThemeManager.textOnAccentColor : ThemeManager.textColor
+                        color: wifiButton.isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor
                         width: parent.width
                         height: parent.height
                         rightPadding: 6
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         anchors.centerIn: parent
-                        opacity: 1
                     }
                 }
             }

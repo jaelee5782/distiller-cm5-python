@@ -34,8 +34,8 @@ Image {
     Rectangle {
         anchors.fill: parent
         visible: optimizedImage.showPlaceholder && (optimizedImage.isLoading || (optimizedImage.hasError && optimizedImage.fallbackSource === ""))
-        color: "transparent"
-        border.color: ThemeManager.borderColor
+        color: ThemeManager.transparentColor
+        border.color: ThemeManager.black
         border.width: ThemeManager.borderWidth
         radius: ThemeManager.borderRadius
 
@@ -43,7 +43,7 @@ Image {
         Text {
             anchors.centerIn: parent
             text: optimizedImage.hasError ? "!" : "..."
-            color: ThemeManager.tertiaryTextColor
+            color: ThemeManager.textColor
             font.pixelSize: Math.min(parent.width, parent.height) * 0.2
         }
 

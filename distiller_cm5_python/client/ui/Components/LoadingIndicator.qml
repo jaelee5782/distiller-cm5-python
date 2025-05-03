@@ -10,7 +10,7 @@ Rectangle {
     height: 80
     radius: 40
     color: ThemeManager.backgroundColor
-    border.color: ThemeManager.borderColor
+    border.color: ThemeManager.black
     border.width: ThemeManager.borderWidth
     visible: isLoading
 

@@ -18,9 +18,8 @@ Rectangle {
     height: messageText.implicitHeight + ThemeManager.spacingNormal
     radius: ThemeManager.borderRadius
     color: ThemeManager.backgroundColor
-    border.color: ThemeManager.borderColor
+    border.color: ThemeManager.black
     border.width: ThemeManager.borderWidth
-    opacity: 1
     visible: false
 
     Text {

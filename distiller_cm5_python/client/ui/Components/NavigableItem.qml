@@ -21,8 +21,8 @@ Item {
     property bool visualFocus: activeFocus || isActiveItem
     // Visual state
     property bool highlighted: visualFocus
-    property color backgroundColor: highlighted ? ThemeManager.accentColor : ThemeManager.buttonColor
-    property color textColor: highlighted ? ThemeManager.focusTextColor : ThemeManager.textColor
+    property color backgroundColor: highlighted ? ThemeManager.textColor : ThemeManager.backgroundColor
+    property color textColor: highlighted ? ThemeManager.backgroundColor : ThemeManager.textColor
     // For sliders and other value adjustments
     property bool isAdjustable: false
     property real adjustmentStep: 0.1
@@ -76,7 +76,7 @@ Item {
         anchors.fill: parent
         color: ThemeManager.transparentColor
         border.width: parent.visualFocus ? ThemeManager.borderWidth * 2 : 0 // Increased border width
-        border.color: ThemeManager.accentColor
+        border.color: ThemeManager.textColor
         radius: parent.width
         visible: parent.visualFocus
         opacity: 1

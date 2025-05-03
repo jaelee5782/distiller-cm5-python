@@ -37,7 +37,7 @@ Item {
         id: background
 
         anchors.fill: parent
-        color: "transparent"
+        color: ThemeManager.transparentColor
     }
 
 }
