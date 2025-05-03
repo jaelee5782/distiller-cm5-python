@@ -137,14 +137,21 @@ Rectangle {
     onAppStateChanged: {
         console.log("App state changed to: " + appState);
     }
+    
+    // Set the main container properties
     color: ThemeManager.backgroundColor
-    height: transcribedText.trim().length > 0 ? 100 : 70 // Reduced height by ~20%
+    height: transcribedText.trim().length > 0 ? 100 : 70
     z: 10 // Ensure this is always on top
-
-    // Add border around the entire component with rounded corners
-    border.width: ThemeManager.borderWidth
-    border.color: ThemeManager.black
-    radius: ThemeManager.borderRadius
+    
+    // Straight rectangle to fill the rest of the area without rounded bottom
+    Rectangle {
+        id: bottomFill
+        anchors.top: topMask.bottom
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        color: ThemeManager.backgroundColor
+    }
 
     // Watch for changes to legacy properties and update state accordingly (for backward compatibility)
     onIsListeningChanged: {
@@ -223,6 +230,7 @@ Rectangle {
         border.width: ThemeManager.borderWidth
         border.color: ThemeManager.black // Always black border for contrast
         radius: ThemeManager.borderRadius
+        z: 20 // Above the background rectangles
 
         Text {
             id: transcribedTextLabel
@@ -251,6 +259,7 @@ Rectangle {
         anchors.bottom: parent.bottom
         anchors.margins: 5 // Reduced margins for tighter fit
         height: ThemeManager.buttonHeight
+        z: 20 // Above background rectangles
 
         Row {
             anchors.centerIn: parent

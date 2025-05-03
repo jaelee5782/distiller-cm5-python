@@ -887,7 +887,7 @@ PageBase {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.margins: 8
+        anchors.margins: 0
         isListening: voiceAssistantPage.isListening
         isProcessing: voiceAssistantPage.isProcessing
         isConnected: voiceAssistantPage.isServerConnected && serverName && serverName.length > 0 && serverName !== "No Server"
