@@ -114,31 +114,11 @@ class MCPClient:
             init_result = await self.session.initialize()
             self.server_name = init_result.serverInfo.name
 
-            # If the server reports a generic "cli" name, try to get a better name from the script path
+            # If the server reports a generic "cli" name, use our utility to get a better name
             if self.server_name == "cli":
-                try:
-                    # First attempt to extract SERVER_NAME from the script file
-                    with open(server_script_path, 'r') as f:
-                        for line in f:
-                            line = line.strip()
-                            if line.startswith('SERVER_NAME ='):
-                                extracted_name = line.split('=', 1)[1].strip().strip('"\'')
-                                if extracted_name:
-                                    self.server_name = extracted_name
-                                    logger.debug(f"Extracted server name from script: {self.server_name}")
-                                    break
-                    
-                    # If we couldn't find SERVER_NAME, fall back to the script name
-                    if self.server_name == "cli":
-                        # Extract the name from the script path (e.g., wifi_server.py -> WiFi)
-                        script_name = os.path.basename(server_script_path)
-                        if script_name.endswith('_server.py'):
-                            script_name = script_name[:-10]  # Remove "_server.py"
-                        self.server_name = script_name.replace('_', ' ').title()
-                        logger.debug(f"Using script name as server name: {self.server_name}")
-                except Exception as name_error:
-                    logger.warning(f"Failed to extract server name from script: {name_error}")
-                    # Keep the original server name if extraction failed
+                from distiller_cm5_python.utils.server_utils import extract_server_name
+                self.server_name = extract_server_name(server_script_path)
+                logger.debug(f"Using extracted server name: {self.server_name}")
 
             end_time = time.time()
             logger.debug(f"Server connection completed in {end_time - start_time:.2f}s")
