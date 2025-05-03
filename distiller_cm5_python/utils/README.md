@@ -1,35 +1,48 @@
 # Utilities (`utils`)
 
-This directory contains shared utility modules and configuration files used across different components of the MCP project (e.g., client, servers).
+This directory contains shared utility modules and configuration files used across different components of the project (e.g., client, servers).
 
 ## Modules
 
 - **`config.py`**:
-    - Provides a centralized `Config` class (singleton) for managing application settings.
+    - Provides a centralized mechanism for managing application settings.
     - Loads configuration in the following order of precedence (lowest to highest):
-        1. Defaults from `default_config.json`.
+        1. Defaults from `utils/default_config.json`.
         2. User-defined configuration file (path specified by `MCP_CONFIG_FILE` env var, defaults to `mcp_config.json` in the runtime directory).
         3. Environment variables (e.g., `LLM_MODEL`, `LOG_LEVEL`).
-    - Exports commonly used configuration parameters directly (e.g., `SERVER_URL`, `MODEL_NAME`, `LOGGING_LEVEL`).
+    - Exports commonly used configuration parameters directly (e.g., `SERVER_URL`, `MODEL_NAME`, `LOGGING_LEVEL`). Check the file for available constants.
 - **`logger.py`**:
-    - Sets up a standardized console logger instance named `mcp`.
-    - Configures log formatting and level (defaulting to INFO, controllable via `LOG_LEVEL` in config or `setup_logging` function).
-    - Quiets excessive logging from libraries like `httpx` and `asyncio`.
+    - Provides a `setup_logging()` function to configure project-wide logging.
+    - Sets up a standardized console logger with configurable formatting and level (controlled via `LOGGING_LEVEL` in config or function arguments).
+    - Quiets excessive logging from libraries like `httpx` and `asyncio` by default.
+- **`distiller_exception.py`**:
+    - Defines custom exception classes for standardized error handling:
+        - `LogOnlyError`: For exceptions that should be logged but might not require immediate user visibility.
+        - `UserVisibleError`: For exceptions representing errors that should be directly reported to the user (e.g., configuration errors, critical failures).
 
 ## Configuration Files
 
-- **`default_config.json`**: Contains the base default configuration values for the application, particularly for the client and LLM interactions.
-- **`speak_config.json`**: Likely contains specific configuration settings related to a 'speak' tool or functionality, potentially used by one of the MCP servers (e.g., `speaker_server.py`).
+- **`default_config.json`**: Contains the base default configuration values used by `config.py` if no overrides are found in user config files or environment variables.
 
 ## Usage
 
-Modules in this directory are typically imported by other components:
+Modules in this directory are typically imported by other components using their full path from the project root:
 
 ```python
-# Example importing config values and logger
-from utils.config import MODEL_NAME, TIMEOUT
-from utils.logger import logger
+# Example importing config values, logger setup, and custom exception
+from distiller_cm5_python.utils.config import MODEL_NAME, TIMEOUT
+from distiller_cm5_python.utils.logger import setup_logging, logger
+from distiller_cm5_python.utils.distiller_exception import UserVisibleError
 
-logger.info(f"Using model: {MODEL_NAME}")
-# ... use TIMEOUT ...
+setup_logging() # Configure logging based on settings
+
+try:
+    logger.info(f"Using model: {MODEL_NAME}")
+    # ... some operation that might fail ...
+    if critical_error:
+        raise UserVisibleError("Something went wrong that the user must know!")
+except UserVisibleError as e:
+    print(f"Error: {e}") # Show error to user
+except Exception as e:
+    logger.exception("An unexpected error occurred.") # Log other errors
 ``` 

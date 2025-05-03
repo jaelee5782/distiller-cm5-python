@@ -5,35 +5,47 @@ This directory contains a FastAPI-based server that provides an interface to int
 ## Overview
 
 The server loads GGUF-format LLM files and exposes HTTP endpoints for:
+- Checking server health.
 - Listing available models.
-- Setting the currently active model.
-- Generating chat completions, supporting OpenAI-compatible API requests including tool use and streaming responses.
-- Managing a prompt cache for faster subsequent requests with the same prefix.
+- Setting the currently active model, including specific loading configurations.
+- Generating chat completions, supporting OpenAI-compatible API requests including tool use, inference parameter customization, and streaming responses.
+- Utilizing automatic disk-based prompt caching and providing an endpoint to pre-warm the cache.
 
 ## Features
 
-- **Model Management**: Dynamically load and switch between different GGUF models located in the `models/` directory.
+- **Model Management**: Dynamically load and switch between different GGUF models located in the `models/` directory. Allows specifying model configuration (e.g., `n_ctx`) during loading via the API.
 - **Chat Completion**: Provides an endpoint (`/chat/completions`) compatible with the OpenAI chat completion API format.
+    - Applies the appropriate chat template based on model metadata using Jinja2.
     - Supports multiple messages in the conversation history.
-    - Supports passing available tools to the model.
+    *   Supports passing available tools (`tools`) to the model.
+    *   Supports customizing inference parameters per request (`inference_configs`) like `temperature`, `max_tokens`, `top_k`, `top_p`, `repeat_penalty`, `stop`.
+    *   Supports specifying model load configurations (`load_model_configs`) per request if switching models.
     - Supports streaming responses (`text/event-stream`).
-- **Prompt Caching**: Utilizes `llama-cpp-python`'s disk caching (`LlamaDiskCache`) to speed up processing for requests with repeated prompt structures. The cache is stored in the `cache/` directory.
-- **Configuration**: Configurable host, port, default model, and logging level via command-line arguments.
+- **Prompt Caching**: Automatically utilizes `llama-cpp-python`'s disk caching (`LlamaDiskCache`) to speed up processing for requests with repeated prompt structures. The cache is stored in the `cache/` directory. An endpoint is provided to pre-warm this cache.
+- **Configuration**: Configurable host, port, default model, and logging level via command-line arguments when run directly.
 
 ## Setup
 
 1.  **Install Dependencies**:
     ```bash
-    pip install -r requirements.txt
+    # Navigate to the project root first
+    # pip install -r requirements.txt # Assuming a project-level requirements file
+    # Or install specific dependencies if needed:
+    pip install fastapi uvicorn "llama-cpp-python[server]" jinja2 pydantic
     ```
     Ensure you have the necessary build tools for `llama-cpp-python` (like C++ compilers). Refer to the `llama-cpp-python` documentation for details.
 
-2.  **Place Models**: Download your desired LLM models in GGUF format and place them inside the `models/` directory.
+2.  **Place Models**: Download your desired LLM models in GGUF format and place them inside the `llm_server/models/` directory relative to the project root.
 
 ## Running the Server
 
-You can run the server directly using Python:
+The recommended way to run the server is directly using Python, which processes the command-line arguments for configuration:
 
+```bash
+# Navigate to the project root directory
+python -m distiller_cm5_python.llm_server.server [OPTIONS]
+```
+Or if running from within the `llm_server` directory:
 ```bash
 python server.py [OPTIONS]
 ```
@@ -41,27 +53,35 @@ python server.py [OPTIONS]
 Available options:
 - `--host`: Host to bind the server to (default: `127.0.0.1`).
 - `--port`: Port to bind the server to (default: `8000`).
-- `--model_name`: Default GGUF model file to load from the `models/` directory (default: `qwen2.5-3b-instruct-q4_k_m.gguf`).
+- `--model-name`: Default GGUF model file to load from the `models/` directory (e.g., `qwen2.5-3b-instruct-q4_k_m.gguf`). Defaults might be specified in the script.
 - `--log-level`: Logging level (`debug`, `info`, `warning`, `error`) (default: `info`).
 
-Alternatively, you can use `uvicorn`:
+Alternatively, you can use `uvicorn` for development (note: this bypasses the `--model-name` and `--log-level` arguments from `server.py`):
 
 ```bash
-uvicorn server:app --host 127.0.0.1 --port 8000 --reload
+# Navigate to the project root directory
+uvicorn distiller_cm5_python.llm_server.server:app --host 127.0.0.1 --port 8000 --reload
 ```
-*(Note: Running with `uvicorn` directly won't process the command-line arguments defined in `server.py` for model loading etc. unless the logic is adapted)*
 
 ## API Endpoints
 
 - **`GET /`**: Returns the server status.
-- **`GET /models`**: Lists the GGUF model files found in the `models/` directory.
-- **`POST /setModel`**: Sets the active LLM. Requires a JSON body like `{"modelName": "your_model.gguf"}`.
-- **`POST /chat/completions`**: Generates chat completions. Accepts OpenAI-compatible request bodies. The `model` field in the request body can be used to specify or change the model for the request.
-- **`POST /restore_cache`**: Pre-warms the model's cache based on a provided message history and tools.
+- **`GET /health`**: Checks if the server is running and the LLM model is loaded. Returns `{"status": "ok", "message": "..."}` on success.
+- **`GET /models`**: Lists the GGUF model files found in the `models/` directory. Returns `{"models": ["model1.gguf", ...]}`.
+- **`POST /setModel`**: Sets the active LLM. Requires a JSON body like `{"model_name": "your_model.gguf", "load_model_configs": {"n_ctx": 4096}}`.
+- **`POST /chat/completions`**: Generates chat completions. Accepts OpenAI-compatible request bodies.
+    - `model` (optional): Specify a model name from the `models/` directory for this request. If different from the current model, it will be loaded using `load_model_configs`.
+    - `messages`: List of message objects (`role`, `content`).
+    - `tools` (optional): List of available tools in OpenAI format.
+    - `stream` (optional): Boolean, set to `true` for streaming response.
+    - `inference_configs` (optional): Dictionary with inference parameters (`temperature`, `max_tokens`, `top_k`, `top_p`, `repeat_penalty`, `stop`).
+    - `load_model_configs` (optional): Dictionary with model loading parameters (`n_ctx`, etc.) used if the `model` field specifies a model different from the currently loaded one.
+- **`POST /restore_cache`**: Pre-warms the model's prompt cache based on a provided message history and tools, potentially speeding up subsequent related requests. Accepts `messages`, `tools`, and optional `inference_configs`.
 
 ## Dependencies
 
 - `fastapi`: Web framework.
 - `uvicorn`: ASGI server.
 - `llama-cpp-python`: Python bindings for `llama.cpp`.
-- `Jinja2`: Used for formatting prompts based on model templates. 
+- `Jinja2`: Used for formatting prompts based on model chat templates.
+- `pydantic`: Data validation (used by FastAPI). 
