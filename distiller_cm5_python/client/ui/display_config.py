@@ -14,7 +14,7 @@ config = {
             "use_gamma": True,  # Apply gamma correction before thresholding
             "gamma_value": 0.9,  # Gamma correction value (0.5-1.0, lower = darker)
             "adaptive_block_size": 16,  # Block size for adaptive thresholding (must be odd)
-            "adaptive_c": 5  # Constant subtracted from block mean/median (can be negative)
+            "adaptive_c": 5,  # Constant subtracted from block mean/median (can be negative)
         },
         "dark_mode": True,  # Set dark mode as default
         "show_system_stats": True,  # Enable system monitor display
@@ -26,8 +26,8 @@ config = {
             "font_size_normal": 14,
             "font_size_medium": 16,
             "font_size_large": 18,
-            "font_size_xlarge": 20
-        }
+            "font_size_xlarge": 20,
+        },
     }
 }
 

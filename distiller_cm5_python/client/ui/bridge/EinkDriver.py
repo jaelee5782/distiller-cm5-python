@@ -10,14 +10,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Check if we're on a Rockchip platform
-_ROCK = 'rockchip' in platform.release()
+_ROCK = "rockchip" in platform.release()
 
 # Check if we're on Raspberry Pi - this works on Pi 5 which might not identify as 'raspberry'
 _RPI = (not _ROCK) and (
-    os.path.exists('/proc/device-tree/model') and
-    'raspberry' in open('/proc/device-tree/model', 'r').read().lower() or
-    os.path.exists('/sys/firmware/devicetree/base/model') and
-    'raspberry' in open('/sys/firmware/devicetree/base/model', 'r').read().lower()
+    os.path.exists("/proc/device-tree/model")
+    and "raspberry" in open("/proc/device-tree/model", "r").read().lower()
+    or os.path.exists("/sys/firmware/devicetree/base/model")
+    and "raspberry" in open("/sys/firmware/devicetree/base/model", "r").read().lower()
 )
 
 if _RPI:
@@ -27,41 +27,225 @@ elif _ROCK:
     from .rock_gpio import RockGPIO
 
 
-
 class EinkDriver:
     def __init__(self) -> None:
         self.LUT_ALL: List[int] = [
-            0x01,	0x05,	0x20,	0x19,	0x0A,	0x01,	0x01,
-            0x05,	0x0A,	0x01,	0x0A,	0x01,	0x01,	0x01,
-            0x05,	0x09,	0x02,	0x03,	0x04,	0x01,	0x01,
-            0x01,	0x04,	0x04,	0x02,	0x00,	0x01,	0x01,
-            0x01,	0x00,	0x00,	0x00,	0x00,	0x01,	0x01,
-            0x01,	0x00,	0x00,	0x00,	0x00,	0x01,	0x01,
-            0x01,	0x05,	0x20,	0x19,	0x0A,	0x01,	0x01,
-            0x05,	0x4A,	0x01,	0x8A,	0x01,	0x01,	0x01,
-            0x05,	0x49,	0x02,	0x83,	0x84,	0x01,	0x01,
-            0x01,	0x84,	0x84,	0x82,	0x00,	0x01,	0x01,
-            0x01,	0x00,	0x00,	0x00,	0x00,	0x01,	0x01,
-            0x01,	0x00,	0x00,	0x00,	0x00,	0x01,	0x01,
-            0x01,	0x05,	0x20,	0x99,	0x8A,	0x01,	0x01,
-            0x05,	0x4A,	0x01,	0x8A,	0x01,	0x01,	0x01,
-            0x05,	0x49,	0x82,	0x03,	0x04,	0x01,	0x01,
-            0x01,	0x04,	0x04,	0x02,	0x00,	0x01,	0x01,
-            0x01,	0x00,	0x00,	0x00,	0x00,	0x01,	0x01,
-            0x01,	0x00,	0x00,	0x00,	0x00,	0x01,	0x01,
-            0x01,	0x85,	0x20,	0x99,	0x0A,	0x01,	0x01,
-            0x05,	0x4A,	0x01,	0x8A,	0x01,	0x01,	0x01,
-            0x05,	0x49,	0x02,	0x83,	0x04,	0x01,	0x01,
-            0x01,	0x04,	0x04,	0x02,	0x00,	0x01,	0x01,
-            0x01,	0x00,	0x00,	0x00,	0x00,	0x01,	0x01,
-            0x01,	0x00,	0x00,	0x00,	0x00,	0x01,	0x01,
-            0x01,	0x85,	0xA0,	0x99,	0x0A,	0x01,	0x01,
-            0x05,	0x4A,	0x01,	0x8A,	0x01,	0x01,	0x01,
-            0x05,	0x49,	0x02,	0x43,	0x04,	0x01,	0x01,
-            0x01,	0x04,	0x04,	0x42,	0x00,	0x01,	0x01,
-            0x01,	0x00,	0x00,	0x00,	0x00,	0x01,	0x01,
-            0x01,	0x00,	0x00,	0x00,	0x00,	0x01,	0x01,
-            0x09,	0x10,	0x3F,	0x3F,	0x00,	0x0B,
+            0x01,
+            0x05,
+            0x20,
+            0x19,
+            0x0A,
+            0x01,
+            0x01,
+            0x05,
+            0x0A,
+            0x01,
+            0x0A,
+            0x01,
+            0x01,
+            0x01,
+            0x05,
+            0x09,
+            0x02,
+            0x03,
+            0x04,
+            0x01,
+            0x01,
+            0x01,
+            0x04,
+            0x04,
+            0x02,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x05,
+            0x20,
+            0x19,
+            0x0A,
+            0x01,
+            0x01,
+            0x05,
+            0x4A,
+            0x01,
+            0x8A,
+            0x01,
+            0x01,
+            0x01,
+            0x05,
+            0x49,
+            0x02,
+            0x83,
+            0x84,
+            0x01,
+            0x01,
+            0x01,
+            0x84,
+            0x84,
+            0x82,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x05,
+            0x20,
+            0x99,
+            0x8A,
+            0x01,
+            0x01,
+            0x05,
+            0x4A,
+            0x01,
+            0x8A,
+            0x01,
+            0x01,
+            0x01,
+            0x05,
+            0x49,
+            0x82,
+            0x03,
+            0x04,
+            0x01,
+            0x01,
+            0x01,
+            0x04,
+            0x04,
+            0x02,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x85,
+            0x20,
+            0x99,
+            0x0A,
+            0x01,
+            0x01,
+            0x05,
+            0x4A,
+            0x01,
+            0x8A,
+            0x01,
+            0x01,
+            0x01,
+            0x05,
+            0x49,
+            0x02,
+            0x83,
+            0x04,
+            0x01,
+            0x01,
+            0x01,
+            0x04,
+            0x04,
+            0x02,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x85,
+            0xA0,
+            0x99,
+            0x0A,
+            0x01,
+            0x01,
+            0x05,
+            0x4A,
+            0x01,
+            0x8A,
+            0x01,
+            0x01,
+            0x01,
+            0x05,
+            0x49,
+            0x02,
+            0x43,
+            0x04,
+            0x01,
+            0x01,
+            0x01,
+            0x04,
+            0x04,
+            0x42,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x01,
+            0x01,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x01,
+            0x01,
+            0x09,
+            0x10,
+            0x3F,
+            0x3F,
+            0x00,
+            0x0B,
         ]
         self.emptyImage: List[int] = [0xFF] * 24960
         self.oldData: List[int] = [0] * 12480
@@ -100,7 +284,7 @@ class EinkDriver:
         data_np = np.array(data, dtype=np.uint8)
         for i in range(0, len(data), chunk_size):
             try:
-                self.spi.writebytes(data_np[i:i+chunk_size].tolist())
+                self.spi.writebytes(data_np[i : i + chunk_size].tolist())
             except Exception as e:
                 logger.error(f"SPI write error at offset {i}: {e}")
                 raise
@@ -108,7 +292,7 @@ class EinkDriver:
     def cleanup(self) -> None:
         if _ROCK:
             self.RockGPIO.cleanup()
-        elif hasattr(self, 'lgpio_handle'):
+        elif hasattr(self, "lgpio_handle"):
             lgpio.gpiochip_close(self.lgpio_handle)
 
     def EPD_GPIO_Init(self) -> spidev.SpiDev:
@@ -121,8 +305,7 @@ class EinkDriver:
         else:
             self.RockGPIO.setup(self.RK_DC_PIN, Direction.OUTPUT)
             self.RockGPIO.setup(self.RK_RST_PIN, Direction.OUTPUT)
-            self.RockGPIO.setup(
-                self.RK_BUSY_PIN, Direction.INPUT, bias=Bias.PULL_UP)
+            self.RockGPIO.setup(self.RK_BUSY_PIN, Direction.INPUT, bias=Bias.PULL_UP)
 
         bus = 0
         device = 0
@@ -133,7 +316,7 @@ class EinkDriver:
         return spi
 
     def SPI_Delay(self) -> None:
-        """ Delay for SPI communication, used to tune frequency """
+        """Delay for SPI communication, used to tune frequency"""
         time.sleep(0.000001)
 
     def SPI_Write(self, value: int) -> List[int]:
@@ -373,7 +556,7 @@ class EinkDriver:
 
     def pic_display(self, new_data: List[int]) -> None:
         """Display new data on the e-ink display
-        
+
         Args:
             new_data: Flat list of 12480 integers representing pixel data
         """

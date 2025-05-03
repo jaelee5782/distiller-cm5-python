@@ -11,7 +11,9 @@ from qasync import asyncSlot
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot, pyqtProperty
 
 from distiller_cm5_python.client.ui.bridge.StatusManager import StatusManager
-from distiller_cm5_python.client.ui.bridge.ConversationManager import ConversationManager
+from distiller_cm5_python.client.ui.bridge.ConversationManager import (
+    ConversationManager,
+)
 from distiller_cm5_python.client.ui.bridge.ServerDiscovery import ServerDiscovery
 from distiller_cm5_python.client.ui.utils.NetworkUtils import NetworkUtils
 from distiller_cm5_python.client.mid_layer.mcp_client import MCPClient
@@ -19,12 +21,12 @@ from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatch
 from distiller_cm5_python.utils.config import DEFAULT_CONFIG_PATH, API_KEY
 
 from .event_handler import BridgeEventHandler
-from .config_manager import ConfigManager
 from .connection_manager import ConnectionManager
 from .error_handler import ErrorHandler
 from .lifecycle_manager import LifecycleManager
 
 logger = logging.getLogger(__name__)
+
 
 class BridgeCore(QObject):
     """
@@ -32,94 +34,95 @@ class BridgeCore(QObject):
     This class provides the main interface for the UI and coordinates
     between the various specialized components.
     """
-    
+
     # Signal definitions
     conversationChanged = pyqtSignal()  # Signal for conversation changes
     statusChanged = pyqtSignal(str)  # Signal for status changes
     availableServersChanged = pyqtSignal(list)  # Signal for available servers list
     isConnectedChanged = pyqtSignal(bool)  # Signal for connection status
-    messageReceived = pyqtSignal(str, str, str, str)  # Signal for new messages (content, event_id, timestamp, status)
+    messageReceived = pyqtSignal(
+        str, str, str, str
+    )  # Signal for new messages (content, event_id, timestamp, status)
     listeningStarted = pyqtSignal()  # Signal for when listening starts
     listeningStopped = pyqtSignal()  # Signal for when listening stops
     errorOccurred = pyqtSignal(str)  # Signal for errors
     bridgeReady = pyqtSignal()  # Signal for when the bridge is fully initialized
     recordingStateChanged = pyqtSignal(bool)  # Signal for recording state changes
-    recordingError = pyqtSignal(str)  # Signal specifically for recording/transcription errors
+    recordingError = pyqtSignal(
+        str
+    )  # Signal specifically for recording/transcription errors
     actionReceived = pyqtSignal(str, str, str)  # Signal for actions
     infoReceived = pyqtSignal(str, str, str)  # Signal for info messages
     warningReceived = pyqtSignal(str, str, str)  # Signal for warnings
     errorReceived = pyqtSignal(str, str, str)  # Signal for errors
-    transcriptionUpdate = pyqtSignal(str, arguments=['transcription'])  # Signal for transcription updates
-    transcriptionComplete = pyqtSignal(str, arguments=['full_text'])  # Signal for completed transcription
+    transcriptionUpdate = pyqtSignal(
+        str, arguments=["transcription"]
+    )  # Signal for transcription updates
+    transcriptionComplete = pyqtSignal(
+        str, arguments=["full_text"]
+    )  # Signal for completed transcription
     sshInfoReceived = pyqtSignal(str, str, str)  # Signal for SSH info events
     functionReceived = pyqtSignal(str, str, str)  # Signal for function events
     observationReceived = pyqtSignal(str, str, str)  # Signal for observation events
     planReceived = pyqtSignal(str, str, str)  # Signal for plan events
-    messageSchemaReceived = pyqtSignal('QVariantMap')  # Signal for raw message schema objects
+    messageSchemaReceived = pyqtSignal(
+        "QVariantMap"
+    )  # Signal for raw message schema objects
 
     def __init__(self, parent=None):
         """
         Initialize the bridge core and all its components.
-        
+
         Args:
             parent: Optional parent object
         """
         super().__init__(parent=parent)
-        
+
         # Initialize basic state
         self._is_connected = False
         self._is_ready = False
         self._loop = asyncio.get_event_loop()
         self._app_instance = None
-        
+
         # Initialize basic components
         self.status_manager = StatusManager(self)
         self.conversation_manager = ConversationManager(self)
         self.server_discovery = ServerDiscovery(self)
         self.network_utils = NetworkUtils()
         self.dispatcher = EventDispatcher()
-        
+
         # Initialize the MCP client with dispatcher and API Key
         self.mcp_client = MCPClient(dispatcher=self.dispatcher, api_key=API_KEY)
-        
+
         # Initialize specialized components
         self.event_handler = BridgeEventHandler(
-            self.dispatcher,
-            self.status_manager,
-            self,
-            type(self).is_connected
+            self.dispatcher, self.status_manager, self, type(self).is_connected
         )
         # Give the event handler direct access to the conversation manager
         self.event_handler.signals.conversation_manager = self.conversation_manager
-        
-        self.config_manager = ConfigManager(
-            self.status_manager,
-            self.conversation_manager,
-            DEFAULT_CONFIG_PATH
-        )
-        
-        self.connection_manager = ConnectionManager(
-            self.status_manager,
-            self.conversation_manager,
-            self.server_discovery,
-            type(self).is_connected
-        )
-        
+
         self.error_handler = ErrorHandler(
             self.status_manager,
             self.conversation_manager,
             self.dispatcher,
-            self.errorOccurred.emit
+            self.errorOccurred.emit,
         )
-        
-        self.lifecycle_manager = LifecycleManager(
+
+        self.connection_manager = ConnectionManager(
             self.status_manager,
-            self.conversation_manager
+            self.conversation_manager,
+            self.server_discovery,
+            type(self).is_connected,
+            self.error_handler,
         )
-        
+
+        self.lifecycle_manager = LifecycleManager(
+            self.status_manager, self.conversation_manager
+        )
+
         # Initialize state
         self.conversation_manager.reset_streaming_message()
-        
+
         # Sync the connection manager's MCP client with ours
         self.connection_manager.mcp_client = self.mcp_client
 
@@ -184,7 +187,9 @@ class BridgeCore(QObject):
                 return
 
             if not self._is_connected:
-                raise ConnectionError("Not connected to any server. Please connect first.")
+                raise ConnectionError(
+                    "Not connected to any server. Please connect first."
+                )
 
             # Add user message
             user_message = {
@@ -212,49 +217,21 @@ class BridgeCore(QObject):
             self.error_handler.handle_error(
                 e,
                 "Query processing",
-                user_friendly_msg="Failed to process query. Please try again."
+                user_friendly_msg="Failed to process query. Please try again.",
             )
-
-    @pyqtSlot(bool)
-    def toggle_streaming(self, enabled: bool):
-        """Enable or disable streaming mode."""
-        if self.mcp_client is None:
-            logger.error("Client is not initialized")
-            return
-            
-        self.mcp_client.streaming = enabled
-        status = "enabled" if enabled else "disabled"
-        self.status_manager.status = f"Streaming {status}"
-        self.conversation_manager.add_message({
-            "timestamp": self.conversation_manager.get_timestamp(),
-            "content": f"Streaming {status}",
-        })
-        logger.info(f"Streaming {status}")
-        self.statusChanged.emit(self.status_manager.status)
 
     @pyqtSlot(str, str, result="QVariant")
     def getConfigValue(self, section: str, key: str) -> str:
-        """Get a configuration value, always returning a string."""
-        return self.config_manager.get_config_value(section, key)
+        """Get a configuration value (Stub method)."""
+        logger.warning("ConfigManager removed: getConfigValue returning empty string")
+        return ""
 
     @pyqtSlot(str, str, "QVariant")
     def setConfigValue(self, section: str, key: str, value):
-        """Set a configuration value and update the cache."""
-        self.config_manager.set_config_value(section, key, value)
-
-    @asyncSlot()
-    async def applyConfig(self):
-        """Apply configuration changes by restarting the client."""
-        await self.config_manager.apply_config(
-            self.mcp_client,
-            self.error_handler.handle_error,
-            self.connection_manager.connect_to_selected_server
+        """Set a configuration value (Stub method)."""
+        logger.warning(
+            f"ConfigManager removed: setConfigValue({section}, {key}, {value}) ignored"
         )
-
-    @pyqtSlot()
-    def saveConfigToFile(self):
-        """Save the current configuration to file."""
-        self.config_manager.save_config_to_file(self.error_handler.handle_error)
 
     async def connect_to_server(self):
         """Ask the user to select a server from the list of available servers."""
@@ -299,23 +276,29 @@ class BridgeCore(QObject):
         """Connect to the selected MCP server."""
         try:
             if not self.connection_manager.selected_server_path:
-                raise ValueError("No server selected. Please choose a server before connecting.")
+                raise ValueError(
+                    "No server selected. Please choose a server before connecting."
+                )
 
-            # Extract server name for status messages
-            server_name = (
-                os.path.basename(self.connection_manager.selected_server_path)
-                .replace("_server.py", "")
-                .replace(".py", "")
+            # Use utility to extract server name for status messages
+            from distiller_cm5_python.utils.server_utils import extract_server_name
+
+            server_name = extract_server_name(
+                self.connection_manager.selected_server_path
             )
 
             if not os.path.exists(self.connection_manager.selected_server_path):
-                raise FileNotFoundError(f"Server script not found: {self.connection_manager.selected_server_path}")
+                raise FileNotFoundError(
+                    f"Server script not found: {self.connection_manager.selected_server_path}"
+                )
 
             # Update UI immediately to show connecting status
             self.status_manager.update_status(StatusManager.STATUS_CONNECTING)
 
             # Create task to connect in the background
-            asyncio.create_task(self.connection_manager.connect_to_selected_server(server_name))
+            asyncio.create_task(
+                self.connection_manager.connect_to_selected_server(server_name)
+            )
             return ""  # Empty string indicates success (no error)
 
         except Exception as e:
@@ -339,7 +322,9 @@ class BridgeCore(QObject):
 
             # Check if client is connected
             if not self._is_connected:
-                raise ConnectionError("Cannot activate voice: not connected to any server.")
+                raise ConnectionError(
+                    "Cannot activate voice: not connected to any server."
+                )
 
             # Emit signal for UI update
             self.listeningStarted.emit()
@@ -374,10 +359,6 @@ class BridgeCore(QObject):
         """Start recording audio with Whisper."""
         try:
             logger.info("Starting Whisper recording")
-
-            # Check if client is connected
-            if not self._is_connected:
-                raise ConnectionError("Cannot record: not connected to any server.")
 
             # Use direct app instance reference
             if self._app_instance:
@@ -436,10 +417,10 @@ class BridgeCore(QObject):
                     logger.info("Completed MCP client cleanup")
                 except Exception as e:
                     logger.error(f"Error during client cleanup: {e}", exc_info=True)
-            
+
             # Terminate dangling processes
             self.lifecycle_manager._terminate_dangling_processes()
-            
+
             logger.info("Bridge cleanup completed")
         except Exception as e:
             logger.error(f"Error during bridge cleanup: {e}", exc_info=True)
@@ -448,7 +429,7 @@ class BridgeCore(QObject):
         """
         Synchronous shutdown method for App.py compatibility.
         Creates an async task to perform the actual shutdown.
-        
+
         Args:
             restart: Parameter for backward compatibility (unused)
         """
@@ -469,9 +450,9 @@ class BridgeCore(QObject):
             type(self).is_connected,
             self.mcp_client,
             self.connection_manager.disconnect_from_server,
-            self.connection_manager.connect_to_selected_server
+            self.connection_manager.connect_to_selected_server,
         )
-        
+
         # Emit bridge ready signal to refresh UI components
         logger.info("Emitting bridgeReady signal to reinitialize UI")
-        self.bridgeReady.emit() 
+        self.bridgeReady.emit()

@@ -1,6 +1,6 @@
 import time
 import asyncio
-from typing import Optional, List, Dict, Any, AsyncGenerator, Callable, Union
+from typing import Optional, List, Dict, Any
 import json
 import logging
 
@@ -11,20 +11,35 @@ import os
 
 # Change back to absolute imports
 from distiller_cm5_python.client.mid_layer.llm_client import LLMClient
-from distiller_cm5_python.client.mid_layer.processors import MessageProcessor, ToolProcessor, PromptProcessor
-from distiller_cm5_python.utils.config import (STREAMING_ENABLED, LOGGING_LEVEL,
-                          SERVER_URL, PROVIDER_TYPE, MODEL_NAME, TIMEOUT)
+from distiller_cm5_python.client.mid_layer.processors import (
+    MessageProcessor,
+    ToolProcessor,
+    PromptProcessor,
+)
+from distiller_cm5_python.utils.config import (
+    STREAMING_ENABLED,
+    SERVER_URL,
+    PROVIDER_TYPE,
+    MODEL_NAME,
+    TIMEOUT,
+)
 from contextlib import AsyncExitStack
+
 # Remove colorama import
-from distiller_cm5_python.utils.distiller_exception import UserVisibleError, LogOnlyError
+from distiller_cm5_python.utils.distiller_exception import (
+    UserVisibleError,
+    LogOnlyError,
+)
 import signal
 import traceback
 import concurrent.futures
-import uuid
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
 from distiller_cm5_python.client.ui.events.event_types import (
-    EventType, StatusType, MessageSchema, 
-    MessageEvent, ActionEvent, StatusEvent, ObservationEvent
+    EventType,
+    StatusType,
+    MessageEvent,
+    ActionEvent,
+    StatusEvent,
 )
 
 # Get logger instance for this module
@@ -33,14 +48,14 @@ logger = logging.getLogger(__name__)
 
 class MCPClient:
     def __init__(
-            self,
-            streaming: Optional[bool] = None,
-            llm_server_url: Optional[str] = None,
-            provider_type: Optional[str] = None,
-            model: Optional[str] = None,
-            api_key: Optional[str] = None,
-            timeout: Optional[int] = None,
-            dispatcher: Optional[EventDispatcher] = None
+        self,
+        streaming: Optional[bool] = None,
+        llm_server_url: Optional[str] = None,
+        provider_type: Optional[str] = None,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
+        timeout: Optional[int] = None,
+        dispatcher: Optional[EventDispatcher] = None,
     ):
         self.session = None
         self.write = None
@@ -53,7 +68,7 @@ class MCPClient:
         _llm_server_url = llm_server_url or SERVER_URL
         _provider_type = provider_type or PROVIDER_TYPE
         _model = model or MODEL_NAME
-        _api_key = api_key # Optional, can be None
+        _api_key = api_key  # Optional, can be None
         _timeout = timeout or TIMEOUT
         # TODO questionable if we need to keep both config system and init params system
         self.server_name = None
@@ -61,8 +76,8 @@ class MCPClient:
 
         # Initialize available tools, resources, and prompts
         self.available_tools = []
-        self.available_resources = [] # Store for potential future use/inspection
-        self.available_prompts = [] # Store for potential future use/inspection
+        self.available_resources = []  # Store for potential future use/inspection
+        self.available_prompts = []  # Store for potential future use/inspection
 
         # Initialize processors
         self.message_processor = MessageProcessor()
@@ -71,14 +86,15 @@ class MCPClient:
         # Initialize the LLM provider with unified configuration
         # Pass the streaming flag to LLMClient as it might have internal uses
         logger.debug(
-            f"Initializing LLMClient with server_url={_llm_server_url}, model={_model}, type={_provider_type}, stream={self.streaming}")
+            f"Initializing LLMClient with server_url={_llm_server_url}, model={_model}, type={_provider_type}, stream={self.streaming}"
+        )
         self.llm_provider = LLMClient(
             server_url=_llm_server_url,
             model=_model,
             provider_type=_provider_type,
             api_key=_api_key,
             timeout=_timeout,
-            streaming=self.streaming
+            streaming=self.streaming,
         )
 
         # ToolProcessor initialized after session creation in connect_to_server
@@ -91,23 +107,25 @@ class MCPClient:
     async def connect_to_server(self, server_script_path: str) -> bool:
         """Connect to an MCP server"""
 
-        if not server_script_path.endswith('.py'):
+        if not server_script_path.endswith(".py"):
             raise UserVisibleError("Server script must be a .py file")
 
         # use current python interpreter by default
         server_params = StdioServerParameters(
-            command=sys.executable,
-            args=[server_script_path],
-            env=None
+            command=sys.executable, args=[server_script_path], env=None
         )
 
         try:
             logger.debug(f"Setting up stdio transport")
 
             start_time = time.time()
-            stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
+            stdio_transport = await self.exit_stack.enter_async_context(
+                stdio_client(server_params)
+            )
             self.stdio, self.write = stdio_transport
-            self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
+            self.session = await self.exit_stack.enter_async_context(
+                ClientSession(self.stdio, self.write)
+            )
 
             logger.debug(f"Session established, initializing")
 
@@ -117,6 +135,7 @@ class MCPClient:
             # If the server reports a generic "cli" name, use our utility to get a better name
             if self.server_name == "cli":
                 from distiller_cm5_python.utils.server_utils import extract_server_name
+
                 self.server_name = extract_server_name(server_script_path)
                 logger.debug(f"Using extracted server name: {self.server_name}")
 
@@ -131,58 +150,73 @@ class MCPClient:
             await self.refresh_capabilities()
 
             # setup system prompt
-            self.message_processor.set_system_message(self.prompt_processor.generate_system_prompt())
+            self.message_processor.set_system_message(
+                self.prompt_processor.generate_system_prompt()
+            )
 
             # setup sample (few shot) prompts
             for prompt in self.available_prompts:
                 for message in prompt["messages"]:
                     if message["role"] in ["user", "assistant"]:
-                        self.message_processor.add_message(message["role"], message["content"])
+                        self.message_processor.add_message(
+                            message["role"], message["content"]
+                        )
                     else:
-                        logger.warning(f"Few shot injection message role not supported: {message['role']}")
+                        logger.warning(
+                            f"Few shot injection message role not supported: {message['role']}"
+                        )
 
             # enable cache restore if provider is llama-cpp
             if self.llm_provider.provider_type == "llama-cpp":
-                self.dispatcher.dispatch(StatusEvent(
-                    type=EventType.INFO,
-                    content="Connecting to server, restoring cache...",
-                    status=StatusType.IN_PROGRESS,
-                    component="cache"
-                ))
-                
+                self.dispatcher.dispatch(
+                    StatusEvent(
+                        type=EventType.INFO,
+                        content="Connecting to server, restoring cache...",
+                        status=StatusType.IN_PROGRESS,
+                        component="cache",
+                    )
+                )
+
                 # Set a dedicated status for cache restoration to lock UI elements
-                if hasattr(self.dispatcher, 'status_manager'):
-                    self.dispatcher.status_manager.update_status('restoring_cache', 
-                                                            "Restoring model cache, please wait...")
-                
+                if hasattr(self.dispatcher, "status_manager"):
+                    self.dispatcher.status_manager.update_status(
+                        "restoring_cache", "Restoring model cache, please wait..."
+                    )
+
                 try:
                     # Restore cache (this is the operation that can cause errors if interrupted)
-                    await self.llm_provider.restore_cache(self.message_processor.get_formatted_messages(), 
-                                                       self.available_tools)
-                    
+                    await self.llm_provider.restore_cache(
+                        self.message_processor.get_formatted_messages(),
+                        self.available_tools,
+                    )
+
                     # Set the connection status to True after cache is successfully restored
                     self._is_connected = True
-                    
+
                     # Reset status to connected/ready after successful cache restoration
-                    if hasattr(self.dispatcher, 'status_manager'):
-                        self.dispatcher.status_manager.update_status('connected', 
-                                                                "Connected, cache restored")
-                    
+                    if hasattr(self.dispatcher, "status_manager"):
+                        self.dispatcher.status_manager.update_status(
+                            "connected", "Connected, cache restored"
+                        )
+
                     return True
-                    
+
                 except Exception as e:
                     logger.error(f"Failed to restore cache: {e}")
                     # Set status to error if cache restoration fails
-                    if hasattr(self.dispatcher, 'status_manager'):
-                        self.dispatcher.status_manager.update_status('error', 
-                                                                f"Cache restoration failed: {e}")
-                    
-                    self.dispatcher.dispatch(StatusEvent(
-                        type=EventType.ERROR,
-                        content=f"Failed to restore cache: {e}",
-                        status=StatusType.FAILED,
-                        component="cache"
-                    ))
+                    if hasattr(self.dispatcher, "status_manager"):
+                        self.dispatcher.status_manager.update_status(
+                            "error", f"Cache restoration failed: {e}"
+                        )
+
+                    self.dispatcher.dispatch(
+                        StatusEvent(
+                            type=EventType.ERROR,
+                            content=f"Failed to restore cache: {e}",
+                            status=StatusType.FAILED,
+                            component="cache",
+                        )
+                    )
                     return False
             else:
                 # For other provider types, just set connected
@@ -191,18 +225,22 @@ class MCPClient:
 
         except Exception as e:
             logger.error(f"Failed to connect to server: {e}")
-            self.dispatcher.dispatch(StatusEvent(
-                type=EventType.ERROR,
-                content=f"Failed to connect to server: {e}",
-                status=StatusType.FAILED,
-                component="connection"
-            ))
+            self.dispatcher.dispatch(
+                StatusEvent(
+                    type=EventType.ERROR,
+                    content=f"Failed to connect to server: {e}",
+                    status=StatusType.FAILED,
+                    component="connection",
+                )
+            )
             return False
 
     async def refresh_capabilities(self):
         """Refresh the client's knowledge of server capabilities"""
         if not self.session:
-            raise UserVisibleError("Not connected to Mcp Server, so can't refresh capabilities")
+            raise UserVisibleError(
+                "Not connected to Mcp Server, so can't refresh capabilities"
+            )
 
         # First refresh tools through the tool processor
         await self.tool_processor.refresh_capabilities()
@@ -220,7 +258,9 @@ class MCPClient:
 
         # Set available prompts
         try:
-            self.available_prompts = await self.prompt_processor.format_prompts(self.session)
+            self.available_prompts = await self.prompt_processor.format_prompts(
+                self.session
+            )
 
         except Exception as e:
             logger.warning(f"Failed to get prompts: {e}")
@@ -235,30 +275,40 @@ class MCPClient:
         for i, tool_call in enumerate(tool_calls):
             logger.info(f"Executing tool call {i + 1}/{len(tool_calls)}")
             tool_result_content = "Error: Tool call execution failed."
-            
+
             # Create action event for tool execution start
-            tool_name = tool_call.get('function', {}).get('name', 'unknown') if 'function' in tool_call else tool_call.get('name', 'unknown')
-            
-            raw_tool_args = tool_call.get('function', {}).get('arguments', '{}') # Default to empty JSON string
+            tool_name = (
+                tool_call.get("function", {}).get("name", "unknown")
+                if "function" in tool_call
+                else tool_call.get("name", "unknown")
+            )
+
+            raw_tool_args = tool_call.get("function", {}).get(
+                "arguments", "{}"
+            )  # Default to empty JSON string
             parsed_tool_args = {}
-            parsing_failed = False # Flag to track parsing status
+            parsing_failed = False  # Flag to track parsing status
             try:
                 # Only parse if raw_tool_args is a non-empty string
                 if isinstance(raw_tool_args, str) and raw_tool_args.strip():
                     parsed_tool_args = json.loads(raw_tool_args)
                 elif isinstance(raw_tool_args, dict):
-                    parsed_tool_args = raw_tool_args # Already a dict, use as is
+                    parsed_tool_args = raw_tool_args  # Already a dict, use as is
             except json.JSONDecodeError:
-                logger.error(f"Failed to parse tool arguments: {raw_tool_args}", exc_info=True)
-                self.dispatcher.dispatch(StatusEvent(
-                    type=EventType.ERROR,
-                    content=f"Failed to parse arguments for tool {tool_name}", # More specific content
-                    status=StatusType.FAILED,
-                    component="tools"
-                ))
+                logger.error(
+                    f"Failed to parse tool arguments: {raw_tool_args}", exc_info=True
+                )
+                self.dispatcher.dispatch(
+                    StatusEvent(
+                        type=EventType.ERROR,
+                        content=f"Failed to parse arguments for tool {tool_name}",  # More specific content
+                        status=StatusType.FAILED,
+                        component="tools",
+                    )
+                )
                 # Set specific error content about JSON parsing
                 tool_result_content = f"Error: Failed to parse tool arguments provided by LLM. Invalid JSON received: {raw_tool_args}"
-                parsing_failed = True # Mark parsing as failed
+                parsing_failed = True  # Mark parsing as failed
 
             # Dispatch ActionEvent (start) - provide args or error info based on parsing status
             action_event = ActionEvent(
@@ -266,77 +316,90 @@ class MCPClient:
                 content=f"Executing tool: {tool_name}",
                 status=StatusType.IN_PROGRESS,
                 tool_name=tool_name,
-                tool_args=parsed_tool_args if not parsing_failed else {"error": "Invalid JSON arguments", "raw_args": raw_tool_args},
-                data={"tool_call": tool_call}
+                tool_args=(
+                    parsed_tool_args
+                    if not parsing_failed
+                    else {"error": "Invalid JSON arguments", "raw_args": raw_tool_args}
+                ),
+                data={"tool_call": tool_call},
             )
             self.dispatcher.dispatch(action_event)
-            
+
             # Only attempt execution if JSON parsing succeeded
             if not parsing_failed:
                 try:
-                    if not isinstance(tool_call, dict) or 'function' not in tool_call:
+                    if not isinstance(tool_call, dict) or "function" not in tool_call:
                         error_msg = f"Invalid tool call format: {tool_call}"
                         logger.error(error_msg)
                         tool_result_content = error_msg
-                        
+
                         # Dispatch error event
                         error_event = ActionEvent(
                             type=EventType.ERROR,
                             content=error_msg,
                             status=StatusType.FAILED,
                             tool_name=tool_name,
-                            data={"tool_call": tool_call}
+                            data={"tool_call": tool_call},
                         )
                         self.dispatcher.dispatch(error_event)
                     else:
-                        self.message_processor.add_tool_call(tool_call) # Add the call attempt
-                        tool_result_content = await self.tool_processor.execute_tool_call_async(tool_call)
+                        self.message_processor.add_tool_call(
+                            tool_call
+                        )  # Add the call attempt
+                        tool_result_content = (
+                            await self.tool_processor.execute_tool_call_async(tool_call)
+                        )
                         logger.info(f"Executed tool name: {tool_call.get('id', 'N/A')}")
                         logger.info(f"Executed tool result: {tool_result_content}")
-                        
+
                         # Dispatch success event
                         result_event = ActionEvent(
                             type=EventType.ACTION,
                             content=f"Tool result: {tool_result_content}",
                             status=StatusType.SUCCESS,
                             tool_name=tool_name,
-                            tool_args=parsed_tool_args, # Use the parsed dictionary here too
-                            data={"tool_call": tool_call, "result": tool_result_content}
+                            tool_args=parsed_tool_args,  # Use the parsed dictionary here too
+                            data={
+                                "tool_call": tool_call,
+                                "result": tool_result_content,
+                            },
                         )
                         self.dispatcher.dispatch(result_event)
 
                 except Exception as e:
                     error_msg = f"Error executing tool call {tool_call.get('function',{}).get('name', 'N/A')}: {e}"
                     logger.error(f"{error_msg}")
-                    tool_result_content = error_msg # Store error as result
-                    
+                    tool_result_content = error_msg  # Store error as result
+
                     # Dispatch error event for execution failure
                     error_event = ActionEvent(
                         type=EventType.ERROR,
                         content=error_msg,
                         status=StatusType.FAILED,
                         tool_name=tool_name,
-                        tool_args=parsed_tool_args, # Include parsed args even on error
-                        data={"tool_call": tool_call, "error": str(e)}
+                        tool_args=parsed_tool_args,  # Include parsed args even on error
+                        data={"tool_call": tool_call, "error": str(e)},
                     )
                     self.dispatcher.dispatch(error_event)
-            else: # Parsing failed case
-                 # Dispatch error event specific to parsing failure
+            else:  # Parsing failed case
+                # Dispatch error event specific to parsing failure
                 error_event = ActionEvent(
                     type=EventType.ERROR,
                     content=f"Skipped execution of tool {tool_name} due to invalid arguments.",
                     status=StatusType.FAILED,
                     tool_name=tool_name,
-                    tool_args={"error": "Invalid JSON arguments", "raw_args": raw_tool_args},
-                    data={"tool_call": tool_call, "error": "JSONDecodeError"}
+                    tool_args={
+                        "error": "Invalid JSON arguments",
+                        "raw_args": raw_tool_args,
+                    },
+                    data={"tool_call": tool_call, "error": "JSONDecodeError"},
                 )
                 self.dispatcher.dispatch(error_event)
 
             # Add the tool call result (success, execution error, or parsing error) to the message history
             # This now correctly uses the tool_result_content set in the JSONDecodeError block if parsing failed
             self.message_processor.add_tool_result(
-                tool_call, # Pass the original tool_call dict
-                tool_result_content
+                tool_call, tool_result_content  # Pass the original tool_call dict
             )
 
     async def process_query(self, query: str) -> Dict[str, Any]:
@@ -348,23 +411,23 @@ class MCPClient:
             The processed response from the LLM client.
         """
         import time, uuid
-        
+
         # Create standard message schema for thinking state
         thinking_msg = MessageEvent(
             type=EventType.INFO,
             content="Thinking...",
             status=StatusType.IN_PROGRESS,
             role="assistant",
-            data=None
+            data=None,
         )
-        
+
         # Dispatch using new message schema
         self.dispatcher.dispatch(thinking_msg)
 
         # Record the user's message
         user_msg = self.message_processor.add_message("user", query)
-        
-        # Dispatch user message event 
+
+        # Dispatch user message event
         # self.dispatcher.dispatch(user_msg)
 
         messages = self.message_processor.get_formatted_messages()
@@ -382,20 +445,22 @@ class MCPClient:
                         response = await self.llm_provider.get_chat_completion_streaming_response(
                             messages=messages,
                             tools=self.available_tools,
-                            dispatcher=self.dispatcher
+                            dispatcher=self.dispatcher,
                         )
                     else:
                         # Non-streaming
-                        response = await self.llm_provider.get_chat_completion_response(messages, self.available_tools)
+                        response = await self.llm_provider.get_chat_completion_response(
+                            messages, self.available_tools
+                        )
                         self.dispatcher.dispatch(
                             MessageEvent(
                                 type=EventType.MESSAGE,
                                 content=response.get("message", {}).get("content", ""),
                                 status=StatusType.SUCCESS,
-                                role="assistant"
+                                role="assistant",
                             )
                         )
-                        
+
                 except LogOnlyError as e:
                     # Create proper error message in case of streaming failure
                     error_event = MessageEvent(
@@ -403,30 +468,32 @@ class MCPClient:
                         content=f"Failed to get response: {str(e)}",
                         status=StatusType.FAILED,
                         role="assistant",
-                        data={"error": str(e)}
+                        data={"error": str(e)},
                     )
                     self.dispatcher.dispatch(error_event)
-                    
+
                     # Add error message to the conversation as assistant message
                     error_msg = "I encountered an error while processing your request. Please try again or check your connection."
                     self.message_processor.add_message("assistant", error_msg)
-                    
+
                     # Create completion event to signal end of processing
                     complete_event = StatusEvent(
                         type=EventType.INFO,
                         content="",
                         status=StatusType.SUCCESS,
-                        component="query"
+                        component="query",
                     )
                     self.dispatcher.dispatch(complete_event)
-                    
+
                     # Re-raise the error to be caught by the higher-level handler
                     raise
 
                 # Add message to processor
-                self.message_processor.add_message("assistant", response.get("message", {}).get("content", ""))
+                self.message_processor.add_message(
+                    "assistant", response.get("message", {}).get("content", "")
+                )
                 # done with message processing
-                
+
                 # Extract tool calls
                 tool_calls = (response or {}).get("message", {}).get("tool_calls", [])
                 if not tool_calls:
@@ -438,7 +505,7 @@ class MCPClient:
                     content=f"Executing tools ...",
                     status=StatusType.IN_PROGRESS,
                     component="tools",
-                    data={"count": len(tool_calls)}
+                    data={"count": len(tool_calls)},
                 )
                 self.dispatcher.dispatch(tool_info_event)
 
@@ -446,11 +513,11 @@ class MCPClient:
                 await self._execute_tool_calls(tool_calls)
 
                 # Create and dispatch completion event for tool execution
-                tool_complete_event = StatusEvent( 
+                tool_complete_event = StatusEvent(
                     type=EventType.INFO,
                     content=f"Executed tools, processing response ...",
                     status=StatusType.SUCCESS,
-                    component="tools"
+                    component="tools",
                 )
                 self.dispatcher.dispatch(tool_complete_event)
 
@@ -462,12 +529,12 @@ class MCPClient:
                 type=EventType.INFO,
                 content="",
                 status=StatusType.SUCCESS,
-                component="query"
+                component="query",
             )
             self.dispatcher.dispatch(complete_event)
 
             logger.info("--- Query Processing Complete ---")
-            
+
         except LogOnlyError as e:
             # This is already handled above and has proper UI messaging
             logger.error(f"Error during streaming: {e}")
@@ -479,19 +546,19 @@ class MCPClient:
                 content=f"Unexpected error: {str(e)}",
                 status=StatusType.FAILED,
                 role="assistant",
-                data={"error": str(e)}
+                data={"error": str(e)},
             )
             self.dispatcher.dispatch(error_event)
-            
+
             # Also dispatch completion event to signal end of processing
             complete_event = StatusEvent(
                 type=EventType.INFO,
                 content="",
-                status=StatusType.SUCCESS, 
-                component="query"
+                status=StatusType.SUCCESS,
+                component="query",
             )
             self.dispatcher.dispatch(complete_event)
-            
+
             # Log the error
             logger.error(f"Unexpected error in process_query: {e}", exc_info=True)
             raise
@@ -499,35 +566,30 @@ class MCPClient:
     async def cleanup(self):
         """Clean up resources used by the client."""
         logger.info("Starting MCP client cleanup")
-        
+
         # Cancel all running tasks first
         self._cancel_all_running_tasks()
-        
+
         # If we have a process, terminate it
         if hasattr(self, "_proc") and self._proc:
             try:
                 logger.info("Terminating MCP server process")
                 # Send SIGTERM to allow graceful shutdown
-                if sys.platform == "win32":
-                    # Windows doesn't have SIGTERM
-                    self._proc.terminate()
-                else:
-                    os.kill(self._proc.pid, signal.SIGTERM)
-                
+                os.kill(self._proc.pid, signal.SIGTERM)
+
                 # Wait a bit for the process to exit
                 try:
                     await asyncio.wait_for(self._proc.wait(), timeout=2.0)
                 except asyncio.TimeoutError:
                     logger.warning("MCP server process didn't terminate, forcing kill")
-                    if sys.platform == "win32":
-                        self._proc.kill()
-                    else:
-                        os.kill(self._proc.pid, signal.SIGKILL)
+                    os.kill(self._proc.pid, signal.SIGKILL)
             except ProcessLookupError:
                 # Process is already gone
                 logger.info("MCP server process already terminated")
             except Exception as e:
-                logger.error(f"Error terminating MCP server process: {e}", exc_info=True)
+                logger.error(
+                    f"Error terminating MCP server process: {e}", exc_info=True
+                )
             finally:
                 self._proc = None
         else:
@@ -537,26 +599,26 @@ class MCPClient:
         if hasattr(self, "_exit_stack") and self._exit_stack:
             await self._safe_aclose_exit_stack()
             self._exit_stack = None
-        
+
         logger.info("MCP client cleanup completed")
 
     def _cancel_all_running_tasks(self):
         """Cancel all running tasks safely."""
         logger.info("Cancelling all MCP client tasks")
-        
+
         try:
             # Get all tasks in the current event loop
             for task in asyncio.all_tasks():
                 # Skip the current task (cleanup)
                 if task is asyncio.current_task():
                     continue
-                
+
                 # Only cancel tasks that belong to our client
                 task_name = task.get_name()
                 if "mcp_client" in task_name.lower():
                     logger.info(f"Cancelling task: {task_name}")
                     task.cancel()
-                    
+
             logger.info("All MCP client tasks cancelled")
         except Exception as e:
             logger.error(f"Error cancelling tasks: {e}", exc_info=True)
@@ -564,17 +626,20 @@ class MCPClient:
     async def _safe_aclose_exit_stack(self):
         """Safely close the exit stack with error handling."""
         logger.info("Closing MCP client exit stack")
-        
+
         if not self._exit_stack:
             return
-            
+
         try:
             # Set a timeout for closing the exit stack
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 # Create a future that will close the exit stack
-                future = executor.submit(lambda: asyncio.run_coroutine_threadsafe(
-                    self._exit_stack.aclose(), asyncio.get_event_loop()))
-                
+                future = executor.submit(
+                    lambda: asyncio.run_coroutine_threadsafe(
+                        self._exit_stack.aclose(), asyncio.get_event_loop()
+                    )
+                )
+
                 # Wait for the future to complete with a timeout
                 try:
                     future.result(timeout=3.0)
@@ -584,6 +649,8 @@ class MCPClient:
                 except Exception as e:
                     logger.error(f"Error closing exit stack: {e}", exc_info=True)
         except Exception as e:
-            logger.error(f"Critical error during exit stack closure: {e}", exc_info=True)
+            logger.error(
+                f"Critical error during exit stack closure: {e}", exc_info=True
+            )
             # Log the full traceback for debugging
             logger.error(traceback.format_exc())

@@ -12,13 +12,16 @@ import os
 import psutil
 
 from distiller_cm5_python.client.ui.bridge.StatusManager import StatusManager
-from distiller_cm5_python.client.ui.bridge.ConversationManager import ConversationManager
+from distiller_cm5_python.client.ui.bridge.ConversationManager import (
+    ConversationManager,
+)
 from distiller_cm5_python.client.mid_layer.mcp_client import MCPClient
 
 logger = logging.getLogger(__name__)
 
 # Exit delay constant
 EXIT_DELAY_MS = 500  # milliseconds
+
 
 class LifecycleManager:
     """
@@ -27,24 +30,22 @@ class LifecycleManager:
     """
 
     def __init__(
-        self, 
-        status_manager: StatusManager, 
-        conversation_manager: ConversationManager
+        self, status_manager: StatusManager, conversation_manager: ConversationManager
     ):
         """
         Initialize the lifecycle manager.
-        
+
         Args:
             status_manager: The status manager to update based on lifecycle events
             conversation_manager: The conversation manager to add lifecycle messages to
         """
         self.status_manager = status_manager
         self.conversation_manager = conversation_manager
-    
+
     async def shutdown_process(self, mcp_client: Optional[MCPClient]) -> None:
         """
         Unified shutdown process to handle all cleanup.
-        
+
         Args:
             mcp_client: The MCP client to clean up
         """
@@ -59,10 +60,10 @@ class LifecycleManager:
                     logger.info("Completed MCP client cleanup")
                 except Exception as e:
                     logger.error(f"Error during client cleanup: {e}", exc_info=True)
-            
+
             # Terminate dangling processes
             self._terminate_dangling_processes()
-            
+
             logger.info("Force quitting application from bridge")
             # Use threading for final exit
             threading.Thread(target=self._force_exit, daemon=True).start()
@@ -71,7 +72,7 @@ class LifecycleManager:
         except Exception as e:
             logger.error(f"Error during shutdown: {e}", exc_info=True)
             self._force_exit()
-    
+
     def _force_exit(self) -> None:
         """Force the application to exit after a short delay."""
         time.sleep(EXIT_DELAY_MS / 1000.0)
@@ -82,7 +83,7 @@ class LifecycleManager:
     def _terminate_dangling_processes(self, force: bool = False) -> None:
         """
         Find and terminate any dangling MCP processes.
-        
+
         Args:
             force: Whether to force kill processes
         """
@@ -100,7 +101,9 @@ class LifecycleManager:
                         mcp_name in " ".join(child.cmdline()).lower()
                         for mcp_name in ["mcp", "model-control"]
                     ):
-                        logger.info(f"Terminating process {child.pid}: {' '.join(child.cmdline())}")
+                        logger.info(
+                            f"Terminating process {child.pid}: {' '.join(child.cmdline())}"
+                        )
                         if force:
                             # Force kill
                             child.kill()
@@ -111,26 +114,34 @@ class LifecycleManager:
                                 child.wait(timeout=1)
                             except psutil.TimeoutExpired:
                                 # Force kill if it doesn't terminate
-                                logger.info(f"Process {child.pid} didn't terminate, force killing")
+                                logger.info(
+                                    f"Process {child.pid} didn't terminate, force killing"
+                                )
                                 child.kill()
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                except (
+                    psutil.NoSuchProcess,
+                    psutil.AccessDenied,
+                    psutil.ZombieProcess,
+                ):
                     # Process already gone or can't be accessed
                     pass
                 except Exception as e:
                     logger.error(f"Error terminating process {child.pid}: {e}")
         except Exception as e:
-            logger.error(f"Error finding/terminating dangling processes: {e}", exc_info=True)
+            logger.error(
+                f"Error finding/terminating dangling processes: {e}", exc_info=True
+            )
 
     async def restart_application(
-        self, 
-        is_connected: 'property',
+        self,
+        is_connected: "property",
         mcp_client: Optional[MCPClient],
         disconnect_func: callable,
-        connect_server_func: callable
+        connect_server_func: callable,
     ) -> None:
         """
         Restart the application without completely shutting down.
-        
+
         Args:
             is_connected: Property indicating connection status
             mcp_client: The MCP client instance
@@ -143,8 +154,8 @@ class LifecycleManager:
 
             # Store the current server path for reconnection
             selected_server_path = None
-            if mcp_client and hasattr(mcp_client, 'server_script_path'):
-                selected_server_path = getattr(mcp_client, 'server_script_path', None)
+            if mcp_client and hasattr(mcp_client, "server_script_path"):
+                selected_server_path = getattr(mcp_client, "server_script_path", None)
 
             # Clear the conversation
             self.conversation_manager.clear()
@@ -153,15 +164,15 @@ class LifecycleManager:
             bridge_obj = None
             try:
                 # Get the bridge instance from the status manager's parent reference
-                bridge_obj = getattr(self.status_manager, 'parent', None)
+                bridge_obj = getattr(self.status_manager, "parent", None)
             except Exception:
                 logger.warning("Could not get bridge instance from status manager")
-                
+
             # Use the bridge instance to check connection state if available
             current_is_connected = False
-            if bridge_obj and hasattr(bridge_obj, '_is_connected'):
+            if bridge_obj and hasattr(bridge_obj, "_is_connected"):
                 current_is_connected = bridge_obj._is_connected
-            
+
             # Disconnect from the server
             if current_is_connected:
                 await disconnect_func()
@@ -197,9 +208,9 @@ class LifecycleManager:
                 await connect_server_func()
 
             # Update status
-            if bridge_obj and hasattr(bridge_obj, '_is_connected'):
+            if bridge_obj and hasattr(bridge_obj, "_is_connected"):
                 current_is_connected = bridge_obj._is_connected
-                
+
             if current_is_connected:
                 self.status_manager.update_status(StatusManager.STATUS_IDLE)
                 logger.info("Application restart completed successfully")
@@ -208,18 +219,18 @@ class LifecycleManager:
                 logger.warning("Application restarted but not connected to server")
 
             logger.info("Application restart completed")
-            
+
         except Exception as e:
             logger.error(f"Error during application restart: {e}", exc_info=True)
             self.status_manager.update_status(StatusManager.STATUS_ERROR)
-            
+
     async def initialize_bridge(self, server_discovery_func: callable) -> bool:
         """
         Initialize the bridge components.
-        
+
         Args:
             server_discovery_func: Function to discover available servers
-            
+
         Returns:
             True if initialization was successful, False otherwise
         """
@@ -230,4 +241,4 @@ class LifecycleManager:
         server_discovery_func()
 
         logger.info("Bridge initialization completed")
-        return True 
+        return True

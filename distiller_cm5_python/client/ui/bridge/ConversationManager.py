@@ -19,7 +19,7 @@ class ConversationManager:
         self._bridge = bridge
         self._conversation = []
         self.current_streaming_message: dict[str, str] | None = None
-        
+
         # Batch update mechanism
         self._update_pending = False
         self._last_update_time = 0
@@ -28,14 +28,16 @@ class ConversationManager:
     def _schedule_update(self):
         """Schedule a batched UI update if not already pending."""
         current_time = time.time()
-        
+
         # Only schedule a new update if enough time has passed since the last one
-        if not self._update_pending or (current_time - self._last_update_time > self._update_interval):
+        if not self._update_pending or (
+            current_time - self._last_update_time > self._update_interval
+        ):
             self._update_pending = True
             self._last_update_time = current_time
             # Use QTimer for thread-safe signaling to the UI
             QTimer.singleShot(int(self._update_interval * 1000), self._emit_update)
-    
+
     def _emit_update(self):
         """Emit the signal for the batched update."""
         self._update_pending = False
@@ -50,7 +52,7 @@ class ConversationManager:
         # Ensure the message has a type field, default to "Message" if not provided
         if "type" not in message:
             message["type"] = "Message"
-        
+
         self._conversation.append(message)
         self._schedule_update()
 
@@ -98,13 +100,15 @@ class ConversationManager:
             content = message.get("content", "")
             # Get message type, default to "Message" if not present
             msg_type = message.get("type", "Message")
-            
+
             # Format message as expected by MessageItem: "[timestamp] sender: content::type"
             # If content starts with "You: ", it's a user message, otherwise it's an assistant message
             if content.startswith("You: "):
                 formatted_messages.append(f"[{timestamp}] {content}::{msg_type}")
             else:
-                formatted_messages.append(f"[{timestamp}] Assistant: {content}::{msg_type}")
+                formatted_messages.append(
+                    f"[{timestamp}] Assistant: {content}::{msg_type}"
+                )
         return formatted_messages
 
     def get_timestamp(self):
@@ -117,7 +121,7 @@ class ConversationManager:
 
     def reset_streaming_message(self):
         """Reset the current streaming message reference.
-        
+
         This should be called whenever starting a fresh message stream.
         """
         self.current_streaming_message = None

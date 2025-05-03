@@ -2,6 +2,7 @@ import os
 import time
 import psutil
 
+
 class SystemMonitor:
     def __init__(self):
         self.ram_usage = 0.0
@@ -9,7 +10,9 @@ class SystemMonitor:
         self.temperature = 0.0
         self.llm_model = "Local"  # Default LLM model name
         self.last_update_time = 0
-        self.update_interval = 2.0  # Update every 2 seconds to avoid excessive resource usage
+        self.update_interval = (
+            2.0  # Update every 2 seconds to avoid excessive resource usage
+        )
 
     def get_ram_usage(self):
         """Return current RAM usage as a percentage."""
@@ -41,7 +44,7 @@ class SystemMonitor:
             "cpu": f"{self.cpu_usage:.1f}%",
             "ram": f"{self.ram_usage:.1f}%",
             "temp": f"{self.temperature:.1f}°C",
-            "llm": self.llm_model
+            "llm": self.llm_model,
         }
 
     def _update_if_needed(self):
@@ -65,19 +68,19 @@ class SystemMonitor:
             try:
                 temps = psutil.sensors_temperatures()
                 # Check different temperature sensors based on platform
-                if 'coretemp' in temps:
-                    self.temperature = temps['coretemp'][0].current
-                elif 'cpu_thermal' in temps:  # Raspberry Pi
-                    self.temperature = temps['cpu_thermal'][0].current
-                elif 'soc_thermal' in temps:  # Some ARM devices
-                    self.temperature = temps['soc_thermal'][0].current
+                if "coretemp" in temps:
+                    self.temperature = temps["coretemp"][0].current
+                elif "cpu_thermal" in temps:  # Raspberry Pi
+                    self.temperature = temps["cpu_thermal"][0].current
+                elif "soc_thermal" in temps:  # Some ARM devices
+                    self.temperature = temps["soc_thermal"][0].current
                 else:
                     # Fallback to reading from thermal zone
                     self._read_temp_from_zone()
             except (AttributeError, IOError):
                 # psutil might not have sensors_temperatures on all platforms
                 self._read_temp_from_zone()
-                
+
         except Exception as e:
             print(f"Error updating system stats: {e}")
 
@@ -87,7 +90,7 @@ class SystemMonitor:
             # Try to read from thermal zone 0 (may vary by system)
             temp_file = "/sys/class/thermal/thermal_zone0/temp"
             if os.path.exists(temp_file):
-                with open(temp_file, 'r') as f:
+                with open(temp_file, "r") as f:
                     temp_millicelsius = int(f.read().strip())
                     self.temperature = temp_millicelsius / 1000.0
             else:
@@ -95,5 +98,6 @@ class SystemMonitor:
         except Exception:
             self.temperature = 0.0
 
+
 # Create a singleton instance
-system_monitor = SystemMonitor() 
+system_monitor = SystemMonitor()

@@ -29,10 +29,13 @@ from distiller_cm5_python.utils.logger import setup_logging
 logger = logging.getLogger(__name__)
 
 # Create FastAPI app
-app = FastAPI(title="LLM Server", description="A simple LLM server that provides LLM services")
+app = FastAPI(
+    title="LLM Server", description="A simple LLM server that provides LLM services"
+)
 
 MODEL_NAME = None
 MODEL = None
+
 
 # Define request and response models
 class Message(BaseModel):
@@ -69,6 +72,7 @@ class ChatCompletionRequest(BaseModel):
     inference_configs: Optional[Dict[str, Any]] = dict()
     load_model_configs: Optional[Dict[str, Any]] = dict()
 
+
 class CompletionRequest(BaseModel):
     prompt: str
 
@@ -94,6 +98,7 @@ class RestoreCacheRequest(BaseModel):
     tools: List[Tool]
     inference_configs: Optional[Dict[str, Any]] = dict()
 
+
 class Cache:
     def __init__(self, model: Llama):
         self.model = model
@@ -101,7 +106,7 @@ class Cache:
 
     def get_cache_key(self, prompt: str):
         return self.model.tokenize(prompt.encode("utf-8"))
-    
+
     @staticmethod
     def build_cache(
         cache_dir: str,
@@ -112,12 +117,13 @@ class Cache:
         seed: Optional[int] = None,
     ):
         cache = Cache(model)
-        if seed: model.set_seed(seed)
+        if seed:
+            model.set_seed(seed)
         cache_context = LlamaDiskCache(cache_dir=cache_dir)
         model.set_cache(cache_context)
         prompt_tokens = cache.get_cache_key(prompts)
 
-        try :
+        try:
             cached_state = cache_context[prompt_tokens]
             return cached_state
         except Exception as e:
@@ -133,9 +139,11 @@ class Cache:
             cache_context[prompt_tokens] = model.save_state()
             return cache_context[prompt_tokens]
 
+
 @app.get("/")
 async def root():
     return {"status": "ok", "message": "LLM Server is running"}
+
 
 @app.get("/health")
 async def health_check():
@@ -144,17 +152,28 @@ async def health_check():
     try:
         # Verify model is functioning properly
         if MODEL_NAME is None:
-            return {"status": "warning", "message": "LLM model loaded but no model name set"}
-        return {"status": "ok", "message": f"LLM Server is healthy, using model: {MODEL_NAME}"}
+            return {
+                "status": "warning",
+                "message": "LLM model loaded but no model name set",
+            }
+        return {
+            "status": "ok",
+            "message": f"LLM Server is healthy, using model: {MODEL_NAME}",
+        }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         raise HTTPException(status_code=503, detail=f"Health check failed: {str(e)}")
+
 
 @app.get("/models")
 async def list_models():
     try:
         path = os.path.join(os.path.dirname(__file__), "models")
-        model_names = [f for f in os.listdir(path) if os.path.isfile(os.path.join(path, f)) and f.endswith('.gguf')]
+        model_names = [
+            f
+            for f in os.listdir(path)
+            if os.path.isfile(os.path.join(path, f)) and f.endswith(".gguf")
+        ]
         return {"models": [m for m in model_names]}
     except Exception as e:
         logger.error(f"Error listing models: {e}")
@@ -170,7 +189,8 @@ async def set_model(request: SetModel):
         logger.error(f"Error setting model: {e}")
         raise HTTPException(status_code=500, detail=f"Error set models: {str(e)}")
 
-def load_model(model_name, load_model_configs:dict[str, Any]):
+
+def load_model(model_name, load_model_configs: dict[str, Any]):
     global MODEL
     global MODEL_NAME
     model_path = os.path.join(os.path.dirname(__file__), "models", model_name)
@@ -188,7 +208,9 @@ def load_model(model_name, load_model_configs:dict[str, Any]):
     logger.info(f"Loaded model: {model_name}")
     return True
 
+
 # TODO : we need to use config file to set the all the general parameters
+
 
 def _chat_completion(messages, tools, inference_configs):
     """Non-streaming version"""
@@ -202,9 +224,10 @@ def _chat_completion(messages, tools, inference_configs):
         top_p=inference_configs["top_p"],
         repeat_penalty=inference_configs["repetition_penalty"],
         stop=inference_configs["stop"],
-        stream=False
+        stream=False,
     )
     return response
+
 
 def _stream_chat_completion(messages, tools, inference_configs):
     """Streaming version"""
@@ -218,7 +241,7 @@ def _stream_chat_completion(messages, tools, inference_configs):
         top_p=inference_configs["top_p"],
         repeat_penalty=inference_configs["repetition_penalty"],
         stop=inference_configs["stop"],
-        stream=True
+        stream=True,
     )
 
     chunk_count = 0
@@ -228,17 +251,27 @@ def _stream_chat_completion(messages, tools, inference_configs):
         yield f"data: {json.dumps(chunk)}\n\n"
     logger.debug(f"Streaming finished after {chunk_count} chunks.")
 
+
 def format_prompt(messages, tools):
     # Actual input received by the model
-    model_template = MODEL.metadata.get('tokenizer.chat_template')
+    model_template = MODEL.metadata.get("tokenizer.chat_template")
     template = Template(model_template)
-    logger.debug(f"format_prompt called with {len(messages)} messages and {len(tools) if tools else 0} tools.")
+    logger.debug(
+        f"format_prompt called with {len(messages)} messages and {len(tools) if tools else 0} tools."
+    )
     rendered_prompt = template.render(messages=messages, tools=tools)
-    logger.debug("Actual prompt into llm (truncated):\n" + rendered_prompt[:500] + ("..." if len(rendered_prompt) > 500 else ""))
+    logger.debug(
+        "Actual prompt into llm (truncated):\n"
+        + rendered_prompt[:500]
+        + ("..." if len(rendered_prompt) > 500 else "")
+    )
     return rendered_prompt
 
+
 def format_messages(messages):
-    formatted_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
+    formatted_messages = [
+        {"role": msg.role, "content": msg.content} for msg in messages
+    ]
     # Move the followig to the client side
     # for i in range(len(formatted_messages)):
     #     if formatted_messages[i]["role"] == "function":
@@ -246,18 +279,22 @@ def format_messages(messages):
     #         formatted_messages[i]["content"] = "[TOOL EXECUTION RESULT]" + formatted_messages[i]["content"]
     return formatted_messages
 
+
 def format_tools(tools):
     t_tools = []
     for tool in tools:
-        t_tools.append({
-            "type": tool.type,
-            "function": {
-                "name": tool.function.name,
-                "description": tool.function.description,
-                "parameters": tool.function.parameters
+        t_tools.append(
+            {
+                "type": tool.type,
+                "function": {
+                    "name": tool.function.name,
+                    "description": tool.function.description,
+                    "parameters": tool.function.parameters,
+                },
             }
-        })
+        )
     return t_tools
+
 
 @app.post("/restore_cache")
 async def restore_cache(request: RestoreCacheRequest):
@@ -278,7 +315,8 @@ async def restore_cache(request: RestoreCacheRequest):
     except Exception as e:
         logger.error(f"Error restoring cache: {e}")
         raise HTTPException(status_code=500, detail=f"Error restoring cache: {str(e)}")
-        
+
+
 @app.post("/chat/completions")
 async def create_chat_completion(request: ChatCompletionRequest):
     global MODEL
@@ -293,8 +331,12 @@ async def create_chat_completion(request: ChatCompletionRequest):
             logger.error(f"Failed to load requested model '{request.model}': {e}")
             raise HTTPException(status_code=404, detail=str(e))
         except Exception as e:
-            logger.error(f"Unexpected error loading model '{request.model}': {e}", exc_info=True)
-            raise HTTPException(status_code=500, detail=f"Error loading model: {str(e)}")
+            logger.error(
+                f"Unexpected error loading model '{request.model}': {e}", exc_info=True
+            )
+            raise HTTPException(
+                status_code=500, detail=f"Error loading model: {str(e)}"
+            )
 
     try:
         # Log request details at DEBUG level (excluding potentially sensitive message content)
@@ -304,42 +346,60 @@ async def create_chat_completion(request: ChatCompletionRequest):
             "num_tools": len(request.tools) if request.tools else 0,
             "stream": request.stream,
             "inference_keys": list(request.inference_configs.keys()),
-            "load_model_keys": list(request.load_model_configs.keys())
+            "load_model_keys": list(request.load_model_configs.keys()),
         }
         logger.debug(f"Chat completion request details: {debug_request_summary}")
 
         messages = format_messages(request.messages)
         tools = format_tools(request.tools) if request.tools else []
-    
+
         # Check if stream parameter is in request
         stream = request.stream
-            
-        
+
         if stream:
             logger.debug("Starting stream response generation.")
-            return StreamingResponse(_stream_chat_completion(messages, tools, request.inference_configs),
-                                    media_type="text/event-stream",
-                                    headers={
-                                        "Cache-Control": "no-cache",
-                                        "Connection": "keep-alive",
-                                    })
+            return StreamingResponse(
+                _stream_chat_completion(messages, tools, request.inference_configs),
+                media_type="text/event-stream",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
+            )
         else:
             logger.debug("Starting non-stream response generation.")
             # Get the generator object
             return _chat_completion(messages, tools, request.inference_configs)
-            
+
     except Exception as e:
         logger.error(f"Error creating chat completion: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Error creating chat completion: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error creating chat completion: {str(e)}"
+        )
+
 
 def main():
     parser = argparse.ArgumentParser(description="LLM Server")
-    parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to bind the server to")
-    parser.add_argument("--port", type=int, default=8000, help="Port to bind the server to")
-    parser.add_argument("--model_name", type=str, default="qwen2.5-3b-instruct-q4_k_m.gguf", help="Default LLM model to use")
+    parser.add_argument(
+        "--host", type=str, default="127.0.0.1", help="Host to bind the server to"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8000, help="Port to bind the server to"
+    )
+    parser.add_argument(
+        "--model_name",
+        type=str,
+        default="qwen2.5-3b-instruct-q4_k_m.gguf",
+        help="Default LLM model to use",
+    )
     parser.add_argument("--n_ctx", type=int, default=4096, help="Default LLM N_CTX")
-    parser.add_argument("--log-level", type=str, default="info", choices=["debug", "info", "warning", "error", "critical"],
-                        help="Log level")
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        default="info",
+        choices=["debug", "info", "warning", "error", "critical"],
+        help="Log level",
+    )
     args = parser.parse_args()
 
     # --- Setup Logging ---
@@ -359,11 +419,16 @@ def main():
             load_model(MODEL_NAME, load_model_configs)
             # Logger is already configured, level is set
         except ValueError as e:
-            logger.error(f"Failed to load default model '{args.model_name}' from command line: {e}")
+            logger.error(
+                f"Failed to load default model '{args.model_name}' from command line: {e}"
+            )
             # Decide if server should exit or continue without a default model
             sys.exit(f"Error: {e}")
         except Exception as e:
-            logger.error(f"Unexpected error loading default model '{args.model_name}': {e}", exc_info=True)
+            logger.error(
+                f"Unexpected error loading default model '{args.model_name}': {e}",
+                exc_info=True,
+            )
             sys.exit("Error loading default model.")
 
     logger.info(f"Starting LLM Server on {args.host}:{args.port}")
