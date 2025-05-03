@@ -59,7 +59,7 @@ ScrollView {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 2
-        color: ThemeManager.accentColor
+        color: ThemeManager.textColor
         opacity: 0.8
         z: 1
     }
@@ -72,7 +72,7 @@ ScrollView {
         anchors.left: parent.left
         anchors.right: parent.right
         height: 2
-        color: ThemeManager.accentColor
+        color: ThemeManager.textColor
         opacity: 0.8
         z: 1
     }
@@ -87,7 +87,7 @@ ScrollView {
         width: 40
         height: 40
         radius: width / 2
-        color: ThemeManager.accentColor
+        color: ThemeManager.textColor
         visible: root.showScrollIndicator && root.contentItem.contentHeight > root.height * 1.5
         opacity: 0.7
         z: 10
@@ -95,7 +95,7 @@ ScrollView {
         Text {
             anchors.centerIn: parent
             text: Math.round((root.contentItem.contentY / (root.contentItem.contentHeight - root.height)) * 100) + "%"
-            color: ThemeManager.textOnAccentColor
+            color: ThemeManager.backgroundColor
             font.pixelSize: 12
             font.bold: true
             visible: root.contentItem.contentHeight > root.height
@@ -123,13 +123,13 @@ ScrollView {
         contentItem: Rectangle {
             implicitWidth: 8
             radius: width / 2
-            color: ThemeManager.accentColor
+            color: ThemeManager.textColor
         }
 
         background: Rectangle {
             implicitWidth: 6
             radius: width / 2
-            color: ThemeManager.shadowColor
+            color: ThemeManager.black
             opacity: 0.3
         }
 

@@ -17,9 +17,9 @@ Dialog {
     // Navigation system
     property var focusableItems: []
     // Button colors
-    property color defaultButtonColor: ThemeManager.buttonColor
-    property color acceptButtonColor: ThemeManager.accentColor
-    property color focusButtonColor: ThemeManager.darkMode ? ThemeManager.darkAccentColor : ThemeManager.lightAccentColor
+    property color defaultButtonColor: ThemeManager.backgroundColor
+    property color acceptButtonColor: ThemeManager.textColor
+    property color focusButtonColor: ThemeManager.textColor
     // Store previous focus state
     property var previousFocusItems: []
     property int previousFocusIndex: -1
@@ -100,7 +100,7 @@ Dialog {
 
         width: parent.width
         height: headerText.implicitHeight + ThemeManager.spacingNormal * 2
-        color: ThemeManager.headerColor
+        color: ThemeManager.backgroundColor
         // Rounded corners for top portion only
         radius: 10
         // Only round the top corners

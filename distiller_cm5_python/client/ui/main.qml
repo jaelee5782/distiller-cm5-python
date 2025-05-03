@@ -232,7 +232,7 @@ ApplicationWindow {
         z: -0.5
         
         // Add border around the entire rectangle
-        border.width: 1
+        border.width: ThemeManager.borderWidth
         border.color: "black"
     }
 
@@ -248,7 +248,7 @@ ApplicationWindow {
     //     z: -0.5
         
     //     // Add border around the entire rectangle
-    //     border.width: 1
+    //     border.width: ThemeManager.borderWidth
     //     border.color: "black"
     // }
 }

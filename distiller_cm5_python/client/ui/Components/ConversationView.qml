@@ -164,9 +164,9 @@ ListView {
         id: focusIndicator
 
         anchors.fill: parent
-        color: "transparent"
+        color: ThemeManager.transparentColor
         border.width: isActiveItem ? (scrollModeActive ? ThemeManager.borderWidth * 3 : ThemeManager.borderWidth * 2) : 0
-        border.color: scrollModeActive ? ThemeManager.highlightColor : ThemeManager.accentColor
+        border.color: ThemeManager.textColor
         radius: ThemeManager.borderRadius
         visible: isActiveItem
         z: -1
@@ -183,7 +183,7 @@ ListView {
         width: scrollModeText.width + ThemeManager.spacingLarge
         color: ThemeManager.textColor
         border.width: ThemeManager.borderWidth
-        border.color: "white"
+        border.color: ThemeManager.white
         radius: 2
         visible: isActiveItem && !scrollModeActive && conversationView.contentHeight > conversationView.height
         z: 2
@@ -196,7 +196,6 @@ ListView {
             color: ThemeManager.backgroundColor
             font: FontManager.small
         }
-
     }
 
     // Visual instruction when in scroll mode
@@ -210,7 +209,7 @@ ListView {
         width: activeScrollModeText.width + ThemeManager.spacingNormal * 2
         color: ThemeManager.textColor
         border.width: ThemeManager.borderWidth
-        border.color: ThemeManager.highlightColor
+        border.color: ThemeManager.textColor
         radius: ThemeManager.borderRadius
         visible: false // Start invisible and let the binding update it
         z: 2
