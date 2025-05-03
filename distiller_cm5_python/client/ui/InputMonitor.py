@@ -5,7 +5,15 @@ import threading
 import logging
 import errno
 import select
-import evdev
+import sys 
+
+# Only import evdev on Linux
+if sys.platform == 'linux':
+    import evdev
+else:
+    # Define a dummy evdev or raise an error if needed on other platforms
+    # For now, we'll assume it's only used on Linux where InputMonitor is active
+    evdev = None
 
 # Setup Logging
 logger = logging.getLogger(__name__)

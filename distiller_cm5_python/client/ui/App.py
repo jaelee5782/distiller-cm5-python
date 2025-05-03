@@ -16,8 +16,7 @@ import os
 import signal
 from concurrent.futures import ThreadPoolExecutor
 import atexit
-import threading
-import evdev
+
 
 # --- Setup Logging EARLY ---
 logger = logging.getLogger(__name__)
