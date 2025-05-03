@@ -1,17 +1,25 @@
-# MCP Test Refactored Project
+# Project Context for LLM Assistants
 
-> This project demonstrates a client-server architecture using the MCP (Multi-modal Conversation Protocol). An `mcp_client` interacts with various `mcp_server` implementations. The client utilizes a configurable LLM provider (`client/llm_providers/LLMServerProvider.py`) which connects to an LLM service (like the one in `llm_server/`) to process user queries and decide whether to respond directly or make tool calls to the connected `mcp_server`.
+> This project demonstrates a client-server architecture using the MCP (Model Context Protocol). A client application (found in `distiller_cm5_python/client/`) interacts with various `mcp_server` implementations. The client utilizes configurable LLM interaction logic (primarily in `distiller_cm5_python/client/mid_layer/`) which connects to an LLM service (like the one in `llm_server/` or an external API like OpenRouter) to process user queries and decide whether to respond directly or make tool calls to a connected `mcp_server`.
 
 This `llms.txt` file aims to guide Large Language Models (LLMs) in understanding the project structure, particularly for creating new `mcp_server` implementations.
 
-The core interaction flow:
-1.  User query goes to `mcp_client`.
-2.  `mcp_client` sends the query (with history and available tools) to the configured LLM service via `LLMServerProvider`.
-3.  The LLM service (e.g., `llm_server`) processes the request and responds.
-4.  If the LLM response includes tool calls, `mcp_client` executes them by sending requests to the connected `mcp_server`.
+## Related Repositories
+
+*   **This Repository (Python Framework):** [Pamir-AI/distiller-cm5-python](https://github.com/Pamir-AI/distiller-cm5-python)
+*   **SDK (Whisper, Piper, etc.):** [Pamir-AI/distiller-cm5-sdk](https://github.com/Pamir-AI/distiller-cm5-sdk)
+*   **Firmware (RP2040):** [Pamir-AI/distiller-cm5-firmware](https://github.com/Pamir-AI/distiller-cm5-firmware)
+*   **Kernel (Linux):** [Pamir-AI/Distiller-CM5-Kernel](https://github.com/Pamir-AI/Distiller-CM5-Kernel)
+
+## Core Interaction Flow
+
+1.  User query goes to the client (`client/ui/App.py` or `client/cli.py`).
+2.  The client's mid-layer (`client/mid_layer/mcp_client.py`) sends the query (with history and available tools) to the configured LLM service via logic in `client/mid_layer/llm_client.py`.
+3.  The LLM service (e.g., `llm_server/` or OpenRouter) processes the request and responds.
+4.  If the LLM response includes tool calls, the client's `mcp_client.py` executes them by sending requests to the connected `mcp_server` process (specified by `--server-script`).
 5.  The `mcp_server` executes the tool logic and returns results to the `mcp_client`.
 6.  `mcp_client` sends tool results back to the LLM service for a final response.
-7.  `mcp_client` presents the final response to the user.
+7.  `mcp_client` relays the final response to the UI or CLI for display.
 
 ## Hardware Environment
 
@@ -131,37 +139,35 @@ MCP servers should only use GPIO pins marked as "Yes" in the "Available" column.
 
 When developing an MCP server to control hardware components, ensure your tools follow these specifications for optimal compatibility and reliability. Server implementations should document which GPIO pins or interfaces they require.
 
+## Client Core Logic (See `distiller_cm5_python/client/README.md`)
 
-Understanding the client's capabilities and the server's expected interface (defined by the `mcp` library) is crucial. The `mcp_client` and `mcp_server` communicate via standard input/output when the client launches the server script.
+-   `distiller_cm5_python/client/mid_layer/mcp_client.py`: Core client class managing the MCP connection to a server, sending queries to the LLM service, and dispatching tool calls.
+-   `distiller_cm5_python/client/mid_layer/llm_client.py`: Handles interaction logic with the configured LLM backend (local `llm_server` via HTTP, OpenRouter, etc.).
+-   `distiller_cm5_python/client/mid_layer/processors.py`: Contains `MessageProcessor` (manages conversation history) and `ToolProcessor` (parses tool calls and interacts with `mcp_client.py`).
+-   The client also has UI (`client/ui/`) and CLI (`client/cli.py`) components that use the `mid_layer`.
 
-## Client Core Logic (See [client/README.md](client/README.md))
+## MCP Server Examples (See `distiller_cm5_python/mcp_server/README.md`)
 
-- [client/mcp_client.py](client/mcp_client.py): The main client application. Connects to an `mcp_server` via stdio, manages conversation history (`MessageProcessor`), prepares requests for the LLM service, and handles tool execution (`ToolProcessor`).
-- [client/llm_providers/LLMServerProvider.py](client/llm_providers/LLMServerProvider.py): Handles HTTP communication with the configured LLM service endpoint (defined in config, e.g., the service running from `llm_server/`)
-- [client/processors/ToolProcessor.py](client/processors/ToolProcessor.py): Parses tool calls from the LLM response and executes them via the MCP session with the connected `mcp_server`.
-- [client/processors/MessageProcessor.py](client/processors/MessageProcessor.py): Manages the conversation history formatted for the LLM service.
+-   `distiller_cm5_python/mcp_server/`: Contains example MCP server implementations using the `mcp` library's stdio server capabilities. **To create a new server, model it after these examples.**
+-   `distiller_cm5_python/mcp_server/talk_server.py`: Example server providing a `speak_text` tool using the `distiller_cm5_sdk` (Piper TTS).
+-   `distiller_cm5_python/mcp_server/wifi_server.py`: Example server providing WiFi network tools (`get_wifi_networks`, `connect_to_wifi`, etc.) for Linux using `nmcli`.
 
-## MCP Server Examples (See [mcp_server/README.md](mcp_server/README.md))
+## Configuration & Utilities (See `distiller_cm5_python/utils/README.md`)
 
-- [mcp_server/](mcp_server/): Contains example MCP server implementations using the `mcp` library's stdio server capabilities. These demonstrate how to expose tools, resources, and prompts. **To create a new server, model it after these examples, implementing the required MCP server logic.**
-- [mcp_server/airconditioning_server.py](mcp_server/airconditioning_server.py): Example server controlling a simulated air conditioning unit.
-- [mcp_server/speaker_server.py](mcp_server/speaker_server.py): Example server controlling a simulated speaker.
-- [mcp_server/wifi_server.py](mcp_server/wifi_server.py): Example server providing WiFi network information.
-
-## Configuration & Utilities (See [utils/README.md](utils/README.md))
-
-- [utils/config.py](utils/config.py): Handles loading configuration (defaults, file, environment variables) for the client and potentially servers.
-- [utils/default_config.json](utils/default_config.json): Default configuration values.
-- [utils/logger.py](utils/logger.py): Sets up standardized logging.
+-   `distiller_cm5_python/utils/config.py`: Handles loading configuration (defaults, file, environment variables).
+-   `distiller_cm5_python/utils/default_config.json`: Default configuration values.
+-   `distiller_cm5_python/utils/logger.py`: Sets up standardized logging via `setup_logging()`.
+-   `distiller_cm5_python/utils/distiller_exception.py`: Defines custom exceptions (`UserVisibleError`, `LogOnlyError`).
 
 ## Supporting Components
 
-- [llm_server/](llm_server/): Contains a FastAPI server ([llm_server/server.py](llm_server/server.py)) that wraps `llama-cpp-python` to provide an OpenAI-compatible API endpoint. This is the **default local LLM service** the client connects to via HTTP, as configured in `utils/default_config.json`. See [llm_server/README.md](llm_server/README.md).
-- [main.py](main.py): Script to run the `mcp_client` in interactive mode.
+-   `distiller_cm5_python/llm_server/`: Contains a FastAPI server (`llm_server/server.py`) that wraps `llama-cpp-python` to provide an OpenAI-compatible API endpoint. This can be used as one option for the LLM backend. See `llm_server/README.md`.
+-   `main.py`: The main project entry point script. Parses arguments (`--gui`), optionally manages a local `llama-cpp` server if configured (`PROVIDER_TYPE=llama-cpp`), and launches either the GUI (`client/ui/App.py`) or CLI (`client/cli.py`) client.
+-   `distiller_cm5_sdk`: An external, installable package providing components like Whisper and Piper wrappers. See [Pamir-AI/distiller-cm5-sdk](https://github.com/Pamir-AI/distiller-cm5-sdk).
 
 ## Creating a New MCP Server
 
-This section guides an AI coder in creating a new MCP server script (e.g., `my_new_device_server.py`) that can communicate with the `mcp_client` via stdio, following the pattern established in existing examples like `wifi_server.py`.
+This section guides an AI coder in creating a new MCP server script (e.g., `my_new_device_server.py`) that can communicate with the client via stdio, following the pattern established in existing examples like `talk_server.py` or `wifi_server.py`.
 
 **Goal:** Implement a Python script using `mcp.server` that listens for MCP requests on stdin/stdout, advertises its tools, and executes the corresponding logic when requested.
 
@@ -173,18 +179,17 @@ This section guides an AI coder in creating a new MCP server script (e.g., `my_n
     *   `inputSchema`: A JSON schema object defining the arguments the tool accepts. Use an empty dict `{}` if no arguments are needed.
     *   **Logic:** The actual Python code to execute when the tool is called.
 
-2.  **Use `mcp` Library:** The server MUST use the `mcp.server` module and `mcp.types` for defining capabilities and handling requests. Ensure the library is accessible (e.g., via `pip install .` in the project root or installing the relevant package).
+2.  **Use `mcp` Library:** The server MUST use the `mcp.server` module and `mcp.types` for defining capabilities and handling requests. Ensure the library is accessible in the Python environment.
 
-**Boilerplate Structure (Based on `wifi_server.py`):**
+3.  **Dependencies:** If the server uses components from `distiller_cm5_sdk` (like Piper TTS), ensure the SDK is installed in the environment.
+
+**Boilerplate Structure (Based on `talk_server.py`):**
 
 ```python
 #!/usr/bin/env python3
 import asyncio
 import logging
 import sys
-# Add project root to path if running script directly to find 'mcp'
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) # Adjust if needed
 import nest_asyncio # May be needed in some environments
 
 # Core MCP components
@@ -193,10 +198,17 @@ from mcp.server.models import InitializationOptions
 import mcp.types as types
 import mcp.server.stdio
 
+# Optional: Import standard logger setup
+# from distiller_cm5_python.utils.logger import setup_logging
+# setup_logging() # Call if using standard setup
+
+# Optional: Import SDK components if needed
+# from distiller_cm5_sdk.piper import Piper
+
 # Apply nest_asyncio if needed
 nest_asyncio.apply()
 
-# Setup basic logging (optional but recommended)
+# Setup basic logging (or use standard logger)
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("MyNewMCPServer") # Use a specific server name
 
@@ -277,6 +289,7 @@ async def handle_call_tool(
         if name == "my_tool_name":
             # TODO: Implement the actual logic for 'my_tool_name' here
             # Example: access hardware, call system commands, read files etc.
+            # If using SDK: e.g., piper_instance.speak_stream(arguments.get('text'))
             arg1 = arguments.get('argument_name_1')
             # ... process arguments ...
             result_text = f"Successfully executed my_tool_name with {arg1}"
@@ -323,6 +336,4 @@ if __name__ == "__main__":
     try:
         asyncio.run(run())
     except KeyboardInterrupt:
-        logger.info("Server stopped by user.")
-
-# ... (rest of llms.txt) ... 
+        logger.info("Server stopped by user.") 

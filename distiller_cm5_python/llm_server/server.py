@@ -209,9 +209,6 @@ def load_model(model_name, load_model_configs: dict[str, Any]):
     return True
 
 
-# TODO : we need to use config file to set the all the general parameters
-
-
 def _chat_completion(messages, tools, inference_configs):
     """Non-streaming version"""
     logger.debug("Generating non-streaming chat completion...")
