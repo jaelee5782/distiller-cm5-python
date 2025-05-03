@@ -301,7 +301,7 @@ ApplicationWindow {
     }
 
     // Place the background image as the first child so it is always at the back
-    Image {
+    OptimizedImage {
         id: backgroundImage
         source: "images/idle-frame.png"
         anchors.fill: parent
