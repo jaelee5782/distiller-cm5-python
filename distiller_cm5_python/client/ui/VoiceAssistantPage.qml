@@ -755,10 +755,10 @@ PageBase {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: voiceInputArea.top
-        anchors.bottomMargin: 4
-        anchors.leftMargin: ThemeManager.spacingNormal
-        anchors.rightMargin: ThemeManager.spacingNormal
-        anchors.topMargin: 4
+        anchors.bottomMargin: ThemeManager.spacingSmall
+        anchors.leftMargin: ThemeManager.spacingSmall
+        anchors.rightMargin: ThemeManager.spacingSmall
+        anchors.topMargin: ThemeManager.spacingSmall
         Component.onCompleted: {
             if (bridge && bridge.ready)
                 updateModel(bridge.get_conversation());
