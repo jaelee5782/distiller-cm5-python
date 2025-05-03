@@ -65,13 +65,32 @@ Rectangle {
             stateHint = getStateHint();
             // Update legacy state properties for backward compatibility
             isListening = (newState === "listening");
-            isProcessing = (newState === "processing" || newState === "thinking" || newState === "executing_tool");
+            isProcessing = (newState === "processing" || newState === "thinking" || 
+                           newState === "executing_tool" || newState === "restoring_cache");
             
             // If transitioning to idle, ensure button is enabled
             if (newState === "idle" && voiceButton) {
                 voiceButton.enabled = isConnected;
                 voiceButton.checked = false;
+            } else if (newState === "listening" && voiceButton) {
+                voiceButton.checked = true;
+                voiceButton.enabled = true;
+            } else if (newState === "processing" || newState === "thinking" || 
+                      newState === "executing_tool" || newState === "restoring_cache") {
+                if (voiceButton) {
+                    voiceButton.checked = false;
+                    voiceButton.enabled = false;  // Disable during any processing state
+                }
+            } else if (newState === "error") {
+                // Show error state
+                if (voiceButton) {
+                    voiceButton.checked = false;
+                    voiceButton.enabled = isConnected;
+                }
             }
+            
+            // Signal app state change
+            stateChanged(newState);
         }
     }
 
@@ -270,17 +289,20 @@ Rectangle {
                 width: ThemeManager.buttonHeight
                 height: ThemeManager.buttonHeight
                 isFlat: true
-                // Disable button when not connected or when processing/thinking/executing
+                // Disable button when not connected or when processing/thinking/executing/restoring cache
                 enabled: isConnected && 
                          voiceInputArea.appState !== "processing" && 
                          voiceInputArea.appState !== "thinking" && 
-                         voiceInputArea.appState !== "executing_tool"
+                         voiceInputArea.appState !== "executing_tool" &&
+                         voiceInputArea.appState !== "restoring_cache"
                 
                 onClicked: {
-                    // Only allow interaction when connected and not processing
-                    if (!isConnected || voiceInputArea.appState === "processing" || 
+                    // Only allow interaction when connected and not in any processing state
+                    if (!isConnected || 
+                        voiceInputArea.appState === "processing" || 
                         voiceInputArea.appState === "thinking" || 
-                        voiceInputArea.appState === "executing_tool")
+                        voiceInputArea.appState === "executing_tool" ||
+                        voiceInputArea.appState === "restoring_cache")
                         return;
 
                     // Toggle listening state
@@ -385,11 +407,13 @@ Rectangle {
                             case "thinking":
                             case "executing_tool":
                                 return "󰍯"; // Processing
+                            case "restoring_cache":
+                                return "󰃨"; // Cache/loading icon
                             case "error":
                                 return "󱦉"; // Error symbol (warning icon)
                             default:
                                 // idle
-                                return "󰍭";
+                                return "󰍮";
                             }
                         }
                         anchors.centerIn: parent

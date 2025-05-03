@@ -15,6 +15,7 @@ class StatusManager(QObject):
     STATUS_THINKING = "thinking"          # More specific processing state
     STATUS_PROCESSING_QUERY = "processing_query"  # When processing a query
     STATUS_EXECUTING_TOOL = "executing_tool"  # When executing a tool
+    STATUS_RESTORING_CACHE = "restoring_cache"  # When restoring model cache
     STATUS_READY = "ready"
     STATUS_ERROR = "error"
     STATUS_DISCONNECTED = "disconnected"
@@ -94,7 +95,8 @@ class StatusManager(QObject):
             self.STATUS_PROCESSING, 
             self.STATUS_THINKING,
             self.STATUS_PROCESSING_QUERY,
-            self.STATUS_EXECUTING_TOOL
+            self.STATUS_EXECUTING_TOOL,
+            self.STATUS_RESTORING_CACHE  # Add cache restoration as a processing state
         ]
         return self._current_status in processing_states
     

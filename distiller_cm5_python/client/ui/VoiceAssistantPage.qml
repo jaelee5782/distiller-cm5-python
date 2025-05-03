@@ -113,7 +113,7 @@ PageBase {
         else if (isProcessing)
             _statusText = "Processing...";
         else
-            _statusText = "Tap to Talk";
+            _statusText = "";
     }
 
     // Function to reset focus state
@@ -357,7 +357,10 @@ PageBase {
         function onStatusChanged(newStatus) {
             console.log("QML: Status changed to:", newStatus);
             // Always show consistent status in the UI, regardless of internal state
-            if (newStatus.toLowerCase().includes("thinking") || newStatus.toLowerCase().includes("tool") || newStatus.toLowerCase().includes("executing")) {
+            if (newStatus.toLowerCase().includes("thinking") || 
+                newStatus.toLowerCase().includes("tool") || 
+                newStatus.toLowerCase().includes("executing")) {
+                
                 // Use a unified "Processing..." status for all processing-related states
                 updateStatusText("Processing...");
                 // Set appropriate internal state
@@ -373,11 +376,28 @@ PageBase {
                 }
                 // Always restart the timer when status changes to ensure we don't get stuck
                 stateResetTimer.restart();
+            } else if (newStatus.toLowerCase().includes("restoring_cache")) {
+                // Handle cache restoration state
+                updateStatusText("Restoring cache...");
+                isProcessing = true;
+                isListening = false;
+                
+                // Update voiceInputArea state
+                if (voiceInputArea && voiceInputArea.setAppState) {
+                    voiceInputArea.setAppState("restoring_cache");
+                }
+                
+                // Restart state reset timer with longer timeout for cache operations
+                stateResetTimer.interval = 60000; // 60 seconds for cache restoration
+                stateResetTimer.restart();
+                
             } else if (newStatus === "idle" || newStatus === "Ready") {
                 console.log("QML: Detected idle/ready status, resetting all states");
                 isProcessing = false;
                 isListening = false;
                 stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
+                // Reset timer interval to normal
+                stateResetTimer.interval = 20000; // Reset to default 20 seconds
                 // Reset input area state
                 if (voiceInputArea && voiceInputArea.resetState) {
                     voiceInputArea.resetState();
@@ -509,7 +529,7 @@ PageBase {
         serverName: _serverName
         statusText: voiceAssistantPage.statusText
         isConnected: bridge && bridge.ready ? bridge.isConnected : false
-        showStatusText: false // Hide status text in header
+        showStatusText: true // Show status text in header
         
         // Update WiFi status initially and whenever bridge is ready
         Component.onCompleted: {

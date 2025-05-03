@@ -169,11 +169,45 @@ class MCPClient:
                     status=StatusType.IN_PROGRESS,
                     component="cache"
                 ))
-                await self.llm_provider.restore_cache(self.message_processor.get_formatted_messages(), self.available_tools)
-
-            # Set the connection status to True
-            self._is_connected = True
-            return True
+                
+                # Set a dedicated status for cache restoration to lock UI elements
+                if hasattr(self.dispatcher, 'status_manager'):
+                    self.dispatcher.status_manager.update_status('restoring_cache', 
+                                                            "Restoring model cache, please wait...")
+                
+                try:
+                    # Restore cache (this is the operation that can cause errors if interrupted)
+                    await self.llm_provider.restore_cache(self.message_processor.get_formatted_messages(), 
+                                                       self.available_tools)
+                    
+                    # Set the connection status to True after cache is successfully restored
+                    self._is_connected = True
+                    
+                    # Reset status to connected/ready after successful cache restoration
+                    if hasattr(self.dispatcher, 'status_manager'):
+                        self.dispatcher.status_manager.update_status('connected', 
+                                                                "Connected, cache restored")
+                    
+                    return True
+                    
+                except Exception as e:
+                    logger.error(f"Failed to restore cache: {e}")
+                    # Set status to error if cache restoration fails
+                    if hasattr(self.dispatcher, 'status_manager'):
+                        self.dispatcher.status_manager.update_status('error', 
+                                                                f"Cache restoration failed: {e}")
+                    
+                    self.dispatcher.dispatch(StatusEvent(
+                        type=EventType.ERROR,
+                        content=f"Failed to restore cache: {e}",
+                        status=StatusType.FAILED,
+                        component="cache"
+                    ))
+                    return False
+            else:
+                # For other provider types, just set connected
+                self._is_connected = True
+                return True
 
         except Exception as e:
             logger.error(f"Failed to connect to server: {e}")

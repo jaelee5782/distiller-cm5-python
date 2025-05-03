@@ -69,9 +69,9 @@ Rectangle {
     RowLayout {
         id: headerLayout
         anchors.fill: parent
-        anchors.leftMargin: ThemeManager.spacingNormal
-        anchors.rightMargin: ThemeManager.spacingNormal
-        spacing: ThemeManager.spacingNormal
+        anchors.leftMargin: ThemeManager.spacingTiny * 2
+        anchors.rightMargin: ThemeManager.spacingTiny
+        spacing: ThemeManager.spacingTiny
 
         // Server selection button
         AppButton {
@@ -79,10 +79,9 @@ Rectangle {
             Layout.preferredWidth: 140
             Layout.preferredHeight: 40
             Layout.alignment: Qt.AlignVCenter
-            text: isConnected && serverName && serverName !== "NO SERVER" ? serverName : "SELECT SERVER"
-            fontSize: FontManager.fontSizeSmall
             navigable: true
             isFlat: false
+            text: "" // Set empty text since we're using custom content
             onClicked: header.serverSelectClicked()
             
             // Add custom styling to ensure black border
@@ -95,11 +94,45 @@ Rectangle {
                 radius: ThemeManager.borderRadius
                 z: -1 // Behind the text
             }
+
+            // Custom content using a child Column instead of contentItem
+            Column {
+                anchors.fill: parent
+                anchors.leftMargin: ThemeManager.spacingTiny * 2
+                anchors.rightMargin: ThemeManager.spacingTiny
+                anchors.topMargin: ThemeManager.spacingTiny
+                anchors.bottomMargin: ThemeManager.spacingTiny
+                spacing: 1
+
+                // Server name - left aligned
+                Text {
+                    width: parent.width
+                    height: parent.height / 2
+                    horizontalAlignment: Text.AlignLeft
+                    text: isConnected && serverName && serverName !== "NO SERVER" ? serverName : "SELECT SERVER"
+                    font: FontManager.small
+                    color: serverSelectBtn.visualFocus ? ThemeManager.focusTextColor : ThemeManager.textColor
+                    elide: Text.ElideRight
+                }
+
+                // Status text - left aligned, smaller font
+                Text {
+                    width: parent.width
+                    height: parent.height / 2
+                    horizontalAlignment: Text.AlignLeft
+                    text: statusText
+                    // visible: isConnected && serverName && serverName !== "NO SERVER"
+                    font.pixelSize: FontManager.fontSizeSmall - 2
+                    font.family: FontManager.primaryFontFamily
+                    color: serverSelectBtn.visualFocus ? ThemeManager.focusTextColor : ThemeManager.secondaryTextColor
+                    elide: Text.ElideRight
+                }
+            }
         }
 
-        Item {
-            Layout.fillWidth: true
-        }
+        // Item {
+        //     Layout.fillWidth: false
+        // }
     }
     
     // System stats display - positioned directly in header instead of in RowLayout
