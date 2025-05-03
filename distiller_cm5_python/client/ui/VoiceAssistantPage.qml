@@ -116,7 +116,89 @@ PageBase {
             _statusText = "";
     }
 
-    // Function to reset focus state
+    // Consolidated failsafe timer for state management and stuck detection
+    Timer {
+        id: stateResetTimer
+
+        property bool toolExecutionActive: false
+        property real lastActionTimestamp: Date.now()
+
+        interval: 10000 // 10 seconds timeout for periodic check
+        repeat: true    // Now repeating to handle both periodic check and timeout
+        running: true   // Always running to check for stuck states
+        onTriggered: {
+            // First purpose: Check for stuck processing state (was stateCheckTimer's job)
+            if (isProcessing && (Date.now() - lastActionTimestamp > 15000)) {
+                console.log("StateResetTimer triggered: Detected stuck state after inactivity");
+                isProcessing = false;
+                isListening = false;
+                updateStatusText("Tap to Talk");
+                conversationView.setResponseInProgress(false);
+                // Reset input area state
+                if (voiceInputArea.resetState)
+                    voiceInputArea.resetState();
+
+                // Force conversation view to update - ensure any errors are displayed
+                if (bridge && bridge.ready) {
+                    conversationView.updateModel(bridge.get_conversation());
+                    conversationView.scrollToBottom();
+                }
+            }
+        }
+    }
+
+    // Consolidated focus management timer
+    Timer {
+        id: focusTimer
+
+        property bool isRestoreFocus: false  // Tracks which type of focus operation this is
+
+        interval: 250  // Middle ground between original 200 and 300ms
+        repeat: false
+        running: false
+        onTriggered: {
+            // Always collect focus items regardless of the focus operation type
+            collectFocusItems();
+            
+            if (isRestoreFocus) {
+                // This was the restoreFocusTimer functionality - restore after dialog
+                // Always prioritize the voice button after server selection if connected
+                if (isServerConnected && voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
+                    FocusManager.setFocusToItem(voiceInputArea.voiceButton);
+                    console.log("Focus set to voice button after server selection");
+                } else if (previousFocusedItem && previousFocusedItem.navigable) {
+                    FocusManager.setFocusToItem(previousFocusedItem);
+                } else if (focusableItems.length > 0) {
+                    for (var i = 0; i < focusableItems.length; i++) {
+                        if (focusableItems[i] !== header.serverSelectButton) {
+                            FocusManager.setFocusToItem(focusableItems[i]);
+                            break;
+                        }
+                    }
+                }
+            } else {
+                // This was the focusResetTimer functionality - after app restart
+                // Set focus to voice button if available
+                if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
+                    FocusManager.setFocusToItem(voiceInputArea.voiceButton);
+                    console.log("Focus reset to voice button");
+                } else if (focusableItems.length > 0) {
+                    FocusManager.setFocusToItem(focusableItems[0]);
+                    console.log("Focus reset to first focusable item");
+                }
+                // Force focus to keyHandler in main window to ensure key navigation works
+                if (mainWindow && mainWindow.keyHandler) {
+                    mainWindow.keyHandler.forceActiveFocus();
+                    console.log("Focus forced to key handler");
+                }
+            }
+            
+            // Always ensure focusable items have focus as a final step
+            ensureFocusableItemsHaveFocus();
+        }
+    }
+
+    // Function to reset focus state - updated to use the consolidated timer
     function resetFocusState() {
         console.log("Resetting focus state after restart");
         // First clear any existing focus
@@ -129,7 +211,8 @@ PageBase {
         collectFocusItems();
         
         // Then start the timer to ensure UI elements are ready
-        focusResetTimer.start();
+        focusTimer.isRestoreFocus = false;  // This is a reset operation, not restore
+        focusTimer.start();
         
         // Force a check immediately after resetting focus
         Qt.callLater(function() {
@@ -219,14 +302,14 @@ PageBase {
     }
     // Reset the action timestamp whenever user interacts or state changes
     onIsProcessingChanged: {
-        stateCheckTimer.lastActionTimestamp = Date.now();
+        stateResetTimer.lastActionTimestamp = Date.now();
         if (!conversationScrollMode) {
             _statusText = isProcessing ? "Processing..." : "Tap to Talk";
             updateStatusText();
         }
     }
     onIsListeningChanged: {
-        stateCheckTimer.lastActionTimestamp = Date.now();
+        stateResetTimer.lastActionTimestamp = Date.now();
         if (!conversationScrollMode) {
             _statusText = isListening ? "Listening..." : (_statusText === "Listening..." ? "Processing..." : _statusText);
             updateStatusText();
@@ -544,8 +627,8 @@ PageBase {
                 bridge.submit_query(transcribedText.trim());
                 transcribedText = "";
                 voiceInputArea.transcribedText = "";
-                // Start the state reset timer as a failsafe
-                stateResetTimer.start();
+                // Update the action timestamp to track activity
+                stateResetTimer.lastActionTimestamp = Date.now();
             } else {
                 // Show error for empty message
                 console.log("Empty transcription in timer, showing error state");
@@ -586,7 +669,7 @@ PageBase {
             var headerRect = findChild(header, "headerBackground");
             if (headerRect) {
                 headerRect.border.width = 1;
-                headerRect.border.color = ThemeManager.borderColor;
+                headerRect.border.color = ThemeManager.black;
             }
             
             // Ensure WiFi status is updated
@@ -637,7 +720,8 @@ PageBase {
             }
             
             // Restore focus after dialog closes
-            restoreFocusTimer.start();
+            focusTimer.isRestoreFocus = true;
+            focusTimer.start();
         }
         
         onDialogClosed: {
@@ -789,7 +873,7 @@ PageBase {
             var toastRect = findChild(messageToast, "toastBackground");
             if (toastRect) {
                 toastRect.border.width = 1;
-                toastRect.border.color = ThemeManager.borderColor;
+                toastRect.border.color = ThemeManager.black;
                 toastRect.color = ThemeManager.backgroundColor;
             }
         }
@@ -913,91 +997,6 @@ PageBase {
         }
     }
 
-    Timer {
-        id: restoreFocusTimer
-
-        interval: 300 // Increased from 100ms to 300ms
-        repeat: false
-        running: false
-        onTriggered: {
-            collectFocusItems();
-            // Always prioritize the voice button after server selection if connected
-            if (isServerConnected && voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
-                FocusManager.setFocusToItem(voiceInputArea.voiceButton);
-                console.log("Focus set to voice button after server selection");
-            } else if (previousFocusedItem && previousFocusedItem.navigable) {
-                FocusManager.setFocusToItem(previousFocusedItem);
-            } else if (focusableItems.length > 0) {
-                for (var i = 0; i < focusableItems.length; i++) {
-                    if (focusableItems[i] !== header.serverSelectButton) {
-                        FocusManager.setFocusToItem(focusableItems[i]);
-                        break;
-                    }
-                }
-            }
-            // Directly ensure focus here instead of starting another timer
-            ensureFocusableItemsHaveFocus();
-        }
-    }
-
-    // Failsafe timer to ensure processing state is properly reset
-    Timer {
-        id: stateResetTimer
-
-        property bool toolExecutionActive: false
-
-        interval: 20000 // 20 seconds timeout
-        repeat: false
-        running: false
-        onTriggered: {
-            if (isProcessing) {
-                console.log("StateResetTimer triggered: Forcing state reset from stuck state");
-                isProcessing = false;
-                isListening = false;
-                updateStatusText("Tap to Talk");
-                conversationView.setResponseInProgress(false);
-                // Reset input area state
-                if (voiceInputArea.resetState)
-                    voiceInputArea.resetState();
-
-                // Ensure any errors are displayed in the conversation
-                if (bridge && bridge.ready) {
-                    conversationView.updateModel(bridge.get_conversation());
-                    conversationView.scrollToBottom();
-                }
-            }
-        }
-    }
-
-    // Periodic state check to ensure we don't get stuck in processing state
-    Timer {
-        id: stateCheckTimer
-
-        property real lastActionTimestamp: Date.now()
-
-        interval: 10000 // Increased from 5000ms to 10000ms
-        repeat: true
-        running: true
-        onTriggered: {
-            // Increased timeout check from 10s to 15s
-            if (isProcessing && (Date.now() - lastActionTimestamp > 15000)) {
-                isProcessing = false;
-                isListening = false;
-                updateStatusText("Tap to Talk");
-                conversationView.setResponseInProgress(false);
-                // Reset input area state
-                if (voiceInputArea.resetState)
-                    voiceInputArea.resetState();
-
-                // Force conversation view to update - ensure any errors are displayed
-                if (bridge && bridge.ready) {
-                    conversationView.updateModel(bridge.get_conversation());
-                    conversationView.scrollToBottom();
-                }
-            }
-        }
-    }
-
     // App restart confirmation dialog
     AppDialog {
         id: restartConfirmDialog
@@ -1014,44 +1013,18 @@ PageBase {
         }
     }
 
-    // Timer to ensure proper focus reset
-    Timer {
-        id: focusResetTimer
-
-        interval: 200
-        repeat: false
-        running: false
-        onTriggered: {
-            // Re-collect focus items
-            collectFocusItems();
-            // Set focus to voice button if available
-            if (voiceInputArea && voiceInputArea.voiceButton && voiceInputArea.voiceButton.navigable) {
-                FocusManager.setFocusToItem(voiceInputArea.voiceButton);
-                console.log("Focus reset to voice button");
-            } else if (focusableItems.length > 0) {
-                FocusManager.setFocusToItem(focusableItems[0]);
-                console.log("Focus reset to first focusable item");
-            }
-            // Force focus to keyHandler in main window to ensure key navigation works
-            if (mainWindow && mainWindow.keyHandler) {
-                mainWindow.keyHandler.forceActiveFocus();
-                console.log("Focus forced to key handler");
-            }
-        }
-    }
-
     // Move to thinking state (for external calls)
     function setThinkingState() {
         setAppState("thinking");
-        // Ensure state reset timer is started
-        stateResetTimer.restart();
+        // Update action timestamp
+        stateResetTimer.lastActionTimestamp = Date.now();
     }
 
     // Move to tool execution state (for external calls)
     function setToolExecutionState() {
         setAppState("executing_tool");
-        // Ensure state reset timer is started
-        stateResetTimer.restart();
+        // Update action timestamp
+        stateResetTimer.lastActionTimestamp = Date.now();
     }
 
 }
