@@ -14,6 +14,7 @@ from distiller_cm5_python.client.ui.events.event_types import (
     EventType,
     StatusType,
     MessageSchema,
+    CacheEvent,
 )
 from distiller_cm5_python.client.ui.events.event_dispatcher import EventDispatcher
 from distiller_cm5_python.client.ui.bridge.StatusManager import StatusManager
@@ -29,12 +30,12 @@ class BridgeEventSignals(Protocol):
     infoReceived: pyqtSignal
     warningReceived: pyqtSignal
     errorReceived: pyqtSignal
-    sshInfoReceived: pyqtSignal
     functionReceived: pyqtSignal
     observationReceived: pyqtSignal
     planReceived: pyqtSignal
     statusChanged: pyqtSignal
     messageSchemaReceived: pyqtSignal
+    cacheEventReceived: pyqtSignal
 
 
 class BridgeEventHandler:
@@ -267,10 +268,11 @@ class BridgeEventHandler:
                 }
                 conversation_manager.add_message(message)
 
-        elif event.type == EventType.SSH_INFO:
-            # Handle SSH info events
-            if hasattr(self.signals, "sshInfoReceived"):
-                self.signals.sshInfoReceived.emit(
+        elif event.type == EventType.CACHE:
+            # Handle cache events
+            if hasattr(self.signals, "cacheEventReceived"):
+                # If we have a dedicated handler, use it
+                self.signals.cacheEventReceived.emit(
                     event.content, str(event.id), timestamp_str
                 )
             else:
@@ -279,12 +281,26 @@ class BridgeEventHandler:
                     event.content, str(event.id), timestamp_str
                 )
 
+            # Update status based on cache operation status
+            status_value = (
+                event.status.value if hasattr(event.status, "value") else event.status
+            )
+            operation = getattr(event, "operation", "restoration")
+
+            if operation == "restoration":
+                if status_value == StatusType.IN_PROGRESS:
+                    self.status_manager.update_status("restoring_cache", event.content)
+                elif status_value == StatusType.SUCCESS:
+                    self.status_manager.update_status("connected", event.content)
+                elif status_value == StatusType.FAILED:
+                    self.status_manager.update_status("error", event.content)
+
             # Add to conversation history
             if conversation_manager:
                 message = {
                     "timestamp": self._get_formatted_timestamp(),
                     "content": f"{event.content}",
-                    "type": "SSH Info",
+                    "type": "Cache Operation",
                 }
                 conversation_manager.add_message(message)
 
@@ -331,10 +347,26 @@ class BridgeEventHandler:
                 conversation_manager.add_message(message)
 
         elif event.type == EventType.STATUS:
-            # Update status directly
-            status_str = event.content
-            self.status_manager.update_status(status_str)
-            self.signals.statusChanged.emit(status_str)
+            # Check for specific component status events
+            component = getattr(event, "component", None)
+            status_value = (
+                event.status.value if hasattr(event.status, "value") else event.status
+            )
+
+            if component == "connection":
+                if status_value == StatusType.FAILED:
+                    self.status_manager.update_status("error", event.content)
+                elif status_value == StatusType.SUCCESS:
+                    self.status_manager.update_status("connected", event.content)
+                elif status_value == StatusType.IN_PROGRESS:
+                    self.status_manager.update_status("connecting", event.content)
+            else:
+                # Handle other status events normally
+                status_str = event.content
+                self.status_manager.update_status(status_str)
+
+            # Always emit the status changed signal
+            self.signals.statusChanged.emit(event.content)
 
         else:
             logger.warning(f"Unknown event type: {event.type}")

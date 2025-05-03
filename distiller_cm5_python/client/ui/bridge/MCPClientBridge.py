@@ -53,6 +53,11 @@ class MCPClientBridge(BridgeCore):
     # Signal for receiving MessageSchema events - defined here to maintain compatibility
     messageSchemaReceived = pyqtSignal("QVariantMap")
 
+    # New signal for cache events
+    cacheEventReceived = pyqtSignal(
+        str, str, str, arguments=["content", "event_id", "timestamp"]
+    )
+
     # Audio/Transcription signals - these will be connected to App's signals
     transcriptionUpdate = pyqtSignal(str, arguments=["transcription"])
     transcriptionComplete = pyqtSignal(str, arguments=["full_text"])

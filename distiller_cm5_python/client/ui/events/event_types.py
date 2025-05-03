@@ -26,8 +26,8 @@ class EventType(str, Enum):
     PLAN = "Plan"
     WARNING = "Warning"
     ERROR = "Error"
-    SSH_INFO = "SSHInfo"  # New event type for SSH information
-    STATUS = "Status"  # New event type for status updates
+    STATUS = "Status"  # For general status updates
+    CACHE = "Cache"  # New event type for cache operations
 
 
 class MessageSchema(BaseModel):
@@ -120,20 +120,6 @@ class MessageSchema(BaseModel):
             role="assistant",
         )
 
-    @staticmethod
-    def ssh_info(
-        ip_address: str, username: str = "user", port: int = 22
-    ) -> "SSHInfoEvent":
-        """Create an SSH info event."""
-        return SSHInfoEvent(
-            type=EventType.SSH_INFO,
-            content=f"SSH: {username}@{ip_address}:{port}",
-            status=StatusType.SUCCESS,
-            ip_address=ip_address,
-            username=username,
-            port=port,
-        )
-
 
 # Specialized message schemas for different event types
 class MessageEvent(MessageSchema):
@@ -177,18 +163,6 @@ class PlanEvent(MessageSchema):
         use_enum_values = True
 
 
-class SSHInfoEvent(MessageSchema):
-    """SSH connection information"""
-
-    type: EventType = EventType.SSH_INFO
-    ip_address: str
-    username: str = "user"
-    port: int = 22
-
-    class Config:
-        use_enum_values = True
-
-
 class StatusEvent(MessageSchema):
     """System status information"""
 
@@ -197,3 +171,50 @@ class StatusEvent(MessageSchema):
 
     class Config:
         use_enum_values = True
+
+
+class CacheEvent(MessageSchema):
+    """Cache operation events"""
+
+    type: EventType = EventType.CACHE
+    operation: str = "restoration"  # Default operation is restoration
+    model_name: Optional[str] = None
+
+    class Config:
+        use_enum_values = True
+
+    @staticmethod
+    def restoration_started(model_name: Optional[str] = None) -> "CacheEvent":
+        """Create an event for when cache restoration starts"""
+        return CacheEvent(
+            type=EventType.CACHE,
+            content="Restoring model cache, please wait...",
+            status=StatusType.IN_PROGRESS,
+            operation="restoration",
+            model_name=model_name,
+        )
+
+    @staticmethod
+    def restoration_completed(model_name: Optional[str] = None) -> "CacheEvent":
+        """Create an event for when cache restoration completes successfully"""
+        return CacheEvent(
+            type=EventType.CACHE,
+            content="Cache restored successfully",
+            status=StatusType.SUCCESS,
+            operation="restoration",
+            model_name=model_name,
+        )
+
+    @staticmethod
+    def restoration_failed(
+        error_message: str, model_name: Optional[str] = None
+    ) -> "CacheEvent":
+        """Create an event for when cache restoration fails"""
+        return CacheEvent(
+            type=EventType.CACHE,
+            content=f"Failed to restore cache: {error_message}",
+            status=StatusType.FAILED,
+            operation="restoration",
+            model_name=model_name,
+            data={"error": error_message},
+        )

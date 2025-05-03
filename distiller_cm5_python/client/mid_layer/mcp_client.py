@@ -40,6 +40,7 @@ from distiller_cm5_python.client.ui.events.event_types import (
     MessageEvent,
     ActionEvent,
     StatusEvent,
+    CacheEvent,
 )
 
 # Get logger instance for this module
@@ -177,11 +178,11 @@ class MCPClient:
                     )
                 )
 
-                # Set a dedicated status for cache restoration to lock UI elements
-                if hasattr(self.dispatcher, "status_manager"):
-                    self.dispatcher.status_manager.update_status(
-                        "restoring_cache", "Restoring model cache, please wait..."
-                    )
+                # Send a more specific status event for cache restoration
+                # Dispatch a proper cache event
+                self.dispatcher.dispatch(
+                    CacheEvent.restoration_started(model_name=self.llm_provider.model)
+                )
 
                 try:
                     # Restore cache (this is the operation that can cause errors if interrupted)
@@ -193,28 +194,23 @@ class MCPClient:
                     # Set the connection status to True after cache is successfully restored
                     self._is_connected = True
 
-                    # Reset status to connected/ready after successful cache restoration
-                    if hasattr(self.dispatcher, "status_manager"):
-                        self.dispatcher.status_manager.update_status(
-                            "connected", "Connected, cache restored"
+                    # Dispatch a proper cache completion event
+                    self.dispatcher.dispatch(
+                        CacheEvent.restoration_completed(
+                            model_name=self.llm_provider.model
                         )
+                    )
 
                     return True
 
                 except Exception as e:
                     logger.error(f"Failed to restore cache: {e}")
-                    # Set status to error if cache restoration fails
-                    if hasattr(self.dispatcher, "status_manager"):
-                        self.dispatcher.status_manager.update_status(
-                            "error", f"Cache restoration failed: {e}"
-                        )
+                    # No need for additional status update here as we'll dispatch an error event below
 
+                    # Dispatch a proper cache failure event
                     self.dispatcher.dispatch(
-                        StatusEvent(
-                            type=EventType.ERROR,
-                            content=f"Failed to restore cache: {e}",
-                            status=StatusType.FAILED,
-                            component="cache",
+                        CacheEvent.restoration_failed(
+                            error_message=str(e), model_name=self.llm_provider.model
                         )
                     )
                     return False
@@ -225,9 +221,10 @@ class MCPClient:
 
         except Exception as e:
             logger.error(f"Failed to connect to server: {e}")
+            # Dispatch a generic connection error event
             self.dispatcher.dispatch(
                 StatusEvent(
-                    type=EventType.ERROR,
+                    type=EventType.STATUS,
                     content=f"Failed to connect to server: {e}",
                     status=StatusType.FAILED,
                     component="connection",

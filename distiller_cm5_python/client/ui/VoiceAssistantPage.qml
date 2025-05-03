@@ -312,7 +312,56 @@ PageBase {
             // Add the observation to the conversation view
             if (conversationView)
                 conversationView.updateModel(bridge.get_conversation());
+        }
 
+        // Handler for cache events
+        function onCacheEventReceived(content, eventId, timestamp) {
+            console.log("Cache event received: " + content);
+            
+            // Check message to determine which operation is happening
+            if (content && content.toLowerCase().includes("restoring")) {
+                console.log("Cache restoration in progress, disabling voice button");
+                // Update status text first
+                updateStatusText("Restoring cache...");
+                
+                // Disable voice button during cache restoration
+                if (voiceInputArea && voiceInputArea.setAppState) {
+                    voiceInputArea.setAppState("restoring_cache");
+                }
+                
+                // Show a toast message about the operation
+                messageToast.showMessage("Restoring model cache, please wait...", 3000);
+                
+            } else if (content && content.toLowerCase().includes("restored")) {
+                console.log("Cache restoration completed, re-enabling voice button");
+                // Update status text
+                updateStatusText("Ready");
+                
+                // Reset the voiceInputArea state to enable voice button
+                if (voiceInputArea && voiceInputArea.resetState) {
+                    voiceInputArea.resetState();
+                }
+                
+                // Show a toast message about the completion
+                messageToast.showMessage("Cache restored successfully", 3000);
+                
+            } else if (content && content.toLowerCase().includes("failed")) {
+                console.log("Cache restoration failed");
+                // Update status text
+                updateStatusText("Error");
+                
+                // Set error state
+                if (voiceInputArea && voiceInputArea.setErrorState) {
+                    voiceInputArea.setErrorState();
+                }
+                
+                // Show a toast message about the failure
+                messageToast.showMessage("Cache restoration failed: " + content, 5000);
+            }
+            
+            // Add the cache operation to the conversation view
+            if (conversationView)
+                conversationView.updateModel(bridge.get_conversation());
         }
 
         // Handler for plan events

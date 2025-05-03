@@ -50,6 +50,8 @@ Rectangle {
             return "Thinking...";
         case "executing_tool":
             return "Executing tool...";
+        case "restoring_cache":
+            return "Restoring cache...";
         case "error":
             return "Error - try again";
         default:
@@ -76,11 +78,19 @@ Rectangle {
                 voiceButton.checked = true;
                 voiceButton.enabled = true;
             } else if (newState === "processing" || newState === "thinking" || 
-                      newState === "executing_tool" || newState === "restoring_cache") {
+                      newState === "executing_tool") {
                 if (voiceButton) {
                     voiceButton.checked = false;
                     voiceButton.enabled = false;  // Disable during any processing state
                 }
+            } else if (newState === "restoring_cache") {
+                // Special handling for cache restoration
+                if (voiceButton) {
+                    voiceButton.checked = false;
+                    voiceButton.enabled = false;  // Explicitly disable during cache restoration
+                }
+                // Show appropriate hint text
+                stateHint = "Restoring cache...";
             } else if (newState === "error") {
                 // Show error state
                 if (voiceButton) {
@@ -424,7 +434,8 @@ Rectangle {
                                ((isConnected && 
                                voiceInputArea.appState !== "processing" && 
                                voiceInputArea.appState !== "thinking" && 
-                               voiceInputArea.appState !== "executing_tool") ? 
+                               voiceInputArea.appState !== "executing_tool" &&
+                               voiceInputArea.appState !== "restoring_cache") ? 
                                ThemeManager.textColor : ThemeManager.secondaryTextColor)
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
@@ -433,7 +444,8 @@ Rectangle {
                                 ((isConnected && 
                                 voiceInputArea.appState !== "processing" && 
                                 voiceInputArea.appState !== "thinking" && 
-                                voiceInputArea.appState !== "executing_tool") ? 1 : 0.5)
+                                voiceInputArea.appState !== "executing_tool" &&
+                                voiceInputArea.appState !== "restoring_cache") ? 1 : 0.5)
                     }
 
                     // Simple indicator for active states
