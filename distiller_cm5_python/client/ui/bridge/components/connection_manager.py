@@ -13,6 +13,7 @@ from distiller_cm5_python.client.mid_layer.mcp_client import MCPClient
 from distiller_cm5_python.client.ui.bridge.StatusManager import StatusManager
 from distiller_cm5_python.client.ui.bridge.ConversationManager import ConversationManager
 from distiller_cm5_python.client.ui.bridge.ServerDiscovery import ServerDiscovery
+from distiller_cm5_python.client.ui.bridge.components.error_handler import ErrorHandler
 from distiller_cm5_python.utils.config import (
     STREAMING_ENABLED, SERVER_URL, PROVIDER_TYPE, MODEL_NAME, API_KEY, TIMEOUT
 )
@@ -31,7 +32,8 @@ class ConnectionManager:
         status_manager: StatusManager, 
         conversation_manager: ConversationManager,
         server_discovery: ServerDiscovery,
-        is_connected_property: 'property'
+        is_connected_property: 'property',
+        error_handler: ErrorHandler
     ):
         """
         Initialize the connection manager.
@@ -41,11 +43,13 @@ class ConnectionManager:
             conversation_manager: The conversation manager to add messages about connections
             server_discovery: The server discovery component to find available servers
             is_connected_property: A property that indicates if the bridge is connected
+            error_handler: The error handler for unified error handling
         """
         self.status_manager = status_manager
         self.conversation_manager = conversation_manager
         self.server_discovery = server_discovery
         self.is_connected_property = is_connected_property
+        self.error_handler = error_handler
         self._on_connection_changed = lambda value: None  # Default no-op callback
         
         # Server discovery cache
@@ -85,13 +89,11 @@ class ConnectionManager:
             self.server_discovery.discover_mcp_servers()
 
         if not self.server_discovery.available_servers:
-            self.status_manager.update_status(
-                StatusManager.STATUS_ERROR, error="No MCP servers found"
+            self.error_handler.handle_error(
+                Exception("No MCP servers found"), 
+                error_context="Server discovery", 
+                user_friendly_msg="No MCP servers found"
             )
-            self.conversation_manager.add_message({
-                "timestamp": self.conversation_manager.get_timestamp(),
-                "content": "Error: No MCP servers found.",
-            })
             return False
 
         # Wait for user to select a server in UI before proceeding
@@ -139,24 +141,37 @@ class ConnectionManager:
 
             # Use existing client or wait for it to be set
             if not self._mcp_client:
-                logger.error("MCPClient not set in ConnectionManager")
-                raise RuntimeError("MCPClient not initialized. This is likely a setup issue.")
+                error = RuntimeError("MCPClient not initialized. This is likely a setup issue.")
+                self.error_handler.handle_error(
+                    error, 
+                    error_context="Server connection",
+                    user_friendly_msg="Failed to initialize connection client. Please restart the application."
+                )
+                return False
 
             # Connect to server with explicit timeout
             try:
                 connect_task = self._mcp_client.connect_to_server(self._selected_server_path)
                 connected = await asyncio.wait_for(connect_task, timeout=TIMEOUT)
-            except asyncio.TimeoutError:
-                raise TimeoutError(
-                    f"Connection to {server_name} timed out after 90 seconds. Server may be busy or unavailable."
-                )
+            except asyncio.TimeoutError as e:
+                error_msg = f"Connection to {server_name} timed out after {TIMEOUT} seconds. Server may be busy or unavailable."
+                self.error_handler.handle_error(e, error_context="Server connection", user_friendly_msg=error_msg)
+                
+                # Clean up after connection failure
+                await self._cleanup_after_connection_failure()
+                return False
 
             if not connected:
-                raise ConnectionError(
+                error = ConnectionError(
                     f"Failed to establish connection with {server_name} server. Check server status and configuration."
                 )
+                self.error_handler.handle_error(error, error_context="Server connection")
+                
+                # Clean up after connection failure
+                await self._cleanup_after_connection_failure()
+                return False
 
-            self._update_connection_state(True)  # Use the new method instead of fset
+            self._update_connection_state(True)
             server_display_name = getattr(self._mcp_client, 'server_name', None) or server_name
             self.status_manager.update_status(
                 StatusManager.STATUS_CONNECTED, server_name=server_display_name
@@ -168,20 +183,28 @@ class ConnectionManager:
             return True
             
         except Exception as e:
-            logger.error(f"Error connecting to server: {e}", exc_info=True)
+            self.error_handler.handle_error(
+                e, 
+                error_context="Server connection",
+                user_friendly_msg=f"Failed to connect to server: {server_name}"
+            )
             
-            # Ensure client is reset in case of errors
-            if self._mcp_client:
-                try:
-                    await self._mcp_client.cleanup()
-                except Exception as cleanup_e:
-                    logger.error(f"Error cleaning up client after connection failure: {cleanup_e}")
-                finally:
-                    # Reset the client reference and connection state
-                    self._mcp_client = None
-                    
-            self._update_connection_state(False)  # Use the new method instead of fset
+            # Clean up after connection failure
+            await self._cleanup_after_connection_failure()
             return False
+    
+    async def _cleanup_after_connection_failure(self) -> None:
+        """Clean up resources after a connection failure."""
+        if self._mcp_client:
+            try:
+                await self._mcp_client.cleanup()
+            except Exception as cleanup_e:
+                logger.error(f"Error cleaning up client after connection failure: {cleanup_e}")
+            finally:
+                # Reset the client reference and connection state
+                self._mcp_client = None
+                
+        self._update_connection_state(False)
 
     async def disconnect_from_server(self) -> None:
         """Disconnect from the current MCP server."""
@@ -192,20 +215,34 @@ class ConnectionManager:
                 try:
                     # Timeout the cleanup operation to prevent hanging
                     await asyncio.wait_for(self._mcp_client.cleanup(), timeout=5.0)
-                except asyncio.TimeoutError:
-                    logger.warning("Client cleanup timed out during disconnection")
+                except asyncio.TimeoutError as e:
+                    self.error_handler.handle_error(
+                        e,
+                        error_context="Server disconnection",
+                        user_friendly_msg="Disconnection timed out, but the application will continue to function.",
+                        log_error=True
+                    )
                 except Exception as e:
-                    logger.error(f"Error during client cleanup in disconnection: {e}", exc_info=True)
+                    self.error_handler.handle_error(
+                        e,
+                        error_context="Server disconnection",
+                        user_friendly_msg="An error occurred during disconnection, but the application will continue to function.",
+                        log_error=True
+                    )
                 finally:
                     # Always reset the client reference
                     self._mcp_client = None
 
             # Update the connection state
-            self._update_connection_state(False)  # Use the new method instead of fset
+            self._update_connection_state(False)
             self.status_manager.update_status(StatusManager.STATUS_DISCONNECTED)
             
         except Exception as e:
-            logger.error(f"Error disconnecting from server: {e}", exc_info=True)
+            self.error_handler.handle_error(
+                e,
+                error_context="Server disconnection",
+                user_friendly_msg="Failed to disconnect properly. The application will continue to function."
+            )
 
     def get_available_servers(self) -> List[Dict[str, Any]]:
         """
@@ -219,9 +256,17 @@ class ConnectionManager:
             logger.info("Using cached server discovery results")
             return self.server_discovery.available_servers
 
-        self.server_discovery.discover_mcp_servers()
-        self._last_server_discovery_time = current_time
-        return self.server_discovery.available_servers
+        try:
+            self.server_discovery.discover_mcp_servers()
+            self._last_server_discovery_time = current_time
+            return self.server_discovery.available_servers
+        except Exception as e:
+            self.error_handler.handle_error(
+                e,
+                error_context="Server discovery",
+                user_friendly_msg="Failed to discover available servers. Please check your network connection."
+            )
+            return []
     
     async def process_query(self, query: str) -> None:
         """
@@ -231,8 +276,13 @@ class ConnectionManager:
             query: The user query to process
         """
         if not self._mcp_client:
-            logger.error("Cannot process query: No MCP client available")
-            raise ConnectionError("Not connected to any server")
+            error = ConnectionError("Not connected to any server")
+            self.error_handler.handle_error(
+                error,
+                error_context="Query processing",
+                user_friendly_msg="You are not connected to any server. Please connect first."
+            )
+            return
             
         logger.info(f"Processing query: {query}")
         
@@ -246,33 +296,19 @@ class ConnectionManager:
             if self._is_connected and not self.status_manager.is_error:
                 self.status_manager.update_status(StatusManager.STATUS_IDLE)
         except LogOnlyError as e:
-            # Handle streaming errors by showing a friendly message
-            logger.error(f"Streaming error in process_query: {e}")
-            
-            # Update the status to error state
-            error_msg = "Failed to get response from the language model. Please check your connection and try again."
-            self.status_manager.update_status(StatusManager.STATUS_ERROR, error=error_msg)
-            
-            # Add error message to conversation if not already added
-            self.conversation_manager.add_message({
-                "timestamp": self.conversation_manager.get_timestamp(),
-                "content": f"Error: {error_msg}",
-            })
-            
-            # Note: The MCP client already dispatches appropriate error events
+            # Handle streaming errors with error handler
+            self.error_handler.handle_error(
+                e,
+                error_context="Query processing",
+                user_friendly_msg="Failed to get response from the language model. Please check your connection and try again."
+            )
         except Exception as e:
             # Handle other unexpected errors
-            logger.error(f"Unexpected error in process_query: {e}", exc_info=True)
-            
-            # Update the status to error state
-            error_msg = f"An unexpected error occurred: {str(e)}"
-            self.status_manager.update_status(StatusManager.STATUS_ERROR, error=error_msg)
-            
-            # Add error message to conversation
-            self.conversation_manager.add_message({
-                "timestamp": self.conversation_manager.get_timestamp(),
-                "content": f"Error: {error_msg}",
-            })
+            self.error_handler.handle_error(
+                e,
+                error_context="Query processing",
+                user_friendly_msg=f"An error occurred while processing your query: {str(e)}"
+            )
             
             # Reset to idle state if still connected
             if self._is_connected:
