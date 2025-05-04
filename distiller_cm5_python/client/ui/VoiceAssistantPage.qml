@@ -689,12 +689,21 @@ PageBase {
 
         // Handler for closing the application
         onCloseAppClicked: {
-            console.log("Closing application...");
-            // Any cleanup tasks before closing
-            if (bridge && bridge.ready && typeof bridge.closeApplication === "function") {
-                bridge.closeApplication();
+            console.log("System shutdown requested...");
+            // Any cleanup tasks before shutting down
+            if (bridge && bridge.ready) {
+                // Don't call closeApplication here as the system shutdown command 
+                // will handle application termination as part of the shutdown process
+                console.log("Preparing for system shutdown...");
             } else {
-                console.log("Failed to close application - bridge method not available");
+                console.log("Failed to initiate system shutdown - bridge not available");
+            }
+        }
+        
+        // Handler for toast messages from header
+        onShowToastMessage: function(message, duration) {
+            if (messageToast) {
+                messageToast.showMessage(message, duration);
             }
         }
     }

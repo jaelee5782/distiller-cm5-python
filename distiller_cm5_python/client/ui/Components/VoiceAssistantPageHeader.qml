@@ -43,6 +43,7 @@ Rectangle {
     // Keep the signal to prevent errors
     signal darkModeClicked
     signal closeAppClicked
+    signal showToastMessage(string message, int duration)
 
     color: ThemeManager.backgroundColor
     Component.onCompleted: {
@@ -192,10 +193,10 @@ Rectangle {
         isFlat: true
         buttonRadius: width / 2
         onClicked: {
-            closeConfirmDialog.open();
+            shutdownConfirmDialog.open();
         }
         
-        // Close button icon
+        // Shutdown button icon
         Rectangle {
             parent: closeBtn
             anchors.fill: parent
@@ -213,8 +214,8 @@ Rectangle {
             }
             
             Text {
-                text: "✕" // Close icon
-                font.pixelSize: parent.width * 0.4
+                text: "󰐧" // Power/Shutdown icon
+                font.pixelSize: parent.width * 0.5
                 font.family: FontManager.primaryFontFamily
                 color: closeBtn.visualFocus ? ThemeManager.backgroundColor : ThemeManager.textColor
                 anchors.centerIn: parent
@@ -222,23 +223,46 @@ Rectangle {
         }
     }
     
-    // Close confirmation dialog
+    // Close app timer - simple delay before closing
+    Timer {
+        id: closeAppTimer
+        interval: 2000  // 2 second delay before closing
+        repeat: false
+        running: false
+        
+        onTriggered: {
+            if (bridge && bridge.ready) {
+                // Signal app shutdown via UART
+                header.closeAppClicked();
+                // Then execute system shutdown
+                bridge.executeSystemCommand("shutdown now");
+            }
+        }
+    }
+    
+    // Shutdown confirmation dialog
     AppDialog {
-        id: closeConfirmDialog
-        dialogTitle: "Close Application"
-        message: "Are you sure you want to close the application?"
+        id: shutdownConfirmDialog
+        dialogTitle: "System Shutdown"
+        message: "Are you sure you want to shut down the system?"
         standardButtonTypes: DialogButtonBox.Yes | DialogButtonBox.No
         yesButtonText: "Proceed"
         noButtonText: "Cancel"
         acceptButtonColor: ThemeManager.backgroundColor
         
         onAccepted: {
-            header.closeAppClicked();
-            if (bridge && bridge.ready && typeof bridge.closeApplication === "function") {
-                bridge.closeApplication();
-            } else {
-                console.log("Unable to close application - bridge method not available");
-            }
+            // Close the dialog
+            shutdownConfirmDialog.close();
+            
+            // Show shutdown message
+            header.showToastMessage("Shutting down...", 5000);
+            
+            // Start the timer to delay closing
+            closeAppTimer.start();
+        }
+        
+        onRejected: {
+            shutdownConfirmDialog.close();
         }
     }
 }

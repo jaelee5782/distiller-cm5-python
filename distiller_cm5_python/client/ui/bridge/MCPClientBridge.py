@@ -299,6 +299,45 @@ class MCPClientBridge(BridgeCore):
             except:
                 # Last resort: terminate process
                 os._exit(1)
+                
+    @pyqtSlot(str)
+    def executeSystemCommand(self, command: str):
+        """
+        Execute a system command with proper security checks.
+        
+        Args:
+            command: The system command to execute
+        """
+        # Only allow specific system commands
+        allowed_commands = {
+            "shutdown now": "sudo shutdown now",
+            "poweroff": "sudo poweroff"
+        }
+        
+        logger.info(f"Received system command request: {command}")
+        
+        if command not in allowed_commands:
+            logger.error(f"Unauthorized system command attempt: {command}")
+            return
+            
+        try:
+            # Signal application power down via UART first
+            from distiller_cm5_python.utils.uart_utils import signal_app_shutdown
+            signal_app_shutdown()
+            logger.info(f"Sent shutdown signal to UART device before system {command}")
+            
+            # Execute the allowed command
+            import subprocess
+            logger.info(f"Executing system command: {allowed_commands[command]}")
+            
+            # Run the command in a separate process
+            subprocess.Popen(allowed_commands[command], shell=True)
+            
+            # Return immediately to allow the command to complete
+            return
+            
+        except Exception as e:
+            logger.error(f"Error executing system command: {e}")
     
     @pyqtSlot(str)
     def setLlmModel(self, model_name):
