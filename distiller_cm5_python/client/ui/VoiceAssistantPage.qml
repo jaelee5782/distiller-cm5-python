@@ -8,18 +8,131 @@ PageBase {
 
     property string _serverName: ""
     property string serverName: _serverName
-    property bool isListening: false
-    property bool isProcessing: false
+    property bool isListening: state === "listening"
+    property bool isProcessing: ["processing", "thinking", "toolExecution", "cacheRestoring"].includes(state)  
     property bool isServerConnected: bridge && bridge.ready ? bridge.isConnected : false
     property string statusText: conversationView && conversationView.scrollModeActive ? "Scroll Mode (↑↓ to scroll)" : _statusText
-    property string _statusText: isServerConnected ? "Tap to Talk" : "Not connected"
+    property string _statusText: getStatusTextForState(state)
     property var focusableItems: []
     property var previousFocusedItem: null
     property string transcribedText: ""
     property bool transcriptionInProgress: false
     property bool conversationScrollMode: false // Track if conversation is in scroll mode
     property bool showStatusInBothPlaces: true // Set to true to show status in voice area instead of header
-    property bool cacheRestoring: false // Flag to track if cache is being restored
+    property bool cacheRestoring: state === "cacheRestoring" // Flag to track if cache is being restored
+
+    // Default state
+    state: isServerConnected ? "idle" : "disconnected"
+
+    // Helper function to get status text for current state
+    function getStatusTextForState(currentState) {
+        switch(currentState) {
+            case "disconnected": return "Not connected";
+            case "idle": return "Tap to Talk";
+            case "listening": return "Listening...";
+            case "processing": return "Processing...";
+            case "thinking": return "Thinking...";
+            case "toolExecution": return "Executing Tool...";
+            case "cacheRestoring": return "Restoring cache...";
+            case "error": return "Error Occurred";
+            default: return "Tap to Talk";
+        }
+    }
+
+    // State machine
+    StateGroup {
+        id: stateMachine
+        
+        states: [
+            State {
+                name: "disconnected"
+                PropertyChanges { target: voiceInputArea; enabled: false }
+            },
+            State {
+                name: "idle"
+                PropertyChanges { target: voiceInputArea; enabled: true }
+                PropertyChanges { target: voiceAssistantPage; _statusText: "Tap to Talk" }
+            },
+            State {
+                name: "listening"
+                PropertyChanges { target: voiceInputArea; enabled: true }
+                PropertyChanges { target: voiceAssistantPage; _statusText: "Listening..." }
+            },
+            State {
+                name: "processing"
+                PropertyChanges { target: voiceInputArea; enabled: false }
+                PropertyChanges { target: voiceAssistantPage; _statusText: "Processing..." }
+            },
+            State {
+                name: "thinking"
+                PropertyChanges { target: voiceInputArea; enabled: false }
+                PropertyChanges { target: voiceAssistantPage; _statusText: "Processing..." }
+            },
+            State {
+                name: "toolExecution"
+                PropertyChanges { target: voiceInputArea; enabled: false }
+                PropertyChanges { target: voiceAssistantPage; _statusText: "Processing..." }
+            },
+            State {
+                name: "cacheRestoring"
+                PropertyChanges { target: voiceInputArea; enabled: false }
+                PropertyChanges { target: voiceAssistantPage; _statusText: "Restoring cache..." }
+            },
+            State {
+                name: "error"
+                PropertyChanges { target: voiceInputArea; enabled: true }
+                PropertyChanges { target: voiceAssistantPage; _statusText: "Error Occurred" }
+            }
+        ]
+        
+        transitions: [
+            Transition {
+                from: "*"; to: "idle"
+                ScriptAction { 
+                    script: {
+                        stateResetTimer.toolExecutionActive = false;
+                        conversationView.setResponseInProgress(false);
+                        if (voiceInputArea && voiceInputArea.resetState)
+                            voiceInputArea.resetState();
+                    }
+                }
+            },
+            Transition {
+                from: "*"; to: "listening"
+                ScriptAction { 
+                    script: {
+                        transcribedText = "";
+                        voiceInputArea.transcribedText = "";
+                        if (voiceInputArea && voiceInputArea.setAppState)
+                            voiceInputArea.setAppState("listening");
+                        stateResetTimer.lastActionTimestamp = Date.now();
+                    }
+                }
+            },
+            Transition {
+                from: "listening"; to: "processing"
+                ScriptAction { 
+                    script: {
+                        conversationView.setResponseInProgress(true);
+                        if (voiceInputArea && voiceInputArea.setAppState)
+                            voiceInputArea.setAppState("processing");
+                        stateResetTimer.lastActionTimestamp = Date.now();
+                    }
+                }
+            },
+            Transition {
+                from: "*"; to: "error"
+                ScriptAction { 
+                    script: {
+                        stateResetTimer.toolExecutionActive = false;
+                        conversationView.setResponseInProgress(false);
+                        if (voiceInputArea && voiceInputArea.setErrorState)
+                            voiceInputArea.setErrorState();
+                    }
+                }
+            }
+        ]
+    }
 
     function findChild(parent, objectName) {
         if (!parent)
@@ -89,37 +202,6 @@ PageBase {
         }
     }
 
-    // Update status text based on app state
-    function updateStatusText(newStatus) {
-        if (conversationView && conversationView.scrollModeActive)
-            return ;
-
-        // Don't update status in scroll mode
-        if (!isServerConnected) {
-            _statusText = "Not connected";
-            return ;
-        }
-        if (newStatus) {
-            // Use a consistent "Processing..." status for all processing-related states
-
-            if (newStatus === "Ready")
-                _statusText = "Tap to Talk";
-            else if (newStatus.toLowerCase().includes("executing") || newStatus.toLowerCase().includes("thinking") || newStatus.toLowerCase().includes("processing") || newStatus.toLowerCase().includes("tool"))
-                _statusText = "Processing...";
-            else if (newStatus.toLowerCase().includes("listening"))
-                _statusText = "Listening...";
-            else if (newStatus.toLowerCase().includes("error"))
-                _statusText = "Error Occurred";
-            else
-                _statusText = newStatus;
-        } else if (isListening)
-            _statusText = "Listening...";
-        else if (isProcessing)
-            _statusText = "Processing...";
-        else
-            _statusText = "";
-    }
-
     // Consolidated failsafe timer for state management and stuck detection
     Timer {
         id: stateResetTimer
@@ -131,22 +213,10 @@ PageBase {
         repeat: true    // Now repeating to handle both periodic check and timeout
         running: true   // Always running to check for stuck states
         onTriggered: {
-            // First purpose: Check for stuck processing state (was stateCheckTimer's job)
+            // Check for stuck processing state (was stateCheckTimer's job)
             if (isProcessing && (Date.now() - lastActionTimestamp > 15000)) {
                 console.log("StateResetTimer triggered: Detected stuck state after inactivity");
-                isProcessing = false;
-                isListening = false;
-                updateStatusText("Tap to Talk");
-                conversationView.setResponseInProgress(false);
-                // Reset input area state
-                if (voiceInputArea.resetState)
-                    voiceInputArea.resetState();
-
-                // Force conversation view to update - ensure any errors are displayed
-                if (bridge && bridge.ready) {
-                    conversationView.updateModel(bridge.get_conversation());
-                    conversationView.scrollToBottom();
-                }
+                voiceAssistantPage.state = "idle";
             }
         }
     }
@@ -280,6 +350,41 @@ PageBase {
     onServerNameChanged: {
         _serverName = serverName;
     }
+    
+    // State change monitoring
+    onStateChanged: {
+        console.log("State changed to: " + state);
+        stateResetTimer.lastActionTimestamp = Date.now();
+        
+        // Update voice input area state to match page state
+        if (voiceInputArea && voiceInputArea.setAppState) {
+            if (state === "listening")
+                voiceInputArea.setAppState("listening");
+            else if (state === "processing")
+                voiceInputArea.setAppState("processing");
+            else if (state === "thinking")
+                voiceInputArea.setAppState("thinking");
+            else if (state === "toolExecution")
+                voiceInputArea.setAppState("executing_tool");
+            else if (state === "cacheRestoring")
+                voiceInputArea.setAppState("restoring_cache");
+            else if (state === "error")
+                voiceInputArea.setAppState("error");
+            else if (state === "idle")
+                voiceInputArea.setAppState("idle");
+        }
+    }
+    
+    // Server connection state monitor
+    onIsServerConnectedChanged: {
+        if (isServerConnected) {
+            if (state === "disconnected")
+                state = "idle";
+        } else {
+            state = "disconnected";
+        }
+    }
+
     Component.onCompleted: {
         collectFocusItems();
         
@@ -304,21 +409,6 @@ PageBase {
             FocusManager.setFocusToItem(voiceInputArea.voiceButton);
         }
     }
-    // Reset the action timestamp whenever user interacts or state changes
-    onIsProcessingChanged: {
-        stateResetTimer.lastActionTimestamp = Date.now();
-        if (!conversationScrollMode) {
-            _statusText = isProcessing ? "Processing..." : "Tap to Talk";
-            updateStatusText();
-        }
-    }
-    onIsListeningChanged: {
-        stateResetTimer.lastActionTimestamp = Date.now();
-        if (!conversationScrollMode) {
-            _statusText = isListening ? "Listening..." : (_statusText === "Listening..." ? "Processing..." : _statusText);
-            updateStatusText();
-        }
-    }
 
     Connections {
         function onBridgeReady() {
@@ -341,29 +431,15 @@ PageBase {
                 voiceInputArea.transcribedText = transcribedText;
                 // Submit the transcribed text to the server after a short delay
                 transcriptionTimer.start();
-                // Update to thinking state
-                if (voiceInputArea.setThinkingState)
-                    voiceInputArea.setThinkingState();
+                // Update state to thinking
+                state = "thinking";
 
             } else {
                 // Handle empty transcription the same way as short audio error
                 console.log("Empty transcription detected, treating as error");
-                // Reset all states on empty transcription
-                isProcessing = false;
-                isListening = false;
-                stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
                 // Show error state and message
                 messageToast.showMessage("Error: Empty voice message", 3000);
-                // Show error state briefly before returning to idle
-                if (voiceInputArea && voiceInputArea.setErrorState) {
-                    voiceInputArea.setErrorState();
-                } else {
-                    // Fallback if setErrorState is not available
-                    updateStatusText("Tap to Talk");
-                    if (voiceInputArea && voiceInputArea.resetState)
-                        voiceInputArea.resetState();
-
-                }
+                state = "error";
                 // Reset conversation view state
                 conversationView.setResponseInProgress(false);
             }
@@ -390,7 +466,6 @@ PageBase {
             // Add the function information to the conversation view
             if (conversationView)
                 conversationView.updateModel(bridge.get_conversation());
-
         }
 
         // Handler for observation events
@@ -408,49 +483,17 @@ PageBase {
             // Check message to determine which operation is happening
             if (content && content.toLowerCase().includes("restoring")) {
                 console.log("Cache restoration in progress, disabling voice button");
-                // Update status text first
-                updateStatusText("Restoring cache...");
-                
-                // Set cache restoring flag
-                cacheRestoring = true;
-                
-                // Disable voice button during cache restoration
-                if (voiceInputArea && voiceInputArea.setAppState) {
-                    voiceInputArea.setAppState("restoring_cache");
-                }
-                
+                state = "cacheRestoring";
                 // Show a toast message about the operation
                 messageToast.showMessage("Restoring model cache, please wait...", 3000);
-                
             } else if (content && content.toLowerCase().includes("restored")) {
                 console.log("Cache restoration completed, re-enabling voice button");
-                // Update status text
-                updateStatusText("Ready");
-                
-                // Clear cache restoring flag
-                cacheRestoring = false;
-                
-                // Reset the voiceInputArea state to enable voice button
-                if (voiceInputArea && voiceInputArea.resetState) {
-                    voiceInputArea.resetState();
-                }
-                
+                state = "idle";
                 // Show a toast message about the completion
                 messageToast.showMessage("Cache restored successfully", 3000);
-                
             } else if (content && content.toLowerCase().includes("failed")) {
                 console.log("Cache restoration failed");
-                // Update status text
-                updateStatusText("Error");
-                
-                // Clear cache restoring flag
-                cacheRestoring = false;
-                
-                // Set error state
-                if (voiceInputArea && voiceInputArea.setErrorState) {
-                    voiceInputArea.setErrorState();
-                }
-                
+                state = "error";
                 // Show a toast message about the failure
                 messageToast.showMessage("Cache restoration failed: " + content, 5000);
             }
@@ -466,136 +509,66 @@ PageBase {
             // Add the plan to the conversation view
             if (conversationView)
                 conversationView.updateModel(bridge.get_conversation());
-
         }
 
         // Handler for raw message schema objects
         function onMessageSchemaReceived(messageData) {
-            // console.log("Message schema received: " + JSON.stringify(messageData));
             // Update conversation view with latest messages
             if (conversationView)
                 conversationView.updateModel(bridge.get_conversation());
-
         }
 
         function onRecordingStateChanged(is_recording) {
-            isListening = is_recording;
+            state = is_recording ? "listening" : "processing";
             if (is_recording) {
-                updateStatusText("Listening...");
                 transcribedText = "";
                 voiceInputArea.transcribedText = "";
-            } else {
-                // Always show Processing when recording stops
-                updateStatusText("Processing...");
-                isProcessing = true;
-                // Make sure voiceInputArea shows processing state as well
-                if (voiceInputArea.setAppState)
-                    voiceInputArea.setAppState("processing");
-                // Force an immediate e-ink update
-                if (typeof AppController !== 'undefined' && AppController.triggerEinkUpdate) {
-                    console.log("QML: Forcing e-ink update for processing state");
-                    AppController.triggerEinkUpdate();
-                }
+            }
+            
+            // Force an immediate e-ink update when going to processing
+            if (!is_recording && typeof AppController !== 'undefined' && AppController.triggerEinkUpdate) {
+                console.log("QML: Forcing e-ink update for processing state");
+                AppController.triggerEinkUpdate();
             }
         }
 
         function onStatusChanged(newStatus) {
             console.log("QML: Status changed to:", newStatus);
-            // Always show consistent status in the UI, regardless of internal state
-            if (newStatus.toLowerCase().includes("thinking") || 
-                newStatus.toLowerCase().includes("tool") || 
-                newStatus.toLowerCase().includes("executing")) {
-                
-                // Use a unified "Processing..." status for all processing-related states
-                updateStatusText("Processing...");
-                // Set appropriate internal state
-                if (newStatus.toLowerCase().includes("thinking")) {
-                    if (voiceInputArea.setThinkingState)
-                        voiceInputArea.setThinkingState();
-                    stateResetTimer.toolExecutionActive = false;
-                } else {
-                    // Tool execution or other processing
-                    if (voiceInputArea.setToolExecutionState)
-                        voiceInputArea.setToolExecutionState();
-                    stateResetTimer.toolExecutionActive = true; // Flag tool execution as active
-                }
-                // Always restart the timer when status changes to ensure we don't get stuck
-                stateResetTimer.restart();
+            
+            // Map status to state
+            if (newStatus.toLowerCase().includes("thinking")) {
+                state = "thinking";
+                stateResetTimer.toolExecutionActive = false;
+            } else if (newStatus.toLowerCase().includes("tool") || newStatus.toLowerCase().includes("executing")) {
+                state = "toolExecution";
+                stateResetTimer.toolExecutionActive = true;
             } else if (newStatus.toLowerCase().includes("restoring_cache")) {
-                // Handle cache restoration state
-                updateStatusText("Restoring cache...");
-                isProcessing = true;
-                isListening = false;
-                cacheRestoring = true; // Set flag to indicate cache is being restored
-                
-                // Update voiceInputArea state
-                if (voiceInputArea && voiceInputArea.setAppState) {
-                    voiceInputArea.setAppState("restoring_cache");
-                }
-                
+                state = "cacheRestoring";
                 // Restart state reset timer with longer timeout for cache operations
                 stateResetTimer.interval = 60000; // 60 seconds for cache restoration
                 stateResetTimer.restart();
-                
             } else if (newStatus === "idle" || newStatus === "Ready") {
-                console.log("QML: Detected idle/ready status, resetting all states");
-                isProcessing = false;
-                isListening = false;
-                cacheRestoring = false; // Reset cache flag
-                stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
+                state = "idle";
                 // Reset timer interval to normal
-                stateResetTimer.interval = 20000; // Reset to default 20 seconds
-                // Reset input area state
-                if (voiceInputArea && voiceInputArea.resetState) {
-                    voiceInputArea.resetState();
-                }
-                // Update status text
-                updateStatusText("Tap to Talk");
-                // Ensure conversation view is updated
-                conversationView.setResponseInProgress(false);
-                conversationView.scrollToBottom();
-            } else {
-                // For any other status, just update the text
-                updateStatusText(newStatus);
+                stateResetTimer.interval = 20000;
+            } else if (newStatus.toLowerCase().includes("listening")) {
+                state = "listening";
+            } else if (newStatus.toLowerCase().includes("error")) {
+                state = "error";
             }
         }
 
         function onRecordingError(errorMessage) {
             console.log("Recording Error: " + errorMessage);
             messageToast.showMessage("Error: " + errorMessage, 3000);
-            // Reset all states on recording error
-            isProcessing = false;
-            isListening = false;
-            stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
-            // Show error state briefly before returning to idle
-            if (voiceInputArea && voiceInputArea.setErrorState) {
-                voiceInputArea.setErrorState();
-            } else {
-                // Fallback if setErrorState is not available
-                updateStatusText("Tap to Talk");
-                if (voiceInputArea && voiceInputArea.resetState)
-                    voiceInputArea.resetState();
-
-            }
-            // Reset conversation view state
-            conversationView.setResponseInProgress(false);
+            state = "error";
             console.log("RecordingError: Reset all UI states due to error: " + errorMessage);
         }
 
         function onErrorReceived(content, eventId, timestamp) {
             console.log("Error event received: " + content);
-            // Reset all UI states on error
-            isProcessing = false;
-            isListening = false;
-            stateResetTimer.toolExecutionActive = false;
-            // Force error state
-            if (voiceInputArea && voiceInputArea.setErrorState)
-                voiceInputArea.setErrorState();
-
-            // Update status text
-            updateStatusText("Error occurred");
-            // Reset conversation view response state
-            conversationView.setResponseInProgress(false);
+            state = "error";
+            
             // Update the conversation and show message toast
             if (bridge && bridge.ready) {
                 conversationView.updateModel(bridge.get_conversation());
@@ -607,25 +580,29 @@ PageBase {
         function onErrorOccurred(errorMessage) {
             var displayDuration = Math.max(3000, Math.min(errorMessage.length * 75, 8000));
             messageToast.showMessage("Error: " + errorMessage, displayDuration);
-            // Make sure to reset all states on error
-            isProcessing = false;
-            isListening = false;
-            stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
-            updateStatusText("Tap to Talk");
-            conversationView.setResponseInProgress(false);
+            state = "error";
+            
             // Force conversation view to update - ensure the error is displayed
             if (bridge && bridge.ready) {
                 conversationView.updateModel(bridge.get_conversation());
                 conversationView.scrollToBottom();
             }
-            if (errorMessage.toLowerCase().includes("connect") || errorMessage.toLowerCase().includes("server") || errorMessage.toLowerCase().includes("timeout"))
+            
+            if (errorMessage.toLowerCase().includes("connect") || 
+                errorMessage.toLowerCase().includes("server") || 
+                errorMessage.toLowerCase().includes("timeout")) {
                 reconnectionTimer.start();
-
+            }
         }
 
         function onIsConnectedChanged(connected) {
             isServerConnected = connected;
-            updateStatusText();
+            if (connected) {
+                if (state === "disconnected")
+                    state = "idle";
+            } else {
+                state = "disconnected";
+            }
         }
 
         target: bridge
@@ -649,19 +626,7 @@ PageBase {
                 console.log("Empty transcription in timer, showing error state");
                 // Show error state and message
                 messageToast.showMessage("Error: Empty voice message", 3000);
-                // Reset all states
-                isProcessing = false;
-                isListening = false;
-                // Show error state briefly before returning to idle
-                if (voiceInputArea && voiceInputArea.setErrorState) {
-                    voiceInputArea.setErrorState();
-                } else {
-                    // Fallback if setErrorState is not available
-                    updateStatusText("Tap to Talk");
-                    if (voiceInputArea && voiceInputArea.resetState)
-                        voiceInputArea.resetState();
-
-                }
+                state = "error";
             }
         }
     }
@@ -676,9 +641,8 @@ PageBase {
         serverName: _serverName
         statusText: voiceAssistantPage.statusText
         isConnected: bridge && bridge.ready ? bridge.isConnected : false
-        showStatusText: true // Show status text in header
+        showStatusText: true
         
-        // Update WiFi status initially and whenever bridge is ready
         Component.onCompleted: {
             // Add high contrast border for visibility
             var headerRect = findChild(header, "headerBackground");
@@ -699,20 +663,16 @@ PageBase {
             serverListDialog.open();
         }
 
-        // Handler for closing the application
         onCloseAppClicked: {
             console.log("System shutdown requested...");
             // Any cleanup tasks before shutting down
             if (bridge && bridge.ready) {
-                // Don't call closeApplication here as the system shutdown command 
-                // will handle application termination as part of the shutdown process
                 console.log("Preparing for system shutdown...");
             } else {
                 console.log("Failed to initiate system shutdown - bridge not available");
             }
         }
         
-        // Handler for toast messages from header
         onShowToastMessage: function(message, duration) {
             if (messageToast) {
                 messageToast.showMessage(message, duration);
@@ -735,9 +695,11 @@ PageBase {
                     // Connection failed, show error message
                     console.error("Connection failed: " + connectionResult);
                     messageToast.showMessage("Connection failed: " + connectionResult, 5000);
+                    state = "error";
                 } else {
                     // Connection successful, update server name
                     _serverName = serverName;
+                    state = "idle";
                     
                     // Get conversation if available
                     if (conversationView) {
@@ -782,7 +744,6 @@ PageBase {
                 FocusManager.lockFocus = true;
             } else {
                 FocusManager.lockFocus = false;
-                updateStatusText(); // Restore status when exiting scroll mode
             }
         }
 
@@ -802,13 +763,9 @@ PageBase {
             // Disable scrolling animations for smoother experience
             if (scrollAnimation)
                 scrollAnimation.duration = 0;
-
         }
 
         Connections {
-            // For streaming chunks, keep the response in progress
-            // and update the conversation model with the new chunk
-
             function onConversationChanged() {
                 conversationView.updateModel(bridge.get_conversation());
                 // Ensure we scroll to the bottom after model updates
@@ -841,60 +798,23 @@ PageBase {
                     console.log("QML: Message complete, resetting UI state");
                     // Final message or end of streaming
                     // Reset UI state now that the response is complete
-                    isProcessing = false;
-                    isListening = false;
-                    stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
-                    updateStatusText("Tap to Talk");
-                    // Turn off response mode
-                    conversationView.setResponseInProgress(false);
+                    voiceAssistantPage.state = "idle";
                     conversationView.scrollToBottom();
-                    // Reset voice input area state
-                    if (voiceInputArea && voiceInputArea.resetState) {
-                        voiceInputArea.resetState();
-                    }
-                    // Log the state reset
-                    console.log("MessageReceived: Reset isProcessing to false (complete message)");
                     // Stop failsafe timer
                     stateResetTimer.stop();
                 }
             }
 
             function onListeningStarted() {
-                isListening = true;
-                updateStatusText("Listening...");
-                transcribedText = "";
-                voiceInputArea.transcribedText = "";
+                voiceAssistantPage.state = "listening";
             }
 
             function onListeningStopped() {
-                isListening = false;
-                updateStatusText("Processing...");
-                isProcessing = true;
-                conversationView.setResponseInProgress(true);
-            }
-
-            function onErrorOccurred(errorMessage) {
-                var displayDuration = Math.max(3000, Math.min(errorMessage.length * 75, 8000));
-                messageToast.showMessage("Error: " + errorMessage, displayDuration);
-                // Make sure to reset all states on error
-                isProcessing = false;
-                isListening = false;
-                stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
-                updateStatusText("Tap to Talk");
-                conversationView.setResponseInProgress(false);
-                // Force conversation view to update - ensure the error is displayed
-                if (bridge && bridge.ready) {
-                    conversationView.updateModel(bridge.get_conversation());
-                    conversationView.scrollToBottom();
-                }
-                if (errorMessage.toLowerCase().includes("connect") || errorMessage.toLowerCase().includes("server") || errorMessage.toLowerCase().includes("timeout"))
-                    reconnectionTimer.start();
-
+                voiceAssistantPage.state = "processing";
             }
 
             target: bridge && bridge.ready ? bridge : null
         }
-
     }
 
     MessageToast {
@@ -926,92 +846,96 @@ PageBase {
         isListening: voiceAssistantPage.isListening
         isProcessing: voiceAssistantPage.isProcessing
         isConnected: voiceAssistantPage.isServerConnected && serverName && serverName.length > 0 && serverName !== "No Server"
-        showStatusHint: true // Use a simple boolean value for now as getConfigBoolValue isn't available
-        // Set WiFi properties
+        showStatusHint: true
         wifiConnected: header.wifiConnected
         ipAddress: header.ipAddress
         
-        // Connect to our new state changed signal
         onAppStateUpdated: function(newState) {
             console.log("VoiceInputArea state changed to: " + newState);
-            // Update parent state variables for compatibility
+            // Map to appropriate state in the state machine
             if (newState === "listening") {
-                voiceAssistantPage.isListening = true;
-                voiceAssistantPage.isProcessing = false;
-                updateStatusText("Listening...");
+                if (voiceAssistantPage.state !== "listening")
+                    voiceAssistantPage.state = "listening";
             } else if (newState === "processing") {
-                voiceAssistantPage.isListening = false;
-                voiceAssistantPage.isProcessing = true;
-                updateStatusText("Processing...");
+                if (voiceAssistantPage.state !== "processing")
+                    voiceAssistantPage.state = "processing";
             } else if (newState === "thinking") {
-                voiceAssistantPage.isListening = false;
-                voiceAssistantPage.isProcessing = true;
-                updateStatusText("Thinking...");
+                if (voiceAssistantPage.state !== "thinking")
+                    voiceAssistantPage.state = "thinking";
             } else if (newState === "executing_tool") {
-                voiceAssistantPage.isListening = false;
-                voiceAssistantPage.isProcessing = true;
-                updateStatusText("Executing tool...");
+                if (voiceAssistantPage.state !== "toolExecution")
+                    voiceAssistantPage.state = "toolExecution";
             } else if (newState === "restoring_cache") {
-                voiceAssistantPage.isListening = false;
-                voiceAssistantPage.isProcessing = true;
-                voiceAssistantPage.cacheRestoring = true;
-                updateStatusText("Restoring cache...");
+                if (voiceAssistantPage.state !== "cacheRestoring")
+                    voiceAssistantPage.state = "cacheRestoring";
             } else if (newState === "error") {
-                voiceAssistantPage.isListening = false;
-                voiceAssistantPage.isProcessing = false;
-                voiceAssistantPage.cacheRestoring = false;
-                updateStatusText("Error occurred");
+                if (voiceAssistantPage.state !== "error")
+                    voiceAssistantPage.state = "error";
             } else if (newState === "idle") {
-                voiceAssistantPage.isListening = false;
-                voiceAssistantPage.isProcessing = false;
-                voiceAssistantPage.cacheRestoring = false;
-                updateStatusText("Tap to Talk");
+                if (voiceAssistantPage.state !== "idle" && voiceAssistantPage.isServerConnected)
+                    voiceAssistantPage.state = "idle";
             }
         }
+        
         onVoiceToggled: function(listening) {
             // Prevent voice toggling during cache restoration
-            if (cacheRestoring) {
+            if (voiceAssistantPage.state === "cacheRestoring") {
                 console.log("Voice toggle ignored - cache is being restored");
                 messageToast.showMessage("Please wait, cache restoration in progress...", 2000);
                 return;
             }
             
-            if (bridge && bridge.ready && bridge.isConnected && !isProcessing) {
-                if (listening)
+            if (bridge && bridge.ready && bridge.isConnected && voiceAssistantPage.state !== "processing" && 
+                voiceAssistantPage.state !== "thinking" && voiceAssistantPage.state !== "toolExecution") {
+                if (listening) {
                     bridge.startRecording();
-                else
+                    voiceAssistantPage.state = "listening";
+                } else {
                     bridge.stopAndTranscribe();
+                    voiceAssistantPage.state = "processing";
+                }
             }
         }
+        
         onVoicePressed: function() {
             // Prevent voice press during cache restoration
-            if (cacheRestoring) {
+            if (voiceAssistantPage.state === "cacheRestoring") {
                 console.log("Voice press ignored - cache is being restored");
                 messageToast.showMessage("Please wait, cache restoration in progress...", 2000);
                 return;
             }
             
-            if (bridge && bridge.ready && bridge.isConnected && !isProcessing)
+            if (bridge && bridge.ready && bridge.isConnected && 
+                voiceAssistantPage.state !== "processing" && 
+                voiceAssistantPage.state !== "thinking" && 
+                voiceAssistantPage.state !== "toolExecution") {
                 bridge.startRecording();
+                voiceAssistantPage.state = "listening";
+            }
         }
+        
         onVoiceReleased: function() {
             // Prevent voice release during cache restoration
-            if (cacheRestoring) {
+            if (voiceAssistantPage.state === "cacheRestoring") {
                 console.log("Voice release ignored - cache is being restored");
                 return;
             }
             
-            if (bridge && bridge.ready && bridge.isConnected && isListening)
+            if (bridge && bridge.ready && bridge.isConnected && voiceAssistantPage.state === "listening") {
                 bridge.stopAndTranscribe();
+                voiceAssistantPage.state = "processing";
+            }
         }
+        
         onResetClicked: {
             // Show confirmation dialog, unless cache is restoring
-            if (cacheRestoring) {
+            if (voiceAssistantPage.state === "cacheRestoring") {
                 messageToast.showMessage("Cannot reset during cache restoration", 2000);
                 return;
             }
             restartConfirmDialog.open();
         }
+        
         onWifiClicked: {
             // Show WiFi status in a toast message instead of dialog
             if (bridge && bridge.ready) {
@@ -1043,7 +967,7 @@ PageBase {
     Timer {
         id: reconnectionTimer
 
-        interval: 750 // Increased from 500ms to 750ms
+        interval: 750
         repeat: false
         running: false
         onTriggered: {
@@ -1063,10 +987,10 @@ PageBase {
             // Check connection state
             if (bridge && bridge.ready && bridge.isConnected) {
                 messageToast.showMessage("Successfully reconnected to server", 3000);
-                updateStatusText("Tap to Talk");
+                voiceAssistantPage.state = "idle";
             } else {
                 messageToast.showMessage("Failed to reconnect to server", 3000);
-                updateStatusText("Not connected");
+                voiceAssistantPage.state = "disconnected";
             }
             
             // Update conversation view
@@ -1084,7 +1008,7 @@ PageBase {
     Timer {
         id: responseEndTimer
 
-        interval: 500 // Increased from 300ms to 500ms
+        interval: 500
         repeat: false
         running: false
         onTriggered: {
@@ -1124,7 +1048,7 @@ PageBase {
         }
         onRejected: {
             // User chose not to reconnect
-            updateStatusText("Not connected");
+            voiceAssistantPage.state = "disconnected";
         }
     }
 
@@ -1148,15 +1072,11 @@ PageBase {
             // Store the current focus before the operation
             previousFocusedItem = FocusManager.currentFocusItems[FocusManager.currentFocusIndex];
             
-            // Reset states
-            isProcessing = false;
-            isListening = false;
+            // Set reconnecting state
+            state = "disconnected";
             
             // Attempt to reconnect
             bridge.reconnectToServer();
-            
-            // Update UI state
-            updateStatusText("Reconnecting...");
             
             // Use the reconnection timer
             serverReconnectTimer.start();
@@ -1172,7 +1092,7 @@ PageBase {
         console.log("Key Pressed:", event.key, " | Current Focus:", FocusManager.currentFocusItems[FocusManager.currentFocusIndex] ? FocusManager.currentFocusItems[FocusManager.currentFocusIndex].objectName : "None", " | Scroll Mode:", conversationScrollMode);
         
         // During cache restoration, block keys that could change state
-        if (cacheRestoring) {
+        if (state === "cacheRestoring") {
             if (event.key === Qt.Key_Return || 
                 event.key === Qt.Key_Enter || 
                 event.key === Qt.Key_Space) {
@@ -1185,5 +1105,40 @@ PageBase {
         }
         
         // Process other keys normally
+    }
+
+    // Add these transition methods that are necessary for proper state handling
+    
+    // Move to specified state with proper UI updates
+    function setAppState(newState) {
+        console.log("Setting app state to: " + newState);
+        
+        // Map newState to a valid state in our state machine
+        if (newState === "listening") {
+            state = "listening";
+        } else if (newState === "processing") {
+            state = "processing";
+        } else if (newState === "thinking") {
+            state = "thinking";
+        } else if (newState === "executing_tool") {
+            state = "toolExecution";
+        } else if (newState === "restoring_cache") {
+            state = "cacheRestoring";
+        } else if (newState === "error") {
+            state = "error";
+        } else if (newState === "idle") {
+            state = "idle";
+        } else if (newState === "disconnected") {
+            state = "disconnected";
+        }
+    }
+    
+    // Update WiFi status (keep for backwards compatibility)
+    function updateWifiStatus() {
+        if (bridge && bridge.ready && header) {
+            var ipAddr = bridge.getWifiIpAddress ? bridge.getWifiIpAddress() : "";
+            header.ipAddress = ipAddr;
+            header.wifiConnected = ipAddr && ipAddr !== "No network IP found" && !ipAddr.includes("Error");
+        }
     }
 }
