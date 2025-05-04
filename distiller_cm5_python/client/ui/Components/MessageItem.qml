@@ -1,6 +1,7 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15
 import QtQuick.Layouts 1.15
+import "."  // Import our local components
 
 Rectangle {
     id: messageItem
@@ -55,13 +56,13 @@ Rectangle {
             visible: sender !== ""
         }
 
-        Text {
-            text: content
-            font: FontManager.normal
-            color: ThemeManager.textColor
-            wrapMode: Text.WordWrap
-            lineHeight: 1.1
+        // Use our MarkdownText component
+        MarkdownText {
+            markdownText: content
+            textFont: FontManager.normal
+            textColor: ThemeManager.textColor
             Layout.fillWidth: true
+            Layout.preferredHeight: implicitHeight
         }
 
         RowLayout {

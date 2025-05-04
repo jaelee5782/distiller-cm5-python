@@ -10,6 +10,7 @@ singleton AppInfo 1.0 AppInfo.qml
 singleton ThemeManager 1.0 ThemeManager.qml
 singleton FontManager 1.0 FontManager.qml
 singleton FocusManager 1.0 FocusManager.qml
+MarkdownText 1.0 MarkdownText.qml
 
 # Reusable UI components
 NavigableItem 1.0 NavigableItem.qml
