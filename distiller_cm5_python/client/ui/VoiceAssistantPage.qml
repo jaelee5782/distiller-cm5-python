@@ -1008,6 +1008,35 @@ PageBase {
             confirmServerChangeDialog.open();
         }
     }
+    
+    // Separate timer for handling reconnection process
+    Timer {
+        id: serverReconnectTimer
+        
+        interval: 2000
+        repeat: false
+        running: false
+        onTriggered: {
+            // Check connection state
+            if (bridge && bridge.ready && bridge.isConnected) {
+                messageToast.showMessage("Successfully reconnected to server", 3000);
+                updateStatusText("Tap to Talk");
+            } else {
+                messageToast.showMessage("Failed to reconnect to server", 3000);
+                updateStatusText("Not connected");
+            }
+            
+            // Update conversation view
+            if (bridge && bridge.ready) {
+                conversationView.updateModel(bridge.get_conversation());
+                conversationView.scrollToBottom();
+            }
+            
+            // Reset focus
+            focusTimer.isRestoreFocus = true;
+            focusTimer.start();
+        }
+    }
 
     Timer {
         id: responseEndTimer
@@ -1035,6 +1064,26 @@ PageBase {
             restartApplication();
         }
     }
+    
+    // Server reconnection confirmation dialog
+    AppDialog {
+        id: confirmServerChangeDialog
+        
+        dialogTitle: "Server Connection"
+        message: "Server connection lost. Do you want to reconnect?"
+        standardButtonTypes: DialogButtonBox.Yes | DialogButtonBox.No
+        yesButtonText: "Reconnect"
+        noButtonText: "Cancel"
+        acceptButtonColor: ThemeManager.backgroundColor
+        onAccepted: {
+            // Use the shared reconnection function
+            reconnectToServer();
+        }
+        onRejected: {
+            // User chose not to reconnect
+            updateStatusText("Not connected");
+        }
+    }
 
     // Move to thinking state (for external calls)
     function setThinkingState() {
@@ -1048,6 +1097,30 @@ PageBase {
         setAppState("executing_tool");
         // Update action timestamp
         stateResetTimer.lastActionTimestamp = Date.now();
+    }
+
+    // Function to handle server reconnection
+    function reconnectToServer() {
+        if (bridge && bridge.ready) {
+            // Store the current focus before the operation
+            previousFocusedItem = FocusManager.currentFocusItems[FocusManager.currentFocusIndex];
+            
+            // Reset states
+            isProcessing = false;
+            isListening = false;
+            
+            // Attempt to reconnect
+            bridge.reconnectToServer();
+            
+            // Update UI state
+            updateStatusText("Reconnecting...");
+            
+            // Use the reconnection timer
+            serverReconnectTimer.start();
+            
+            return true;
+        }
+        return false;
     }
 
 }
