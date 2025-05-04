@@ -17,7 +17,7 @@ Rectangle {
     property bool showStatusHint: true // Enable status hint by default
     // State management - define possible states
     property string appState: "idle"
-    // Possible values: "idle", "listening", "processing", "thinking", "executing_tool", "error"
+    // Possible values: "idle", "listening", "processing", "thinking", "executing_tool", "restoring_cache", "error"
     property string stateHint: getStateHint()
     // Expose button as property
     property alias voiceButton: voiceButton
@@ -26,6 +26,8 @@ Rectangle {
     // WiFi status properties
     property bool wifiConnected: false
     property string ipAddress: ""
+    // Flag to track cache restore state specifically
+    property bool cacheRestoring: appState === "restoring_cache"
 
     // Signals
     signal voiceToggled(bool listening)
@@ -33,6 +35,7 @@ Rectangle {
     signal voiceReleased
     signal resetClicked // New signal for reset button
     signal wifiClicked // New signal for WiFi button
+    signal appStateUpdated(string newState) // Renamed signal to avoid conflict with appStateChanged
 
     // Get appropriate hint text for current state
     function getStateHint() {
@@ -51,7 +54,7 @@ Rectangle {
         case "executing_tool":
             return "Executing tool...";
         case "restoring_cache":
-            return "Restoring cache...";
+            return "Please wait - Restoring cache...";
         case "error":
             return "Error - try again";
         default:
@@ -61,6 +64,15 @@ Rectangle {
 
     // Set the app state and emit signal
     function setAppState(newState) {
+        // Block state changes from restoring_cache to anything other than idle or error
+        if (appState === "restoring_cache" && 
+            newState !== "idle" && 
+            newState !== "error" && 
+            newState !== "restoring_cache") {
+            console.log("VoiceInputArea: Blocked state change from restoring_cache to " + newState);
+            return;
+        }
+        
         if (appState !== newState) {
             console.log("VoiceInputArea: State changing from " + appState + " to " + newState);
             appState = newState;
@@ -73,32 +85,43 @@ Rectangle {
             if (newState === "idle" && voiceButton) {
                 voiceButton.enabled = isConnected;
                 voiceButton.checked = false;
+                resetButton.enabled = true;
+                wifiButton.enabled = true;
             } else if (newState === "listening" && voiceButton) {
                 voiceButton.checked = true;
                 voiceButton.enabled = true;
+                resetButton.enabled = false;
+                wifiButton.enabled = false;
             } else if (newState === "processing" || newState === "thinking" || newState === "executing_tool") {
                 if (voiceButton) {
                     voiceButton.checked = false;
                     voiceButton.enabled = false;  // Disable during any processing state
                 }
+                resetButton.enabled = false;
+                wifiButton.enabled = false;
             } else if (newState === "restoring_cache") {
-                // Special handling for cache restoration
+                // Special handling for cache restoration - disable ALL buttons
                 if (voiceButton) {
                     voiceButton.checked = false;
                     voiceButton.enabled = false;  // Explicitly disable during cache restoration
                 }
-                // Show appropriate hint text
-                stateHint = "Restoring cache...";
+                resetButton.enabled = false;
+                wifiButton.enabled = false;
+                
+                // Show appropriate hint text with stronger visibility
+                stateHint = "Please wait - Restoring cache...";
             } else if (newState === "error") {
                 // Show error state
                 if (voiceButton) {
                     voiceButton.checked = false;
                     voiceButton.enabled = isConnected;
                 }
+                resetButton.enabled = true;
+                wifiButton.enabled = true;
             }
 
             // Signal app state change
-            stateChanged(newState);
+            appStateUpdated(newState);
         }
     }
 
@@ -112,6 +135,8 @@ Rectangle {
             voiceButton.checked = false;
             voiceButton.enabled = isConnected;
         }
+        resetButton.enabled = true;
+        wifiButton.enabled = true;
         // Force status update
         stateHint = getStateHint();
     }
@@ -167,6 +192,12 @@ Rectangle {
             setAppState("idle");
     }
     onVoiceReleased: function () {
+        // Double-check cache restoration state
+        if (appState === "restoring_cache") {
+            console.log("Voice release blocked - cache is being restored");
+            return;
+        }
+        
         if (bridge && bridge.ready && bridge.isConnected && isListening) {
             // First set state to processing explicitly
             setAppState("processing");
@@ -278,6 +309,13 @@ Rectangle {
 
                 // Activate when Enter is pressed via FocusManager
                 function activate() {
+                    // Block activation during cache restoration
+                    if (voiceInputArea.appState === "restoring_cache") {
+                        console.log("VoiceButton.activate(): Blocked during cache restoration");
+                        if (checked) checked = false;
+                        return;
+                    }
+                    
                     // Only allow activation when connected and not processing
                     if (!isConnected || voiceInputArea.appState === "processing" || voiceInputArea.appState === "thinking" || voiceInputArea.appState === "executing_tool")
                         return;
@@ -300,9 +338,16 @@ Rectangle {
                 height: ThemeManager.buttonHeight
                 isFlat: true
                 // Disable button when not connected or when processing/thinking/executing/restoring cache
-                enabled: isConnected && voiceInputArea.appState !== "processing" && voiceInputArea.appState !== "thinking" && voiceInputArea.appState !== "executing_tool" && voiceInputArea.appState !== "restoring_cache"
+                enabled: (isConnected && voiceInputArea.appState !== "processing" && voiceInputArea.appState !== "thinking" && voiceInputArea.appState !== "executing_tool") || voiceInputArea.appState !== "restoring_cache"
 
                 onClicked: {
+                    if (voiceInputArea.appState === "restoring_cache") {
+                        console.log("Voice button clicked during cache restoration - ignoring");
+                        checked = false; // Ensure unchecked state
+                        enabled = false; // Explicitly disable
+                        return;
+                    }
+
                     // Only allow interaction when connected and not in any processing state
                     if (!isConnected || voiceInputArea.appState === "processing" || voiceInputArea.appState === "thinking" || voiceInputArea.appState === "executing_tool" || voiceInputArea.appState === "restoring_cache")
                         return;

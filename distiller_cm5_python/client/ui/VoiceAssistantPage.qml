@@ -19,6 +19,7 @@ PageBase {
     property bool transcriptionInProgress: false
     property bool conversationScrollMode: false // Track if conversation is in scroll mode
     property bool showStatusInBothPlaces: true // Set to true to show status in voice area instead of header
+    property bool cacheRestoring: false // Flag to track if cache is being restored
 
     function findChild(parent, objectName) {
         if (!parent)
@@ -410,6 +411,9 @@ PageBase {
                 // Update status text first
                 updateStatusText("Restoring cache...");
                 
+                // Set cache restoring flag
+                cacheRestoring = true;
+                
                 // Disable voice button during cache restoration
                 if (voiceInputArea && voiceInputArea.setAppState) {
                     voiceInputArea.setAppState("restoring_cache");
@@ -423,6 +427,9 @@ PageBase {
                 // Update status text
                 updateStatusText("Ready");
                 
+                // Clear cache restoring flag
+                cacheRestoring = false;
+                
                 // Reset the voiceInputArea state to enable voice button
                 if (voiceInputArea && voiceInputArea.resetState) {
                     voiceInputArea.resetState();
@@ -435,6 +442,9 @@ PageBase {
                 console.log("Cache restoration failed");
                 // Update status text
                 updateStatusText("Error");
+                
+                // Clear cache restoring flag
+                cacheRestoring = false;
                 
                 // Set error state
                 if (voiceInputArea && voiceInputArea.setErrorState) {
@@ -516,6 +526,7 @@ PageBase {
                 updateStatusText("Restoring cache...");
                 isProcessing = true;
                 isListening = false;
+                cacheRestoring = true; // Set flag to indicate cache is being restored
                 
                 // Update voiceInputArea state
                 if (voiceInputArea && voiceInputArea.setAppState) {
@@ -530,6 +541,7 @@ PageBase {
                 console.log("QML: Detected idle/ready status, resetting all states");
                 isProcessing = false;
                 isListening = false;
+                cacheRestoring = false; // Reset cache flag
                 stateResetTimer.toolExecutionActive = false; // Clear tool execution flag
                 // Reset timer interval to normal
                 stateResetTimer.interval = 20000; // Reset to default 20 seconds
@@ -920,7 +932,7 @@ PageBase {
         ipAddress: header.ipAddress
         
         // Connect to our new state changed signal
-        onStateChanged: function(newState) {
+        onAppStateUpdated: function(newState) {
             console.log("VoiceInputArea state changed to: " + newState);
             // Update parent state variables for compatibility
             if (newState === "listening") {
@@ -939,17 +951,31 @@ PageBase {
                 voiceAssistantPage.isListening = false;
                 voiceAssistantPage.isProcessing = true;
                 updateStatusText("Executing tool...");
+            } else if (newState === "restoring_cache") {
+                voiceAssistantPage.isListening = false;
+                voiceAssistantPage.isProcessing = true;
+                voiceAssistantPage.cacheRestoring = true;
+                updateStatusText("Restoring cache...");
             } else if (newState === "error") {
                 voiceAssistantPage.isListening = false;
                 voiceAssistantPage.isProcessing = false;
+                voiceAssistantPage.cacheRestoring = false;
                 updateStatusText("Error occurred");
             } else if (newState === "idle") {
                 voiceAssistantPage.isListening = false;
                 voiceAssistantPage.isProcessing = false;
+                voiceAssistantPage.cacheRestoring = false;
                 updateStatusText("Tap to Talk");
             }
         }
         onVoiceToggled: function(listening) {
+            // Prevent voice toggling during cache restoration
+            if (cacheRestoring) {
+                console.log("Voice toggle ignored - cache is being restored");
+                messageToast.showMessage("Please wait, cache restoration in progress...", 2000);
+                return;
+            }
+            
             if (bridge && bridge.ready && bridge.isConnected && !isProcessing) {
                 if (listening)
                     bridge.startRecording();
@@ -958,15 +984,32 @@ PageBase {
             }
         }
         onVoicePressed: function() {
+            // Prevent voice press during cache restoration
+            if (cacheRestoring) {
+                console.log("Voice press ignored - cache is being restored");
+                messageToast.showMessage("Please wait, cache restoration in progress...", 2000);
+                return;
+            }
+            
             if (bridge && bridge.ready && bridge.isConnected && !isProcessing)
                 bridge.startRecording();
         }
         onVoiceReleased: function() {
+            // Prevent voice release during cache restoration
+            if (cacheRestoring) {
+                console.log("Voice release ignored - cache is being restored");
+                return;
+            }
+            
             if (bridge && bridge.ready && bridge.isConnected && isListening)
                 bridge.stopAndTranscribe();
         }
         onResetClicked: {
-            // Show confirmation dialog
+            // Show confirmation dialog, unless cache is restoring
+            if (cacheRestoring) {
+                messageToast.showMessage("Cannot reset during cache restoration", 2000);
+                return;
+            }
             restartConfirmDialog.open();
         }
         onWifiClicked: {
@@ -1123,4 +1166,24 @@ PageBase {
         return false;
     }
 
+    // Override key handling to ignore certain keys during cache restoration
+    Keys.onPressed: function(event) {
+        // Log key presses
+        console.log("Key Pressed:", event.key, " | Current Focus:", FocusManager.currentFocusItems[FocusManager.currentFocusIndex] ? FocusManager.currentFocusItems[FocusManager.currentFocusIndex].objectName : "None", " | Scroll Mode:", conversationScrollMode);
+        
+        // During cache restoration, block keys that could change state
+        if (cacheRestoring) {
+            if (event.key === Qt.Key_Return || 
+                event.key === Qt.Key_Enter || 
+                event.key === Qt.Key_Space) {
+                
+                console.log("Key press blocked - cache is being restored");
+                messageToast.showMessage("Please wait, cache restoration in progress...", 2000);
+                event.accepted = true;
+                return;
+            }
+        }
+        
+        // Process other keys normally
+    }
 }
