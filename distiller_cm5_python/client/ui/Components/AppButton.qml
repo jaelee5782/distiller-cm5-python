@@ -28,7 +28,7 @@ NavigableItem {
         anchors.fill: parent
         color: root.backgroundColor
         border.color: ThemeManager.black
-        border.width: root.visualFocus ? 2 : 1 // Always show border for better visibility on E-Ink
+        border.width: root.visualFocus ? ThemeManager.borderWidth * 2 : ThemeManager.borderWidth // Always show border for better visibility on E-Ink
         radius: buttonRadius
     }
 
