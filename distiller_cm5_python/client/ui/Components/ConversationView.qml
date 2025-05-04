@@ -53,7 +53,6 @@ ListView {
         // Always scroll to bottom during response or if we were already at the bottom
         if (responseInProgress || wasAtBottom)
             scrollTimer.start();
-
     }
 
     objectName: "conversationView"
@@ -78,7 +77,6 @@ ListView {
         // Only check when not user scrolling to avoid unnecessary calculations
         if (!userScrolling)
             checkIfAtBottom();
-
     }
     // Track when user is manually scrolling
     onMovementStarted: {
@@ -115,10 +113,9 @@ ListView {
     onModelChanged: {
         if (responseInProgress || atBottom || count === 0)
             scrollTimer.start();
-
     }
     // Add keyboard handling for scroll mode
-    Keys.onPressed: function(event) {
+    Keys.onPressed: function (event) {
         if (scrollModeActive) {
             var scrollAmount = 50; // Pixels to scroll per key press
             if (event.key === Qt.Key_Down) {
@@ -159,19 +156,6 @@ ListView {
         easing.type: Easing.Linear
     }
 
-    // Visual indicator for keyboard focus and scroll mode
-    Rectangle {
-        id: focusIndicator
-
-        anchors.fill: parent
-        color: ThemeManager.transparentColor
-        border.width: isActiveItem ? (scrollModeActive ? ThemeManager.borderWidth * 3 : ThemeManager.borderWidth * 2) : 0
-        border.color: ThemeManager.textColor
-        radius: ThemeManager.borderRadius
-        visible: isActiveItem
-        z: -1
-    }
-
     // Visual instruction when in focus but not in scroll mode
     Rectangle {
         id: scrollModeInstructions
@@ -180,11 +164,11 @@ ListView {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: ThemeManager.spacingNormal
         height: scrollModeText.height + ThemeManager.spacingLarge
-        width: scrollModeText.width + ThemeManager.spacingLarge
+        width: scrollModeText.width + ThemeManager.spacingSmall * 3
         color: ThemeManager.textColor
         border.width: ThemeManager.borderWidth
         border.color: ThemeManager.white
-        radius: 2
+        radius: ThemeManager.borderRadius
         visible: isActiveItem && !scrollModeActive && conversationView.contentHeight > conversationView.height
         z: 2
 
@@ -215,7 +199,7 @@ ListView {
         z: 2
         // Make sure the visibility is bound to the scrollModeActive property
         Component.onCompleted: {
-            activeScrollModeInstructions.visible = Qt.binding(function() {
+            activeScrollModeInstructions.visible = Qt.binding(function () {
                 return scrollModeActive;
             });
         }
@@ -228,7 +212,6 @@ ListView {
             color: ThemeManager.backgroundColor
             font: FontManager.small
         }
-
     }
 
     // Timer to scroll to bottom with slight delay to ensure layout updates are complete
@@ -250,5 +233,4 @@ ListView {
         isLastMessage: index === conversationView.count - 1
         isResponding: conversationView.responseInProgress && index === conversationView.count - 1
     }
-
 }
