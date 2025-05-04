@@ -146,7 +146,7 @@ Rectangle {
     // Straight rectangle to fill the rest of the area without rounded bottom
     Rectangle {
         id: bottomFill
-        anchors.top: topMask.bottom
+        anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
