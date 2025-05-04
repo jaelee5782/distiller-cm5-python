@@ -263,6 +263,38 @@ class MCPClientBridge(BridgeCore):
             logger.error(f"Error getting system stats: {e}")
             return {"cpu": "N/A", "ram": "N/A", "temp": "N/A", "llm": "Local"}
 
+    @pyqtSlot()
+    def closeApplication(self):
+        """
+        Close the application gracefully.
+        This method will perform any necessary cleanup and then exit the application.
+        """
+        logger.info("Closing application from QML bridge call")
+        try:
+            # Perform cleanup first
+            if hasattr(self, 'cleanup') and callable(self.cleanup):
+                try:
+                    # Run cleanup synchronously
+                    asyncio.run_coroutine_threadsafe(
+                        self.cleanup(), self._loop
+                    ).result(timeout=2.0)  # 2-second timeout for cleanup
+                    logger.info("Cleanup completed successfully")
+                except Exception as e:
+                    logger.error(f"Error during cleanup: {e}")
+            
+            # Schedule application exit with a short delay to allow cleanup to complete
+            QApplication.instance().quit()
+            logger.info("Application exit scheduled")
+            
+        except Exception as e:
+            logger.error(f"Error during application close: {e}")
+            # Force quit if normal exit fails
+            try:
+                QApplication.instance().exit(1)
+            except:
+                # Last resort: terminate process
+                os._exit(1)
+    
     @pyqtSlot(str)
     def setLlmModel(self, model_name):
         """Set the current LLM model name."""

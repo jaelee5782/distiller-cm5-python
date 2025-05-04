@@ -14,6 +14,7 @@ Rectangle {
     property alias serverSelectButton: serverSelectBtn
     // Keep the alias but point to a dummy item to prevent runtime errors
     property alias darkModeButton: dummyDarkModeBtn
+    property alias closeButton: closeBtn
     
     // System stats properties
     property bool showSystemStats: bridge && bridge.ready ? bridge.getShowSystemStats() : true
@@ -41,6 +42,7 @@ Rectangle {
     signal serverSelectClicked
     // Keep the signal to prevent errors
     signal darkModeClicked
+    signal closeAppClicked
 
     color: ThemeManager.backgroundColor
     Component.onCompleted: {
@@ -64,94 +66,16 @@ Rectangle {
         color: ThemeManager.black 
     }
 
-    // Layout for header components
-    RowLayout {
-        id: headerLayout
-        anchors.fill: parent
-        anchors.leftMargin: ThemeManager.spacingTiny * 2
-        anchors.rightMargin: ThemeManager.spacingTiny
-        spacing: ThemeManager.spacingTiny
-
-        // Server selection button
-        AppButton {
-            id: serverSelectBtn
-            Layout.preferredWidth: 160
-            Layout.preferredHeight: 44
-            Layout.alignment: Qt.AlignVCenter
-            navigable: true
-            isFlat: false
-            text: "" // Set empty text since we're using custom content
-            onClicked: header.serverSelectClicked()
-            
-            // Add custom styling to ensure black border
-            Rectangle {
-                parent: serverSelectBtn
-                anchors.fill: parent
-                color: ThemeManager.transparentColor
-                border.width: ThemeManager.borderWidth
-                border.color: ThemeManager.black 
-                radius: ThemeManager.borderRadius
-                z: -1 // Behind the text
-            }
-
-            // Custom content using a child Column instead of contentItem
-            Column {
-                anchors.fill: parent
-                anchors.leftMargin: ThemeManager.spacingTiny * 2
-                anchors.rightMargin: ThemeManager.spacingTiny
-                anchors.topMargin: ThemeManager.spacingTiny
-                anchors.bottomMargin: ThemeManager.spacingTiny
-                spacing: 1
-
-                // Server name - left aligned
-                Text {
-                    width: parent.width
-                    height: parent.height / 2
-                    horizontalAlignment: Text.AlignLeft
-                    text: isConnected && serverName && serverName !== "NO SERVER" ? serverName : "SELECT SERVER"
-                    font: FontManager.small
-                    color: serverSelectBtn.visualFocus ? ThemeManager.backgroundColor : ThemeManager.textColor
-                    elide: Text.ElideRight
-                }
-
-                // Status text - left aligned, smaller font
-                Text {
-                    width: parent.width
-                    height: parent.height / 2
-                    horizontalAlignment: Text.AlignLeft
-                    text: statusText
-                    // visible: isConnected && serverName && serverName !== "NO SERVER"
-                    font.pixelSize: FontManager.fontSizeSmall - 2
-                    font.family: FontManager.primaryFontFamily
-                    color: serverSelectBtn.visualFocus ? ThemeManager.backgroundColor : ThemeManager.textColor
-                    elide: Text.ElideRight
-                }
-            }
-        }
-
-        // Item {
-        //     Layout.fillWidth: false
-        // }
-    }
-    
-    // System stats display - positioned directly in header instead of in RowLayout
+    // System stats display
     Rectangle {
         id: statsDisplay
         width: 30
         height: 40
-        anchors.right: parent.right
-        anchors.rightMargin: ThemeManager.spacingNormal * 2  // Double the normal spacing
+        anchors.left: parent.left
+        anchors.leftMargin: ThemeManager.spacingSmall
         anchors.verticalCenter: parent.verticalCenter
-        Layout.alignment: Qt.AlignVCenter
         color: ThemeManager.transparentColor
         visible: showSystemStats
-        
-        // Add border for visibility
-        Rectangle {
-            anchors.fill: parent
-            color: ThemeManager.transparentColor
-            radius: ThemeManager.borderRadius / 3
-        }
         
         // Stats content
         Column {
@@ -164,7 +88,7 @@ Rectangle {
                 width: parent.width
                 height: 10
                 text: "CPU: " + systemStats.cpu
-                font.pixelSize: 9
+                font.pixelSize: FontManager.fontSizeTiny
                 font.family: FontManager.primaryFontFamily
                 color: ThemeManager.textColor
                 horizontalAlignment: Text.AlignLeft
@@ -176,7 +100,7 @@ Rectangle {
                 width: parent.width
                 height: 10
                 text: "MEM: " + systemStats.ram
-                font.pixelSize: 9
+                font.pixelSize: FontManager.fontSizeTiny
                 font.family: FontManager.primaryFontFamily
                 color: ThemeManager.textColor
                 horizontalAlignment: Text.AlignLeft
@@ -188,7 +112,7 @@ Rectangle {
                 width: parent.width
                 height: 10
                 text: "TEMP: " + systemStats.temp
-                font.pixelSize: 9
+                font.pixelSize: FontManager.fontSizeTiny
                 font.family: FontManager.primaryFontFamily
                 color: ThemeManager.textColor
                 horizontalAlignment: Text.AlignLeft
@@ -200,7 +124,7 @@ Rectangle {
                 width: parent.width
                 height: 10
                 text: "LLM: " + systemStats.llm
-                font.pixelSize: 9
+                font.pixelSize: FontManager.fontSizeTiny
                 font.family: FontManager.primaryFontFamily
                 color: ThemeManager.textColor
                 horizontalAlignment: Text.AlignLeft
@@ -209,81 +133,112 @@ Rectangle {
         }
     }
 
-    // Dark mode button - commented out
-    /*
+    // Server selection button - centered with reduced width
     AppButton {
-        id: darkModeBtn
-        Layout.preferredWidth: ThemeManager.buttonHeight
-        Layout.preferredHeight: ThemeManager.buttonHeight
-        Layout.alignment: Qt.AlignVCenter
-        isFlat: true
+        id: serverSelectBtn
+        width: 120
+        height: 44
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.verticalCenter: parent.verticalCenter
         navigable: true
-        buttonRadius: width / 2
-        onClicked: header.darkModeClicked()
-
-        // Dark mode icon content
-        Rectangle {
-            parent: darkModeBtn
+        isFlat: false
+        text: "" // Set empty text since we're using custom content
+        onClicked: header.serverSelectClicked()
+        
+        // Custom content using a child Column instead of contentItem
+        Column {
             anchors.fill: parent
-            color: ThemeManager.darkMode ? "black" : "white" // Solid color
+            anchors.leftMargin: ThemeManager.spacingSmall
+            anchors.rightMargin: ThemeManager.spacingSmall
+            anchors.topMargin: ThemeManager.spacingSmall
+            anchors.bottomMargin: ThemeManager.spacingTiny
+            spacing: ThemeManager.spacingTiny / 4
 
+            // Server name - left aligned
+            Text {
+                width: parent.width
+                height: parent.height / 2
+                horizontalAlignment: Text.AlignLeft
+                text: isConnected && serverName && serverName !== "NO SERVER" ? serverName : "SELECT SERVER"
+                font: FontManager.small
+                color: serverSelectBtn.visualFocus ? ThemeManager.backgroundColor : ThemeManager.textColor
+                elide: Text.ElideRight
+            }
+
+            // Status text - left aligned, smaller font
+            Text {
+                width: parent.width
+                height: parent.height / 2
+                horizontalAlignment: Text.AlignLeft
+                text: statusText
+                // visible: isConnected && serverName && serverName !== "NO SERVER"
+                font.pixelSize: FontManager.fontSizeTiny
+                font.family: FontManager.primaryFontFamily
+                color: serverSelectBtn.visualFocus ? ThemeManager.backgroundColor : ThemeManager.textColor
+                elide: Text.ElideRight
+            }
+        }
+    }
+
+    // Close app button - positioned at top right
+    AppButton {
+        id: closeBtn
+        width: 36
+        height: 36
+        anchors.right: parent.right
+        anchors.rightMargin: ThemeManager.spacingSmall
+        anchors.verticalCenter: parent.verticalCenter
+        navigable: true
+        isFlat: true
+        buttonRadius: width / 2
+        onClicked: {
+            closeConfirmDialog.open();
+        }
+        
+        // Close button icon
+        Rectangle {
+            parent: closeBtn
+            anchors.fill: parent
+            color: ThemeManager.backgroundColor
+            
             // High contrast highlight for e-ink when focused
             Rectangle {
-                visible: darkModeBtn.visualFocus || darkModeBtn.pressed || true // Always visible
+                visible: closeBtn.visualFocus || closeBtn.pressed || true
                 anchors.fill: parent
                 radius: width / 2
-                color: darkModeBtn.visualFocus ? "black" : (ThemeManager.darkMode ? "black" : "white")
+                color: closeBtn.visualFocus ? ThemeManager.textColor : ThemeManager.backgroundColor
                 border.width: ThemeManager.borderWidth
-                border.color: "black"
-                opacity: 1.0
+                border.color: ThemeManager.black
                 antialiasing: true
             }
-
+            
             Text {
-                text: ThemeManager.darkMode ? "󰖨" : "" // Dark mode icon
-                font.pixelSize: parent.width * 0.3
+                text: "✕" // Close icon
+                font.pixelSize: parent.width * 0.4
                 font.family: FontManager.primaryFontFamily
-                color: darkModeBtn.visualFocus ? ThemeManager.backgroundColor : ThemeManager.textColor
-                rightPadding: ThemeManager.darkMode ? 3 : 0
-                width: parent.width
-                height: parent.height
-                horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: Text.AlignVCenter
+                color: closeBtn.visualFocus ? ThemeManager.backgroundColor : ThemeManager.textColor
                 anchors.centerIn: parent
-                opacity: 1
             }
-        }
-    }
-    */
-
-    // Keep the signal handler but make it do nothing to prevent runtime errors
-    onDarkModeClicked: {
-        /* Commented out
-        // Toggle dark mode
-        ThemeManager.toggleTheme();
-        if (bridge && bridge.ready) {
-            bridge.setConfigValue("display", "dark_mode", ThemeManager.darkMode.toString());
-        }
-        */
-    }
-
-    // Timer to update WiFi status periodically
-    Timer {
-        interval: 5000
-        running: true
-        repeat: true
-        onTriggered: {
-            updateWifiStatus();
         }
     }
     
-    // Timer to update system stats periodically
-    Timer {
-        interval: 3000
-        running: showSystemStats
-        repeat: true
-        onTriggered: {
-            updateSystemStats();
+    // Close confirmation dialog
+    AppDialog {
+        id: closeConfirmDialog
+        dialogTitle: "Close Application"
+        message: "Are you sure you want to close the application?"
+        standardButtonTypes: DialogButtonBox.Yes | DialogButtonBox.No
+        yesButtonText: "Proceed"
+        noButtonText: "Cancel"
+        acceptButtonColor: ThemeManager.backgroundColor
+        
+        onAccepted: {
+            header.closeAppClicked();
+            if (bridge && bridge.ready && typeof bridge.closeApplication === "function") {
+                bridge.closeApplication();
+            } else {
+                console.log("Unable to close application - bridge method not available");
+            }
         }
     }
 }

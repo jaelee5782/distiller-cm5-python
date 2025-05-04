@@ -49,6 +49,9 @@ PageBase {
             if (header.darkModeButton && header.darkModeButton.navigable)
                 focusableItems.push(header.darkModeButton);
             */
+
+           if (header.closeButton && header.closeButton.navigable)
+				focusableItems.push(header.closeButton);
         }
 
         
@@ -682,6 +685,17 @@ PageBase {
             previousFocusedItem = FocusManager.currentFocusItems[FocusManager.currentFocusIndex];
             // Show server list dialog instead of confirmation
             serverListDialog.open();
+        }
+
+        // Handler for closing the application
+        onCloseAppClicked: {
+            console.log("Closing application...");
+            // Any cleanup tasks before closing
+            if (bridge && bridge.ready && typeof bridge.closeApplication === "function") {
+                bridge.closeApplication();
+            } else {
+                console.log("Failed to close application - bridge method not available");
+            }
         }
     }
 
