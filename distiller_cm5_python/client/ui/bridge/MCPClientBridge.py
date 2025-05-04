@@ -271,6 +271,11 @@ class MCPClientBridge(BridgeCore):
         """
         logger.info("Closing application from QML bridge call")
         try:
+            # Signal application power down via UART
+            from distiller_cm5_python.utils.uart_utils import signal_app_shutdown
+            signal_app_shutdown()
+            logger.info("Sent shutdown signal to UART device")
+            
             # Perform cleanup first
             if hasattr(self, 'cleanup') and callable(self.cleanup):
                 try:
