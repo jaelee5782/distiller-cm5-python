@@ -91,7 +91,7 @@ Dialog {
     // Dialog background
     background: Rectangle {
         color: ThemeManager.backgroundColor
-        radius: 10 // Basic rounded corners
+        radius: ThemeManager.borderRadius // Basic rounded corners
     }
 
     // Dialog header
@@ -102,7 +102,7 @@ Dialog {
         height: headerText.implicitHeight + ThemeManager.spacingNormal * 2
         color: ThemeManager.backgroundColor
         // Rounded corners for top portion only
-        radius: 10
+        radius: ThemeManager.borderRadius
         // Only round the top corners
         Rectangle {
             anchors.left: parent.left
@@ -153,7 +153,7 @@ Dialog {
         height: buttonRow.height + ThemeManager.spacingLarge * 2
         color: ThemeManager.backgroundColor
         // Rounded corners for bottom portion only
-        radius: 10
+        radius: ThemeManager.borderRadius
         // Only round the bottom corners
         Rectangle {
             anchors.left: parent.left

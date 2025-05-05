@@ -227,28 +227,12 @@ ApplicationWindow {
         anchors.right: parent.right
         anchors.top: parent.top
         height: 50  // Cover the header area
-        color: ThemeManager.darkMode ? "black" : "white"  // Solid color, no transparency
+        color: ThemeManager.backgroundColor
         opacity: 1.0
         z: -0.5
         
         // Add border around the entire rectangle
         border.width: ThemeManager.borderWidth
-        border.color: "black"
+        border.color: ThemeManager.black
     }
-
-    // // Button area - solid black or white with border
-    // Rectangle {
-    //     id: buttonAreaOverlay
-    //     anchors.left: parent.left
-    //     anchors.right: parent.right
-    //     anchors.bottom: parent.bottom
-    //     height: 80  // Cover the button area
-    //     color: ThemeManager.darkMode ? "black" : "white"  // Solid color, no transparency
-    //     opacity: 1.0
-    //     z: -0.5
-        
-    //     // Add border around the entire rectangle
-    //     border.width: ThemeManager.borderWidth
-    //     border.color: "black"
-    // }
 }
