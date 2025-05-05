@@ -37,6 +37,16 @@ QtObject {
         "pixelSize": fontSizeNormal,
         "weight": fontWeightBold
     })
+    property font tiny: Qt.font({
+        "family": primaryFontFamily,
+        "pixelSize": fontSizeTiny,
+        "weight": fontWeightNormal
+    })
+    property font tinyBold: Qt.font({
+        "family": primaryFontFamily,
+        "pixelSize": fontSizeTiny,
+        "weight": fontWeightBold
+    })
     property font small: Qt.font({
         "family": primaryFontFamily,
         "pixelSize": fontSizeSmall,
@@ -85,6 +95,16 @@ QtObject {
         normalBold = Qt.font({
             "family": primaryFontFamily,
             "pixelSize": fontSizeNormal,
+            "weight": fontWeightBold
+        });
+        tiny = Qt.font({
+            "family": primaryFontFamily,
+            "pixelSize": fontSizeTiny,
+            "weight": fontWeightNormal
+        });
+        tinyBold = Qt.font({
+            "family": primaryFontFamily,
+            "pixelSize": fontSizeTiny,
             "weight": fontWeightBold
         });
         small = Qt.font({

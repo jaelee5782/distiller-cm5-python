@@ -159,13 +159,11 @@ PageBase {
             if (header.serverSelectButton && header.serverSelectButton.navigable)
                 focusableItems.push(header.serverSelectButton);
 
-            /* Dark mode button commented out
-            if (header.darkModeButton && header.darkModeButton.navigable)
-                focusableItems.push(header.darkModeButton);
-            */
+            if (header.statusButton && header.statusButton.navigable)
+                focusableItems.push(header.statusButton);
 
-           if (header.closeButton && header.closeButton.navigable)
-				focusableItems.push(header.closeButton);
+            if (header.closeButton && header.closeButton.navigable)
+                focusableItems.push(header.closeButton);
         }
 
         
