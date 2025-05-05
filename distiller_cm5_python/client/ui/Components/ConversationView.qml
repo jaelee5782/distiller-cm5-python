@@ -116,7 +116,7 @@ ListView {
         width: scrollModeText.width + ThemeManager.spacingSmall * 3
         color: ThemeManager.textColor
         border.width: ThemeManager.borderWidth
-        border.color: ThemeManager.white
+        border.color: ThemeManager.textColor
         radius: ThemeManager.borderRadius
         visible: isActiveItem && !scrollModeActive && conversationView.contentHeight > conversationView.height
         z: 2
@@ -136,8 +136,8 @@ ListView {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: ThemeManager.spacingNormal
-        height: activeScrollModeText.height + ThemeManager.spacingSmall * 2
-        width: activeScrollModeText.width + ThemeManager.spacingNormal * 2
+        height: activeScrollModeText.height + ThemeManager.spacingLarge
+        width: activeScrollModeText.width + ThemeManager.spacingSmall * 3
         color: ThemeManager.textColor
         border.width: ThemeManager.borderWidth
         border.color: ThemeManager.textColor
