@@ -90,7 +90,12 @@ Rectangle {
         navigable: true
         isFlat: false
         text: "" // Set empty text since we're using custom content
-        onClicked: header.serverSelectClicked()
+        onClicked: {
+            if (statsPopup.visible) {
+                statsPopup.close();
+            }
+            header.serverSelectClicked()
+        }
         
         // Custom content using a child Column instead of contentItem
         Column {
@@ -363,6 +368,9 @@ Rectangle {
         isFlat: true
         buttonRadius: width / 2
         onClicked: {
+            if (statsPopup.visible) {
+                statsPopup.close();
+            }
             shutdownConfirmDialog.open();
         }
         
