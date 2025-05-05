@@ -14,6 +14,18 @@ class NetworkUtils:
     Provides methods for obtaining network information such as IP addresses.
     """
 
+    def get_wifi_name(self):
+        """Get the WiFi SSID name.
+        
+        Returns:
+            SSID name as a string or an error message
+        """
+        try:
+            return self._get_linux_wifi_name()
+        except Exception as e:
+            logger.error(f"Error getting WiFi name: {e}")
+            return "Unknown WiFi"
+            
     def get_wifi_ip_address(self):
         """Get the WiFi IP address of the system.
 
@@ -394,3 +406,91 @@ class NetworkUtils:
         except Exception as e:
             logger.error(f"Error getting network interfaces: {e}")
             return []
+
+    def _get_linux_wifi_name(self):
+        """Get the WiFi SSID name for Linux systems.
+        
+        Returns:
+            SSID name as a string or an error message
+        """
+        try:
+            # Try nmcli first (NetworkManager)
+            try:
+                result = subprocess.run(
+                    ["nmcli", "-t", "-f", "active,ssid", "dev", "wifi"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                
+                # Parse output to find active connection
+                for line in result.stdout.split('\n'):
+                    if line.startswith('yes:'):
+                        return line.split(':', 1)[1]  # Return SSID
+            except (FileNotFoundError, subprocess.CalledProcessError):
+                pass
+                
+            # Try iwconfig as fallback
+            try:
+                # Find WiFi interface
+                wifi_interface = None
+                ip_result = subprocess.run(
+                    ["ip", "link", "show"], capture_output=True, text=True, check=True
+                )
+                wifi_regex = r"(wl\w+)"
+                wifi_interfaces = re.findall(wifi_regex, ip_result.stdout)
+                if wifi_interfaces:
+                    wifi_interface = wifi_interfaces[0]
+
+                if not wifi_interface:
+                    return "No WiFi interface found"
+                    
+                # Get SSID using iwconfig
+                result = subprocess.run(
+                    ["iwconfig", wifi_interface],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                
+                # Extract ESSID from output
+                essid_match = re.search(r'ESSID:"([^"]*)"', result.stdout)
+                if essid_match:
+                    return essid_match.group(1)
+            except (FileNotFoundError, subprocess.CalledProcessError):
+                pass
+                
+            # Try iw as second fallback
+            try:
+                # Find WiFi interface
+                wifi_interface = None
+                ip_result = subprocess.run(
+                    ["ip", "link", "show"], capture_output=True, text=True, check=True
+                )
+                wifi_regex = r"(wl\w+)"
+                wifi_interfaces = re.findall(wifi_regex, ip_result.stdout)
+                if wifi_interfaces:
+                    wifi_interface = wifi_interfaces[0]
+
+                if not wifi_interface:
+                    return "No WiFi interface found"
+                    
+                # Get SSID using iw
+                result = subprocess.run(
+                    ["iw", "dev", wifi_interface, "link"],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                )
+                
+                # Extract SSID from output
+                ssid_match = re.search(r'SSID: (.*?)$', result.stdout, re.MULTILINE)
+                if ssid_match:
+                    return ssid_match.group(1).strip()
+            except (FileNotFoundError, subprocess.CalledProcessError):
+                pass
+                
+            return "No WiFi name found"
+        except Exception as e:
+            logger.error(f"Error getting Linux WiFi name: {e}")
+            return "Unknown WiFi"

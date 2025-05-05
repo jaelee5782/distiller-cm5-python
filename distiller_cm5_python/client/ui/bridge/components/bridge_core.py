@@ -403,6 +403,11 @@ class BridgeCore(QObject):
         """Get the WiFi IP address of the system."""
         return self.network_utils.get_wifi_ip_address()
 
+    @pyqtSlot(result=str)
+    def getWifiName(self):
+        """Get the WiFi SSID name."""
+        return self.network_utils.get_wifi_name()
+
     async def cleanup(self):
         """
         Compatibility method for the App class.
