@@ -58,7 +58,11 @@ Rectangle {
     signal showToastMessage(string message, int duration)
 
     color: ThemeManager.backgroundColor
-    
+    Component.onCompleted: {
+        updateWifiStatus();
+        updateSystemStats();
+    }
+
     // Dummy invisible item to satisfy the darkModeButton alias
     Item {
         id: dummyDarkModeBtn
