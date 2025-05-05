@@ -22,8 +22,7 @@ Rectangle {
     // Expose button as property
     property alias voiceButton: voiceButton
     property alias resetButton: resetButton
-    property alias wifiButton: wifiButton
-    // WiFi status properties
+    // WiFi status properties - Keeping these for now in case they're referenced elsewhere
     property bool wifiConnected: false
     property string ipAddress: ""
     // Flag to track cache restore state specifically
@@ -34,7 +33,6 @@ Rectangle {
     signal voicePressed
     signal voiceReleased
     signal resetClicked // New signal for reset button
-    signal wifiClicked // New signal for WiFi button
     signal appStateUpdated(string newState) // Renamed signal to avoid conflict with appStateChanged
 
     // Get appropriate hint text for current state
@@ -86,19 +84,16 @@ Rectangle {
                 voiceButton.enabled = isConnected;
                 voiceButton.checked = false;
                 resetButton.enabled = true;
-                wifiButton.enabled = true;
             } else if (newState === "listening" && voiceButton) {
                 voiceButton.checked = true;
                 voiceButton.enabled = true;
                 resetButton.enabled = false;
-                wifiButton.enabled = false;
             } else if (newState === "processing" || newState === "thinking" || newState === "executing_tool") {
                 if (voiceButton) {
                     voiceButton.checked = false;
                     voiceButton.enabled = false;  // Disable during any processing state
                 }
                 resetButton.enabled = false;
-                wifiButton.enabled = false;
             } else if (newState === "restoring_cache") {
                 // Special handling for cache restoration - disable ALL buttons
                 if (voiceButton) {
@@ -106,7 +101,6 @@ Rectangle {
                     voiceButton.enabled = false;  // Explicitly disable during cache restoration
                 }
                 resetButton.enabled = false;
-                wifiButton.enabled = false;
                 
                 // Show appropriate hint text with stronger visibility
                 stateHint = "Please wait - Restoring cache...";
@@ -117,7 +111,6 @@ Rectangle {
                     voiceButton.enabled = isConnected;
                 }
                 resetButton.enabled = true;
-                wifiButton.enabled = true;
             }
 
             // Signal app state change
@@ -136,7 +129,6 @@ Rectangle {
             voiceButton.enabled = isConnected;
         }
         resetButton.enabled = true;
-        wifiButton.enabled = true;
         // Force status update
         stateHint = getStateHint();
     }
@@ -231,8 +223,6 @@ Rectangle {
                 return voiceInputArea.stateHint;
             } else if (resetButton.isActiveItem) {
                 return "Reset App";
-            } else if (wifiButton.isActiveItem) {
-                return "WiFi Status";
             } else {
                 return "";
             }
@@ -243,7 +233,7 @@ Rectangle {
         horizontalAlignment: Text.AlignHCenter
         z: 20 // Make sure it appears above everything
         // Show hint text when any button is active and showStatusHint is enabled
-        visible: showStatusHint && ((voiceButton.isActiveItem && isConnected) || resetButton.isActiveItem || wifiButton.isActiveItem)
+        visible: showStatusHint && ((voiceButton.isActiveItem && isConnected) || resetButton.isActiveItem)
     }
 
     // Transcribed text display
@@ -494,58 +484,6 @@ Rectangle {
                         font.pixelSize: parent.width * 0.5
                         font.family: FontManager.primaryFontFamily
                         color: resetButton.isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor
-                        horizontalAlignment: Text.AlignHCenter
-                        verticalAlignment: Text.AlignVCenter
-                        anchors.centerIn: parent
-                    }
-                }
-            }
-
-            // 3rd button: WiFi status button
-            AppButton {
-                id: wifiButton
-
-                property bool navigable: true
-                property bool isActiveItem: false
-
-                width: ThemeManager.buttonHeight
-                height: ThemeManager.buttonHeight
-                isFlat: true
-                buttonRadius: width / 2
-                onClicked: {
-                    // Refresh WiFi info when clicked
-                    if (bridge && bridge.ready) {
-                        bridge.getWifiIpAddress(); // This forces a refresh
-                    }
-                    voiceInputArea.wifiClicked();
-                }
-
-                // WiFi icon content needs custom handling
-                Rectangle {
-                    // Clear custom styling from AppButton
-                    parent: wifiButton
-                    anchors.fill: parent
-                    color: ThemeManager.backgroundColor
-
-                    // High contrast highlight for e-ink when focused
-                    Rectangle {
-                        visible: wifiButton.isActiveItem || wifiButton.pressed || true  // Always visible
-                        anchors.fill: parent
-                        radius: width / 2
-                        color: wifiButton.isActiveItem ? ThemeManager.textColor : ThemeManager.backgroundColor
-                        border.width: ThemeManager.borderWidth
-                        border.color: ThemeManager.black
-                        antialiasing: true
-                    }
-
-                    Text {
-                        text: "" // WiFi icon
-                        font.pixelSize: parent.width * 0.3
-                        font.family: FontManager.primaryFontFamily
-                        color: wifiButton.isActiveItem ? ThemeManager.backgroundColor : ThemeManager.textColor
-                        width: parent.width
-                        height: parent.height
-                        rightPadding: 6
                         horizontalAlignment: Text.AlignHCenter
                         verticalAlignment: Text.AlignVCenter
                         anchors.centerIn: parent

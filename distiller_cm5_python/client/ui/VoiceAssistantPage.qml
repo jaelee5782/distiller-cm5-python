@@ -933,33 +933,6 @@ PageBase {
             }
             restartConfirmDialog.open();
         }
-        
-        onWifiClicked: {
-            // Show WiFi status in a toast message instead of dialog
-            if (bridge && bridge.ready) {
-                var ipAddr = bridge.getWifiIpAddress();
-                var macAddr = bridge.getWifiMacAddress ? bridge.getWifiMacAddress() : "";
-                var signalStr = bridge.getWifiSignalStrength ? bridge.getWifiSignalStrength() : "";
-                
-                var wifiConnected = ipAddr && ipAddr !== "No network IP found" && !ipAddr.includes("Error");
-                
-                var statusMsg = wifiConnected ? 
-                    "WiFi: Connected\nIP: " + ipAddr : 
-                    "WiFi: Disconnected";
-                    
-                if (wifiConnected && macAddr) {
-                    statusMsg += "\nMAC: " + macAddr;
-                }
-                
-                if (wifiConnected && signalStr) {
-                    statusMsg += "\nSignal: " + signalStr;
-                }
-                
-                messageToast.showMessage(statusMsg, 5000);
-            } else {
-                messageToast.showMessage("Error: Bridge not ready", 3000);
-            }
-        }
     }
 
     Timer {
