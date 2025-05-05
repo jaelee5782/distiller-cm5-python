@@ -180,10 +180,6 @@ PageBase {
             // Then add the reset button
             if (voiceInputArea.resetButton && voiceInputArea.resetButton.navigable)
                 focusableItems.push(voiceInputArea.resetButton);
-                
-            // Add WiFi button
-            if (voiceInputArea.wifiButton && voiceInputArea.wifiButton.navigable)
-                focusableItems.push(voiceInputArea.wifiButton);        
         }
         
         // Initialize focus manager with proper activation handling
@@ -648,11 +644,6 @@ PageBase {
                 headerRect.border.width = 1;
                 headerRect.border.color = ThemeManager.black;
             }
-            
-            // Ensure WiFi status is updated
-            if (bridge && bridge.ready) {
-                updateWifiStatus();
-            }
         }
         
         onServerSelectClicked: {
@@ -845,8 +836,6 @@ PageBase {
         isProcessing: voiceAssistantPage.isProcessing
         isConnected: voiceAssistantPage.isServerConnected && serverName && serverName.length > 0 && serverName !== "No Server"
         showStatusHint: true
-        wifiConnected: header.wifiConnected
-        ipAddress: header.ipAddress
         
         onAppStateUpdated: function(newState) {
             console.log("VoiceInputArea state changed to: " + newState);
@@ -1101,15 +1090,6 @@ PageBase {
             state = "idle";
         } else if (newState === "disconnected") {
             state = "disconnected";
-        }
-    }
-    
-    // Update WiFi status (keep for backwards compatibility)
-    function updateWifiStatus() {
-        if (bridge && bridge.ready && header) {
-            var ipAddr = bridge.getWifiIpAddress ? bridge.getWifiIpAddress() : "";
-            header.ipAddress = ipAddr;
-            header.wifiConnected = ipAddr && ipAddr !== "No network IP found" && !ipAddr.includes("Error");
         }
     }
 }

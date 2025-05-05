@@ -22,9 +22,6 @@ Rectangle {
     // Expose button as property
     property alias voiceButton: voiceButton
     property alias resetButton: resetButton
-    // WiFi status properties - Keeping these for now in case they're referenced elsewhere
-    property bool wifiConnected: false
-    property string ipAddress: ""
     // Flag to track cache restore state specifically
     property bool cacheRestoring: appState === "restoring_cache"
 
