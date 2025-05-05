@@ -11,6 +11,7 @@ Rectangle {
     property bool showStatusText: false
     property bool wifiConnected: false
     property string ipAddress: ""
+    property string wifiName: ""
     property alias serverSelectButton: serverSelectBtn
     // Keep the alias but point to a dummy item to prevent runtime errors
     property alias darkModeButton: dummyDarkModeBtn
@@ -27,9 +28,17 @@ Rectangle {
             var ipAddr = bridge.getWifiIpAddress();
             wifiConnected = ipAddr && ipAddr !== "No network IP found" && !ipAddr.includes("Error");
             ipAddress = wifiConnected ? ipAddr : "";
+            
+            // Get WiFi name if available from the bridge
+            if (wifiConnected && bridge.getWifiName) {
+                wifiName = bridge.getWifiName();
+            } else {
+                wifiName = "";
+            }
         } else {
             wifiConnected = false;
             ipAddress = "";
+            wifiName = "";
         }
     }
     
@@ -37,6 +46,8 @@ Rectangle {
     function updateSystemStats() {
         if (bridge && bridge.ready && showSystemStats) {
             systemStats = bridge.getSystemStats();
+            // Also update WiFi status when updating stats
+            updateWifiStatus();
         }
     }
 
@@ -154,7 +165,7 @@ Rectangle {
             }
             
             Text {
-                text: "" 
+                text: "󰍜" 
                 font.pixelSize: parent.width * 0.5
                 font.family: FontManager.primaryFontFamily
                 color: statusBtn.visualFocus ? ThemeManager.backgroundColor : ThemeManager.textColor
@@ -308,7 +319,7 @@ Rectangle {
                     }
                     
                     Text {
-                        text: wifiConnected ? "Connected" : "Disconnected"
+                        text: wifiConnected ? (wifiName !== "" ? wifiName : "Connected") : "Disconnected"
                         font.pixelSize: FontManager.fontSizeSmall
                         font.family: FontManager.primaryFontFamily
                         color: ThemeManager.textColor
