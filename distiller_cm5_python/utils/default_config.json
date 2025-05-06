@@ -32,7 +32,7 @@
   },
   "active_llm_provider": "llama-cpp",
   "logging": {
-    "level": "DEBUG",
+    "level": "INFO",
     "file_enabled": false,
     "file_path": "mcp_client.log"
   },

@@ -22,6 +22,11 @@ import atexit
 logger = logging.getLogger(__name__)
 
 
+# quick display check
+if not sys.platform.startswith('linux'):
+    config["display"]["eink_enabled"] = False
+
+
 if config["display"]["eink_enabled"]:
     from distiller_cm5_python.client.ui.bridge.EInkRenderer import EInkRenderer
     from distiller_cm5_python.client.ui.bridge.EInkRendererBridge import (
@@ -170,7 +175,7 @@ class App(QObject):  # Inherit from QObject to support signals/slots
             self.main_window = root_objects[0]  # Assign main_window HERE
             logger.info(f"QML loaded successfully. Main window: {self.main_window}")
 
-        if config.get("display").get("eink_enabled"):
+        if config["display"]["eink_enabled"] and sys.platform.startswith('linux'):
             # Apply fixed size constraints to the root window after loading
             self._apply_window_constraints()
             # E-Ink Initialization Call
