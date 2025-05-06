@@ -219,18 +219,18 @@ class BridgeEventHandler:
             logger.debug(
                 f"Handling INFO event: content='{event.content}', id={event.id}"
             )
-            if event.content:
-                self.signals.infoReceived.emit(
-                    event.content, str(event.id), timestamp_str
-                )
+            # if event.content:
+                # self.signals.infoReceived.emit(
+                #     event.content, str(event.id), timestamp_str
+                # )
                 # Add to conversation history
-                if conversation_manager:
-                    message = {
-                        "timestamp": self._get_formatted_timestamp(),
-                        "content": f"{event.content}",
-                        "type": "Info",
-                    }
-                    conversation_manager.add_message(message)
+                # if conversation_manager:
+                #     message = {
+                #         "timestamp": self._get_formatted_timestamp(),
+                #         "content": f"{event.content}",
+                #         "type": "Info",
+                #     }
+                #     conversation_manager.add_message(message)
 
             status_value = (
                 event.status.value if hasattr(event.status, "value") else event.status
@@ -296,13 +296,13 @@ class BridgeEventHandler:
                     self.status_manager.update_status("error", event.content)
 
             # Add to conversation history
-            if conversation_manager:
-                message = {
-                    "timestamp": self._get_formatted_timestamp(),
-                    "content": f"{event.content}",
-                    "type": "Cache Operation",
-                }
-                conversation_manager.add_message(message)
+            # if conversation_manager:
+            #     message = {
+            #         "timestamp": self._get_formatted_timestamp(),
+            #         "content": f"{event.content}",
+            #         "type": "Cache Operation",
+            #     }
+            #     conversation_manager.add_message(message)
 
         elif event.type == EventType.OBSERVATION:
             # Handle observation events
