@@ -518,12 +518,6 @@ PageBase {
                 transcribedText = "";
                 voiceInputArea.transcribedText = "";
             }
-            
-            // Force an immediate e-ink update when going to processing
-            if (!is_recording && typeof AppController !== 'undefined' && AppController.triggerEinkUpdate) {
-                console.log("QML: Forcing e-ink update for processing state");
-                AppController.triggerEinkUpdate();
-            }
         }
 
         function onStatusChanged(newStatus) {

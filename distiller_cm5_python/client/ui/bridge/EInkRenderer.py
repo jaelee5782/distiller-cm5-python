@@ -108,6 +108,8 @@ class EInkRenderer(QObject):
             logger.warning("Renderer not active, cannot force update.")
             return
         logger.debug("Forcing immediate render update...")
+        # Set the force_update flag to ensure the frame difference check is skipped
+        self._force_update = True 
         # Use QTimer.singleShot to queue the capture on the event loop immediately
         QTimer.singleShot(0, self._capture_frame)
 

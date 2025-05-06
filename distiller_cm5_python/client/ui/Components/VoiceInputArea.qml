@@ -109,7 +109,6 @@ Rectangle {
                 }
                 resetButton.enabled = true;
             }
-
             // Signal app state change
             appStateUpdated(newState);
         }
@@ -190,8 +189,18 @@ Rectangle {
         if (bridge && bridge.ready && bridge.isConnected && isListening) {
             // First set state to processing explicitly
             setAppState("processing");
-            // Then call the bridge method
-            bridge.stopAndTranscribe();
+
+            // Trigger e-ink update *after* state changes are applied but before the blocking call
+            if (typeof AppController !== 'undefined' && AppController.triggerEinkUpdate) {
+                console.log("VoiceInputArea: Forcing e-ink update after setAppState('processing')");
+                AppController.triggerEinkUpdate();
+            }
+
+            // Then call the bridge method after a minimal delay to allow UI event processing (including e-ink)
+            Qt.callLater(function() {
+                console.log("VoiceInputArea.onVoiceReleased: Calling bridge.stopAndTranscribe() after delay");
+                bridge.stopAndTranscribe();
+            });
         }
     }
 
@@ -229,8 +238,8 @@ Rectangle {
         color: ThemeManager.textColor
         horizontalAlignment: Text.AlignHCenter
         z: 20 // Make sure it appears above everything
-        // Show hint text when any button is active and showStatusHint is enabled
-        visible: showStatusHint && ((voiceButton.isActiveItem && isConnected) || resetButton.isActiveItem)
+        // Show hint text whenever the app is not idle, or if a button has focus (and hint is enabled)
+        visible: showStatusHint && (appState !== "idle" || (voiceButton.isActiveItem || resetButton.isActiveItem))
     }
 
     // Transcribed text display
