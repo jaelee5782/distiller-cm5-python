@@ -65,7 +65,7 @@ class InputMonitor(QObject):
         logger.warning(f"Could not find input device with name: '{device_name}'")
         return None
 
-    def start(self, device_name="RP2040 Key Input"):
+    def start(self, device_name="Pamir AI Key Input"):
         """
         Finds the input device and starts the monitoring thread.
 
