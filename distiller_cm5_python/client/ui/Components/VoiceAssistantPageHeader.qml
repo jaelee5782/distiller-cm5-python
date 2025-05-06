@@ -170,7 +170,7 @@ Rectangle {
             }
             
             Text {
-                text: "󰍜" 
+                text: "" 
                 font.pixelSize: parent.width * 0.5
                 font.family: FontManager.primaryFontFamily
                 color: statusBtn.visualFocus ? ThemeManager.backgroundColor : ThemeManager.textColor
@@ -392,7 +392,7 @@ Rectangle {
             }
             
             Text {
-                text: "󰐧" // Power/Shutdown icon
+                text: "⏻" // Power/Shutdown icon
                 font.pixelSize: parent.width * 0.5
                 font.family: FontManager.primaryFontFamily
                 color: closeBtn.visualFocus ? ThemeManager.backgroundColor : ThemeManager.textColor
