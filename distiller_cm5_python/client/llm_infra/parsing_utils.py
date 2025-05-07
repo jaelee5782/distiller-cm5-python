@@ -31,6 +31,13 @@ def normalize_tool_call_json(tool_call_str: str) -> str:
     tool_call_str = tool_call_str.strip()  # Strip again after removing markdown
     logger.debug(f"After markdown removal: '{tool_call_str}'")
 
+    # Fix unbalanced braces
+    open_braces = tool_call_str.count("{")
+    close_braces = tool_call_str.count("}")
+    if open_braces > close_braces:
+        tool_call_str += "}" * (open_braces - close_braces)
+    logger.debug(f"After fixing unbalanced braces: '{tool_call_str}'")
+
     # Handle double curly braces {{...}} -> {...}
     if tool_call_str.startswith("{{") and tool_call_str.endswith("}}"):
         # Be careful not to strip braces from nested valid JSON
@@ -40,6 +47,7 @@ def normalize_tool_call_json(tool_call_str: str) -> str:
                 1:-1
             ].strip()  # Strip any whitespace after removing braces
             logger.debug(f"Attempting to parse inner content: '{inner_content}'")
+            logger.debug(f"Attempting to parse inner content (repr): {repr(inner_content)}")
             json.loads(inner_content)
             # If inner parse succeeds, assume the outer braces were extra
             tool_call_str = inner_content
@@ -47,6 +55,7 @@ def normalize_tool_call_json(tool_call_str: str) -> str:
                 f"Successfully normalized double curly braces: '{tool_call_str}'"
             )
         except json.JSONDecodeError as e:
+            logger.warning(f"JSONDecodeError for inner_content: {e}. Inner content was (repr): {repr(inner_content)}")
             # If inner parse fails, try removing both sets of braces
             if tool_call_str.count("{") == 2 and tool_call_str.count("}") == 2:
                 inner_content = tool_call_str[

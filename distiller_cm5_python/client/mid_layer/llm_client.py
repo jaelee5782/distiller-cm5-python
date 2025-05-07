@@ -965,11 +965,16 @@ class LLMClient:
                                 logger.warning(
                                     f"Skipping dispatch of invalid tool call parsed from text: {call}"
                                 )
+                        if not full_response_content:
+                            self._emit_success(dispatcher, str(uuid.uuid4()), EventType.MESSAGE, "please retry")
+                else:
+                    self._emit_success(dispatcher, str(uuid.uuid4()), EventType.MESSAGE, "tool call parsing failed, please retry")
 
             logger.info(
                 f"LLMClient.get_chat_completion_streaming_response: Processed result. Content length: {len(full_response_content)}, Tool calls: {len(final_tool_calls)}"
             )
 
+            
             return {
                 "message": {
                     "content": full_response_content,
