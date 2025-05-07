@@ -49,7 +49,7 @@ Rectangle {
         case "executing_tool":
             return "Executing tool...";
         case "restoring_cache":
-            return "Please wait - Restoring cache...";
+            return "Restoring cache...";
         case "error":
             return "Error - try again";
         default:
@@ -100,7 +100,7 @@ Rectangle {
                 resetButton.enabled = false;
                 
                 // Show appropriate hint text with stronger visibility
-                stateHint = "Please wait - Restoring cache...";
+                stateHint = "Restoring cache...";
             } else if (newState === "error") {
                 // Show error state
                 if (voiceButton) {
