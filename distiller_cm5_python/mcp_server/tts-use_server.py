@@ -115,7 +115,7 @@ async def handle_list_tools() -> list[types.Tool]:
 
 def _play_stream(text: str, volume: int):
     """Play a stream of audio."""
-    piper.speak_stream(text, volume)
+    piper.speak_stream(text, volume, "snd_rpi_pamir_ai_soundcard")
 
 
 @server.call_tool()
