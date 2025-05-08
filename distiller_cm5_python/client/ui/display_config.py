@@ -21,7 +21,7 @@ config = {
         "width": 240,
         "height": 416,
         "font": {
-            "primary_font": "fonts/ProFontIIxNerdFont-Regular.ttf",  # Default font for UI elements
+            "primary_font": "fonts/MartianMonoNerdFont-CondensedBold.ttf",  # Default font for UI elements
             "font_size_small": 12,
             "font_size_normal": 14,
             "font_size_medium": 16,
