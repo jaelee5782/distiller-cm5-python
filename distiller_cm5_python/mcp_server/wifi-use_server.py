@@ -135,20 +135,14 @@ async def handle_call_tool(
 
     if name == "get_wifi_networks":
         # Linux command using nmcli
-        command = """sudo nmcli device wifi list | awk '
-    NR>1 {
-        # Skip header line and process all network entries
-        if ($2 != "BSSID") {
-            # If network is in use (marked with *), SSID is in column 3
-            if ($1 == "*") {
-                print $3
-            } 
-            # Otherwise SSID is in column 2
-            else {
-                print $2
-            }
-        }
-    }' | sort | uniq"""
+        command = """sudo nmcli -t -f IN-USE,SSID device wifi list | awk -F: '
+{
+    if ($1 == "*") {
+        print $2
+    } else {
+        print $2
+    }
+}' | sort | uniq"""
 
         logger.debug(
             f"Running command for get_wifi_networks: {command[:100]}..."
