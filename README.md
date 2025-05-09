@@ -1,6 +1,6 @@
 # Distiller CM5 Python Framework
 
-This repository contains the Python implementation for the Distiller CM5 project, featuring a client-server architecture based on the Multi-modal Conversation Protocol (MCP) for interacting with Large Language Models (LLMs).
+This repository contains the Python implementation for the Distiller CM5 project, featuring a client-server architecture based on the Model Context Protocal (MCP) for interacting with Large Language Models (LLMs).
 
 ## Overview
 
