@@ -1,6 +1,6 @@
 # MCP Server Implementations
 
-This directory contains various example implementations of servers adhering to the Multi-modal Conversation Protocol (MCP). Each server typically exposes a specific set of tools or resources related to a particular domain or device.
+This directory contains various example implementations of servers adhering to the Model Context Protocal (MCP). Each server typically exposes a specific set of tools or resources related to a particular domain or device.
 
 These servers are designed to be launched independently and communicated with by an MCP client (like the one in the `../client` directory), often via standard input/output (stdio).
 
