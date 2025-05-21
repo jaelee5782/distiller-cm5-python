@@ -3,7 +3,6 @@ import asyncio
 from typing import Optional, List, Dict, Any
 import json
 import logging
-import json5
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -286,14 +285,17 @@ class MCPClient:
                 raw_error_args_str = tool_call.get("function", {}).get("arguments", "{}")
                 error_details_dict = {}
                 try:
-                    error_details_dict = json5.loads(raw_error_args_str)
+                    error_details_dict = json.loads(raw_error_args_str)
                     parsed_error_message = error_details_dict.get('error_message', 'Unknown parsing error')
                     original_snippet = error_details_dict.get('original_content_snippet', 'N/A')
                     error_type = error_details_dict.get('error_type', 'LLMToolParseError')
                     tool_result_content = f"Error: LLM tool call parsing failed ({error_type}). Message: {parsed_error_message}.'"
+                except json.JSONDecodeError as e:
+                    logger.error(f"Could not parse details for __llm_tool_parse_error__ (JSONDecodeError): {e}. Args: {raw_error_args_str}")
+                    tool_result_content = f"Error: LLM tool call parsing failed. Could not parse internal error details (JSONDecodeError): {raw_error_args_str}"
                 except Exception as e:
-                    logger.error(f"Could not parse details for __llm_tool_parse_error__: {e}. Args: {raw_error_args_str}")
-                    tool_result_content = f"Error: LLM tool call parsing failed. Could not parse internal error details: {raw_error_args_str}"
+                    logger.error(f"Could not parse details for __llm_tool_parse_error__ (General Exception): {e}. Args: {raw_error_args_str}")
+                    tool_result_content = f"Error: LLM tool call parsing failed. Could not parse internal error details (General Exception): {raw_error_args_str}"
 
                 # Dispatch an error event for the parsing failure
                 action_event = ActionEvent(
