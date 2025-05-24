@@ -328,7 +328,7 @@ async def main():
                 asr_provider = sdk_asr_provider  # Assign to the global placeholder
 
             if asr_provider:  # Check if import succeeded
-                asr_instance = asr_provider.Parakeet()
+                asr_instance = asr_provider.Parakeet(audio_config={"rate": 48000})
                 logger.info("Parakeet SDK loaded and instance created.")
             else:
                 logger.warning("Audio input disabled: distiller_cm5_sdk not found.")

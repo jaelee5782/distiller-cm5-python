@@ -98,7 +98,7 @@ class App(QObject):  # Inherit from QObject to support signals/slots
 
         # --- ASR Initialization ---
         # TODO: Load model path/size from config if needed
-        self.asr_provider = asr_provider()
+        self.asr_provider = asr_provider(audio_config={"rate": 48000})
         self._is_actively_recording = False  # Separate state for UI feedback
         self._transcription_task = None
         # --- End ASR Initialization ---
