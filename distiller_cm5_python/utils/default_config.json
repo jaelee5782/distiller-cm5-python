@@ -9,8 +9,7 @@
       "temperature": 0.7,
       "top_p": 0.8,
       "top_k": 20,
-      "min_p": 0.0,
-      "repetition_penalty": 1.5,
+      "repetition_penalty": 1.0,
       "n_ctx": 32768,
       "max_tokens": 4096,
       "stop": [
@@ -22,26 +21,26 @@
     },
     "openrouter": {
       "server_url": "https://openrouter.ai/api/v1",
-      "model_name": "*",
+      "model_name": "openai/gpt-4o-mini",
       "provider_type": "openrouter",
-      "api_key": "sk-or-v1-*",
+      "api_key": "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",
       "timeout": 60,
       "temperature": 0.7,
       "streaming": true,
       "max_tokens": 8192
     }
   },
-  "active_llm_provider": "llama-cpp",
+  "active_llm_provider": "openrouter",
   "logging": {
     "level": "INFO",
     "file_enabled": false,
     "file_path": "mcp_client.log"
   },
   "prompts": {
-    "default_system_prompt": "You are a helpful assistant for the device called Distiller. use the tools provided to you to help the user."
+    "default_system_prompt": "On the course? Let me help you avoid some doubles!"
   },
   "mcp_server": {
-    "server_script_path": "distiller_cm5_python/mcp_server/led-use_server.py"
+    "server_script_path": "distiller_cm5_python/mcp_server/caddy2_server.py"
   },
   "display": {
     "dark_mode": "false"

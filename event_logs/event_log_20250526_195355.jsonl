@@ -1,0 +1,151 @@
+{"id": "ae19a7ac-1b1c-4b6e-849e-adc7cdc3b7ac", "type": "Info", "content": "Connecting to server, restoring cache...", "status": "in_progress", "data": null, "timestamp": 1748285647.1713634, "component": "cache"}
+{"id": "bbb205a0-982c-4861-9f94-5d897c662479", "type": "Cache", "content": "Restoring model cache, please wait...", "status": "in_progress", "data": null, "timestamp": 1748285647.1717033, "operation": "restoration", "model_name": "qwen2.5-3b-instruct-q4_k_m.gguf"}
+{"id": "a30dbe1c-237d-46f3-8e88-04dfb583ed9b", "type": "Cache", "content": "Cache restored successfully", "status": "success", "data": null, "timestamp": 1748285648.607156, "operation": "restoration", "model_name": "qwen2.5-3b-instruct-q4_k_m.gguf"}
+{"id": "de13e590-fb7a-497f-bcff-c2008ca7e042", "type": "Info", "content": "Thinking...", "status": "in_progress", "data": null, "timestamp": 1748285655.7366786, "role": "assistant"}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": "To", "status": "in_progress", "data": null, "timestamp": 1748285656.9792688}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " provide", "status": "in_progress", "data": null, "timestamp": 1748285657.1698537}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " you", "status": "in_progress", "data": null, "timestamp": 1748285657.5261211}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " with", "status": "in_progress", "data": null, "timestamp": 1748285657.5265775}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " the", "status": "in_progress", "data": null, "timestamp": 1748285657.7030706}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " coordinates", "status": "in_progress", "data": null, "timestamp": 1748285657.8825867}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " to", "status": "in_progress", "data": null, "timestamp": 1748285658.0589406}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " the", "status": "in_progress", "data": null, "timestamp": 1748285658.2348082}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " green", "status": "in_progress", "data": null, "timestamp": 1748285658.413003}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " at", "status": "in_progress", "data": null, "timestamp": 1748285658.6045876}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " Hole", "status": "in_progress", "data": null, "timestamp": 1748285658.7812214}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " ", "status": "in_progress", "data": null, "timestamp": 1748285658.9576573}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": "1", "status": "in_progress", "data": null, "timestamp": 1748285659.1340497}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " of", "status": "in_progress", "data": null, "timestamp": 1748285659.32676}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " your", "status": "in_progress", "data": null, "timestamp": 1748285659.504382}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " course", "status": "in_progress", "data": null, "timestamp": 1748285659.6800516}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": ",", "status": "in_progress", "data": null, "timestamp": 1748285659.85627}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " I", "status": "in_progress", "data": null, "timestamp": 1748285660.0323448}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " would", "status": "in_progress", "data": null, "timestamp": 1748285660.2186203}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " need", "status": "in_progress", "data": null, "timestamp": 1748285660.39567}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " to", "status": "in_progress", "data": null, "timestamp": 1748285660.571671}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " know", "status": "in_progress", "data": null, "timestamp": 1748285660.7478712}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " which", "status": "in_progress", "data": null, "timestamp": 1748285660.9235556}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " golf", "status": "in_progress", "data": null, "timestamp": 1748285661.0993402}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " course", "status": "in_progress", "data": null, "timestamp": 1748285661.277464}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " you", "status": "in_progress", "data": null, "timestamp": 1748285661.6432192}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " are", "status": "in_progress", "data": null, "timestamp": 1748285661.643519}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " at", "status": "in_progress", "data": null, "timestamp": 1748285661.8197834}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": ".", "status": "in_progress", "data": null, "timestamp": 1748285661.9975605}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " Different", "status": "in_progress", "data": null, "timestamp": 1748285662.1746385}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " courses", "status": "in_progress", "data": null, "timestamp": 1748285662.3503206}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " have", "status": "in_progress", "data": null, "timestamp": 1748285662.5266483}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " different", "status": "in_progress", "data": null, "timestamp": 1748285662.7058158}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " layouts", "status": "in_progress", "data": null, "timestamp": 1748285662.8825305}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " and", "status": "in_progress", "data": null, "timestamp": 1748285663.0587313}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " distances", "status": "in_progress", "data": null, "timestamp": 1748285663.2354267}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " to", "status": "in_progress", "data": null, "timestamp": 1748285663.4126122}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " the", "status": "in_progress", "data": null, "timestamp": 1748285663.6010199}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " green", "status": "in_progress", "data": null, "timestamp": 1748285663.7835217}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " from", "status": "in_progress", "data": null, "timestamp": 1748285663.960191}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " the", "status": "in_progress", "data": null, "timestamp": 1748285664.1379085}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " tee", "status": "in_progress", "data": null, "timestamp": 1748285664.3146613}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": ".", "status": "in_progress", "data": null, "timestamp": 1748285664.4909012}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " \n\n", "status": "in_progress", "data": null, "timestamp": 1748285664.6671784}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": "Could", "status": "in_progress", "data": null, "timestamp": 1748285664.8454814}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " you", "status": "in_progress", "data": null, "timestamp": 1748285665.206093}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " please", "status": "in_progress", "data": null, "timestamp": 1748285665.2066674}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " specify", "status": "in_progress", "data": null, "timestamp": 1748285665.3832128}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " the", "status": "in_progress", "data": null, "timestamp": 1748285665.5595326}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " name", "status": "in_progress", "data": null, "timestamp": 1748285665.7490282}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " of", "status": "in_progress", "data": null, "timestamp": 1748285665.934035}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " the", "status": "in_progress", "data": null, "timestamp": 1748285666.1103556}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " golf", "status": "in_progress", "data": null, "timestamp": 1748285666.2899778}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " course", "status": "in_progress", "data": null, "timestamp": 1748285666.473933}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " and", "status": "in_progress", "data": null, "timestamp": 1748285666.6542554}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " its", "status": "in_progress", "data": null, "timestamp": 1748285666.8371272}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " location", "status": "in_progress", "data": null, "timestamp": 1748285667.0206573}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " (", "status": "in_progress", "data": null, "timestamp": 1748285667.216396}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": "city", "status": "in_progress", "data": null, "timestamp": 1748285667.3991306}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": ",", "status": "in_progress", "data": null, "timestamp": 1748285667.5818062}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " state", "status": "in_progress", "data": null, "timestamp": 1748285667.7693858}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": ",", "status": "in_progress", "data": null, "timestamp": 1748285667.9756827}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " or", "status": "in_progress", "data": null, "timestamp": 1748285668.1602573}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": " country", "status": "in_progress", "data": null, "timestamp": 1748285668.3431814}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": ")?", "status": "in_progress", "data": null, "timestamp": 1748285668.5284574}
+{"id": "be58d39e-19da-452b-a148-627497c0eb3a", "type": "Message", "content": "To provide you with the coordinates to the green at Hole 1 of your course, I would need to know which golf course you are at. Different courses have different layouts and distances to the green from the tee. \n\nCould you please specify the name of the golf course and its location (city, state, or country)?", "status": "success", "data": null, "timestamp": 1748285668.8034883}
+{"id": "727dfd6b-90f3-4915-a8a7-c6a879eb3acf", "type": "Info", "content": "", "status": "success", "data": null, "timestamp": 1748285668.805636, "component": "query"}
+{"id": "53202f9d-369b-42cf-b81e-0418c7f92652", "type": "Info", "content": "Thinking...", "status": "in_progress", "data": null, "timestamp": 1748285672.6356, "role": "assistant"}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "I", "status": "in_progress", "data": null, "timestamp": 1748285675.1283686}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " don", "status": "in_progress", "data": null, "timestamp": 1748285675.3097985}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "'t", "status": "in_progress", "data": null, "timestamp": 1748285675.4880755}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " have", "status": "in_progress", "data": null, "timestamp": 1748285675.6651633}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " access", "status": "in_progress", "data": null, "timestamp": 1748285675.8423626}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " to", "status": "in_progress", "data": null, "timestamp": 1748285676.019691}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " specific", "status": "in_progress", "data": null, "timestamp": 1748285676.2063494}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " golf", "status": "in_progress", "data": null, "timestamp": 1748285676.390272}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " course", "status": "in_progress", "data": null, "timestamp": 1748285676.5674112}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " data", "status": "in_progress", "data": null, "timestamp": 1748285676.7457108}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " or", "status": "in_progress", "data": null, "timestamp": 1748285676.9294603}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " coordinates", "status": "in_progress", "data": null, "timestamp": 1748285677.1128619}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " for", "status": "in_progress", "data": null, "timestamp": 1748285677.296728}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " a", "status": "in_progress", "data": null, "timestamp": 1748285677.480394}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " course", "status": "in_progress", "data": null, "timestamp": 1748285677.6643164}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " with", "status": "in_progress", "data": null, "timestamp": 1748285677.8478665}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " the", "status": "in_progress", "data": null, "timestamp": 1748285678.0357997}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " ID", "status": "in_progress", "data": null, "timestamp": 1748285678.2202663}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " you", "status": "in_progress", "data": null, "timestamp": 1748285678.6104395}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " provided", "status": "in_progress", "data": null, "timestamp": 1748285678.6107824}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " (", "status": "in_progress", "data": null, "timestamp": 1748285678.7955008}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "0", "status": "in_progress", "data": null, "timestamp": 1748285678.9807105}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "1", "status": "in_progress", "data": null, "timestamp": 1748285679.16446}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "2", "status": "in_progress", "data": null, "timestamp": 1748285679.3484879}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "1", "status": "in_progress", "data": null, "timestamp": 1748285679.5322073}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "4", "status": "in_progress", "data": null, "timestamp": 1748285679.7148278}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "1", "status": "in_progress", "data": null, "timestamp": 1748285679.8967109}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "5", "status": "in_progress", "data": null, "timestamp": 1748285680.0787838}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "2", "status": "in_progress", "data": null, "timestamp": 1748285680.2774656}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "0", "status": "in_progress", "data": null, "timestamp": 1748285680.466224}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "6", "status": "in_progress", "data": null, "timestamp": 1748285680.6588495}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "5", "status": "in_progress", "data": null, "timestamp": 1748285680.841205}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "8", "status": "in_progress", "data": null, "timestamp": 1748285681.024766}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "8", "status": "in_progress", "data": null, "timestamp": 1748285681.2109087}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "9", "status": "in_progress", "data": null, "timestamp": 1748285681.3979876}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "1", "status": "in_progress", "data": null, "timestamp": 1748285681.5807133}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "1", "status": "in_progress", "data": null, "timestamp": 1748285681.7642715}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "0", "status": "in_progress", "data": null, "timestamp": 1748285681.948058}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "8", "status": "in_progress", "data": null, "timestamp": 1748285682.130837}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "8", "status": "in_progress", "data": null, "timestamp": 1748285682.313047}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "2", "status": "in_progress", "data": null, "timestamp": 1748285682.4956684}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "9", "status": "in_progress", "data": null, "timestamp": 1748285682.7107558}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": ").", "status": "in_progress", "data": null, "timestamp": 1748285682.9020138}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " \n\n", "status": "in_progress", "data": null, "timestamp": 1748285683.0869503}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "To", "status": "in_progress", "data": null, "timestamp": 1748285683.271824}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " get", "status": "in_progress", "data": null, "timestamp": 1748285683.4562657}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " accurate", "status": "in_progress", "data": null, "timestamp": 1748285683.6446648}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " coordinates", "status": "in_progress", "data": null, "timestamp": 1748285683.8295295}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " and", "status": "in_progress", "data": null, "timestamp": 1748285684.0150597}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " information", "status": "in_progress", "data": null, "timestamp": 1748285684.201363}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " for", "status": "in_progress", "data": null, "timestamp": 1748285684.3873608}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " your", "status": "in_progress", "data": null, "timestamp": 1748285684.5716286}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " specific", "status": "in_progress", "data": null, "timestamp": 1748285684.7601345}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " golf", "status": "in_progress", "data": null, "timestamp": 1748285684.9583397}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " course", "status": "in_progress", "data": null, "timestamp": 1748285685.149122}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": ",", "status": "in_progress", "data": null, "timestamp": 1748285685.3331954}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " you", "status": "in_progress", "data": null, "timestamp": 1748285685.6975977}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " should", "status": "in_progress", "data": null, "timestamp": 1748285685.6981049}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": ":\n\n", "status": "in_progress", "data": null, "timestamp": 1748285685.8818161}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "1", "status": "in_progress", "data": null, "timestamp": 1748285686.0712028}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": ".", "status": "in_progress", "data": null, "timestamp": 1748285686.259012}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " **", "status": "in_progress", "data": null, "timestamp": 1748285686.443664}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "Check", "status": "in_progress", "data": null, "timestamp": 1748285686.627574}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " the", "status": "in_progress", "data": null, "timestamp": 1748285686.810895}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " course", "status": "in_progress", "data": null, "timestamp": 1748285687.015458}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "'s", "status": "in_progress", "data": null, "timestamp": 1748285687.200621}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " official", "status": "in_progress", "data": null, "timestamp": 1748285687.3885586}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " website", "status": "in_progress", "data": null, "timestamp": 1748285687.5727928}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": "**", "status": "in_progress", "data": null, "timestamp": 1748285687.7609732}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " -", "status": "in_progress", "data": null, "timestamp": 1748285687.9480162}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " Many", "status": "in_progress", "data": null, "timestamp": 1748285688.1318216}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " courses", "status": "in_progress", "data": null, "timestamp": 1748285688.3177664}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " have", "status": "in_progress", "data": null, "timestamp": 1748285688.5090232}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " detailed", "status": "in_progress", "data": null, "timestamp": 1748285688.695066}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " information", "status": "in_progress", "data": null, "timestamp": 1748285688.8872654}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " on", "status": "in_progress", "data": null, "timestamp": 1748285689.0862317}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " their", "status": "in_progress", "data": null, "timestamp": 1748285689.2920916}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": " websites", "status": "in_progress", "data": null, "timestamp": 1748285689.4789166}
+{"id": "57e64f7e-02ad-4761-9e61-2e857e028daf", "type": "Message", "content": ",", "status": "in_progress", "data": null, "timestamp": 1748285689.6636913}
